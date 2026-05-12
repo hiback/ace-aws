@@ -59,8 +59,8 @@ export default function HomePage() {
         <p className="text-body text-ink-soft">{t('greeting')}</p>
 
         <HeroCard
-          eyebrow="DVA-C02 · Associate"
-          title="Developer Associate"
+          eyebrow={t('certDvaEyebrow')}
+          title={t('certDvaTitle')}
           stats={[
             {
               label: t('homeAnswered'),

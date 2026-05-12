@@ -7,6 +7,10 @@ export const STRINGS = {
     selectCertCta: '开始练习',
     questionListTitle: '题目列表',
 
+    certDvaEyebrow: 'DVA-C02 · 助理工程师',
+    certDvaTitle: 'Developer Associate',
+    certDvaQCount: '557 题 · 热门',
+
     homeContinue: '继续练习',
     homeAnswered: '已答题',
     homeAccuracy: '正确率',
@@ -67,6 +71,10 @@ export const STRINGS = {
     selectCertTitle: 'Choose certification',
     selectCertCta: 'Start practicing',
     questionListTitle: 'Question list',
+
+    certDvaEyebrow: 'DVA-C02 · Associate',
+    certDvaTitle: 'Developer Associate',
+    certDvaQCount: '557 Q · HOT',
 
     homeContinue: 'Continue',
     homeAnswered: 'Answered',

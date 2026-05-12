@@ -39,10 +39,8 @@ export default function SelectCertPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-card font-bold text-ink">DVA-C02</p>
-            <p className="text-secondary text-ink-soft">Developer Associate</p>
-            <Pill tone="accent" className="mt-2">
-              557 Q · HOT
-            </Pill>
+            <p className="text-secondary text-ink-soft">{t('certDvaTitle')}</p>
+            <Pill tone="accent" className="mt-2">{t('certDvaQCount')}</Pill>
           </div>
           <div className="w-7 h-7 rounded-full bg-accent text-white flex items-center justify-center">
             <Check className="w-4 h-4" strokeWidth={2.5} />

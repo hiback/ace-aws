@@ -1,26 +1,114 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@custom-variant dark (&:where([data-theme=dark] *));
+
+@theme {
+  /* —— Colors / light defaults —— */
+  --color-bg: #F7F3EC;
+  --color-bg-alt: #EFE8DC;
+  --color-surface: #FFFFFF;
+  --color-border: #E5DDCD;
+  --color-border-strong: #D4C9B2;
+  --color-ink: #2A2620;
+  --color-ink-soft: #5C5448;
+  --color-ink-mute: #8A8273;
+  --color-ink-subtle: #B5AC9A;
+  --color-accent: #2E63C9;
+  --color-accent-deep: #1A4290;
+  --color-accent-soft: #D6E2F4;
+  --color-accent-softer: #EBF1FA;
+  --color-hero-from: #2E63C9;
+  --color-hero-to: #1A4290;
+  --color-btn-bg: #2E63C9;
+  --color-success: #3E8D5C;
+  --color-success-soft: #DBEDDF;
+  --color-success-deep: #1F5A3A;
+  --color-danger: #C04848;
+  --color-danger-soft: #F6DEDE;
+  --color-danger-deep: #8E2C2C;
+  --color-info: #4F7CC2;
+  --color-info-soft: #E2EAF6;
+
+  /* —— Typography —— */
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: var(--font-mono-jb), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-hero: 64px;
+  --text-page: 22px;
+  --text-section: 18px;
+  --text-card: 16px;
+  --text-body: 15px;
+  --text-option: 13.5px;
+  --text-secondary: 12px;
+  --text-helper: 11px;
+  --text-mono-small: 10px;
+
+  /* —— Radius —— */
+  --radius-pill: 999px;
+  --radius-button: 12px;
+  --radius-card: 16px;
+  --radius-hero: 20px;
+  --radius-option: 14px;
+  --radius-option-multi: 12px;
+  --radius-letter-square: 6px;
+  --radius-badge: 6px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+[data-theme="dark"] {
+  --color-bg: #15171B;
+  --color-bg-alt: #1E2128;
+  --color-surface: #22262E;
+  --color-border: #2D3138;
+  --color-border-strong: #3D424B;
+  --color-ink: #E8E6E1;
+  --color-ink-soft: #B8B5AD;
+  --color-ink-mute: #7E7B73;
+  --color-ink-subtle: #52514C;
+  --color-accent: #5B82C2;
+  --color-accent-deep: #89A8DB;
+  --color-accent-soft: #243450;
+  --color-accent-softer: #1B2638;
+  --color-hero-from: #2E4366;
+  --color-hero-to: #1B2A45;
+  --color-btn-bg: #3A5680;
+  --color-success: #6FAE85;
+  --color-success-soft: #1F3328;
+  --color-success-deep: #A5D9B5;
+  --color-danger: #D87878;
+  --color-danger-soft: #3A1F1F;
+  --color-danger-deep: #F0A0A0;
 }
 
+/* prefers-color-scheme fallback (system theme mode).
+ * IMPORTANT: must mirror [data-theme="dark"] exactly. When changing dark tokens,
+ * update both blocks. Spec §6.1 — accepted MVP duplication; refactor in Phase 2 if drift becomes a problem. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme]) {
+    --color-bg: #15171B;
+    --color-bg-alt: #1E2128;
+    --color-surface: #22262E;
+    --color-border: #2D3138;
+    --color-border-strong: #3D424B;
+    --color-ink: #E8E6E1;
+    --color-ink-soft: #B8B5AD;
+    --color-ink-mute: #7E7B73;
+    --color-ink-subtle: #52514C;
+    --color-accent: #5B82C2;
+    --color-accent-deep: #89A8DB;
+    --color-accent-soft: #243450;
+    --color-accent-softer: #1B2638;
+    --color-hero-from: #2E4366;
+    --color-hero-to: #1B2A45;
+    --color-btn-bg: #3A5680;
+    --color-success: #6FAE85;
+    --color-success-soft: #1F3328;
+    --color-success-deep: #A5D9B5;
+    --color-danger: #D87878;
+    --color-danger-soft: #3A1F1F;
+    --color-danger-deep: #F0A0A0;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+html, body { background: var(--color-bg); color: var(--color-ink); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }

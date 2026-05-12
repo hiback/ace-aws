@@ -48,7 +48,7 @@ export default function PracticePage() {
 
   useEffect(() => {
     setPicks([])
-  }, [])
+  }, [qid])
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
     return (

@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ace-aws
 
-## Getting Started
+AWS certification practice — a mobile-first, zero-backend quiz app for AWS DVA-C02 (Developer Associate).
 
-First, run the development server:
+Built with Next.js 15+ (App Router), TypeScript, Tailwind v4, Zustand, and TanStack Query. All user progress lives in `localStorage`. Designed for self-hosting via Docker.
+
+## Status
+
+MVP — DVA-C02 only. Mock exam, dashboard, and community comments are out of scope (planned for v2).
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 24+
+- pnpm 9+
+- A copy of the source question bank at `refs/questions.json` (gitignored — must be supplied externally; ask the project owner)
+
+### First-time setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm build:data        # ETL: refs/questions.json → src/data/dva-c02.json
+pnpm dev               # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Tests
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm test              # watch mode
+pnpm test:ci           # one-shot
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Lint / format
 
-## Learn More
+```bash
+pnpm lint
+pnpm format
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Production deployment (Docker)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+# requires refs/questions.json to be present at build time
+docker compose up -d --build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The container exposes HTTP on port 3000. TLS / reverse proxy are intentionally NOT in this repo — front it with your own ingress (Caddy, Traefik, nginx, etc.).
 
-## Deploy on Vercel
+## Architecture (very short)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `src/app/` — Next.js App Router; route groups `(tabbed)` (Home, List, Settings) and `(immersive)` (Cert select, Practice)
+- `src/data/` — Question types + lazy-imported question bank chunks (gitignored)
+- `src/repositories/` — `ProgressRepository` interface + `LocalProgressRepository` (localStorage); future `ServerProgressRepository` swaps the implementation
+- `src/stores/prefs-store.ts` — Zustand store for theme / locale / currentCert (persisted)
+- `src/hooks/` — TanStack Query bridges (`useQuestion`, `useAnswer`, `useSaveAnswer`, ...) + `useT` i18n
+- `src/styles/globals.css` — Tailwind v4 + CSS variables + dark mode via `[data-theme=dark]`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+MIT — see [LICENSE](./LICENSE).

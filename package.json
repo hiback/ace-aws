@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "biome check .",
     "format": "biome format --write .",
+    "build:data": "tsx scripts/build-questions.ts",
+    "predev": "pnpm build:data || true",
+    "prebuild": "pnpm build:data",
     "test": "vitest",
     "test:ci": "vitest run"
   },

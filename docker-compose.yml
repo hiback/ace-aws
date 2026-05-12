@@ -1,0 +1,10 @@
+services:
+  ace-aws:
+    build: .
+    image: ace-aws:latest
+    container_name: ace-aws
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production

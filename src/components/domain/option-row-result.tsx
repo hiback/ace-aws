@@ -12,7 +12,13 @@ interface OptionRowResultProps {
   votePercent?: number
 }
 
-export function OptionRowResult({ letter, text, state, showVoteBar, votePercent }: OptionRowResultProps) {
+export function OptionRowResult({
+  letter,
+  text,
+  state,
+  showVoteBar,
+  votePercent,
+}: OptionRowResultProps) {
   const baseClass = 'w-full text-left p-3 flex items-start gap-3 rounded-option border-[1.5px]'
   let tileClass = 'bg-bg-alt text-ink-soft'
   let borderClass = 'border-border bg-surface'
@@ -23,7 +29,9 @@ export function OptionRowResult({ letter, text, state, showVoteBar, votePercent 
     borderClass = 'border-success bg-success-soft'
     tileClass = 'bg-success text-white'
     textClass = 'text-ink'
-    trailingIcon = <Check className="w-4 h-4 text-success ml-auto flex-shrink-0" strokeWidth={2.5} />
+    trailingIcon = (
+      <Check className="w-4 h-4 text-success ml-auto flex-shrink-0" strokeWidth={2.5} />
+    )
   } else if (state === 'wrong') {
     borderClass = 'border-danger bg-danger-soft'
     tileClass = 'bg-danger text-white'
@@ -33,7 +41,9 @@ export function OptionRowResult({ letter, text, state, showVoteBar, votePercent 
     borderClass = 'border-success'
     tileClass = 'bg-bg-alt text-ink-soft'
     textClass = 'text-ink'
-    trailingIcon = <Check className="w-4 h-4 text-success ml-auto flex-shrink-0" strokeWidth={2.5} />
+    trailingIcon = (
+      <Check className="w-4 h-4 text-success ml-auto flex-shrink-0" strokeWidth={2.5} />
+    )
   }
 
   return (
@@ -49,13 +59,21 @@ export function OptionRowResult({ letter, text, state, showVoteBar, votePercent 
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
-            <span className={['flex-1 text-option leading-[1.55]', textClass].join(' ')}>{text}</span>
+            <span className={['flex-1 text-option leading-[1.55]', textClass].join(' ')}>
+              {text}
+            </span>
             {trailingIcon}
           </div>
           {showVoteBar && typeof votePercent === 'number' ? (
             <VoteBar
               percent={votePercent}
-              variant={state === 'correct' || state === 'missed-correct' ? 'success' : state === 'wrong' ? 'accent' : 'mute'}
+              variant={
+                state === 'correct' || state === 'missed-correct'
+                  ? 'success'
+                  : state === 'wrong'
+                    ? 'accent'
+                    : 'mute'
+              }
             />
           ) : null}
         </div>

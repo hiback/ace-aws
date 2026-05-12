@@ -1,13 +1,13 @@
 'use client'
 import { Star } from 'lucide-react'
+import { QuestionListRow } from '@/components/domain/question-list-row'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { Spinner } from '@/components/primitives/spinner'
-import { QuestionListRow } from '@/components/domain/question-list-row'
 import { useBookmarksList } from '@/hooks/use-progress-stats'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
-import { usePrefsStore } from '@/stores/prefs-store'
 import { progressRepo } from '@/repositories/local-progress-repository'
+import { usePrefsStore } from '@/stores/prefs-store'
 
 export default function BookmarksPage() {
   const bookmarks = useBookmarksList()
@@ -16,7 +16,11 @@ export default function BookmarksPage() {
   const locale = usePrefsStore((s) => s.locale)
 
   if (bookmarks.isLoading || bank.isLoading) {
-    return <div className="flex justify-center py-8"><Spinner /></div>
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner />
+      </div>
+    )
   }
 
   if (!bookmarks.data || bookmarks.data.length === 0) {

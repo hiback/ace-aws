@@ -1,27 +1,33 @@
 'use client'
-import { useParams, useRouter } from 'next/navigation'
-import { useState, useTransition, useEffect } from 'react'
 import { Bookmark, BookmarkCheck } from 'lucide-react'
-import { TopBar } from '@/components/chrome/top-bar'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
+import { TopBar } from '@/components/chrome/top-bar'
+import { ExplanationCard } from '@/components/domain/explanation-card'
+import { MultiStatusLine } from '@/components/domain/multi-status-line'
+import { MultiVoteDistribution } from '@/components/domain/multi-vote-distribution'
+import { OptionRow } from '@/components/domain/option-row'
+import { OptionRowResult } from '@/components/domain/option-row-result'
+import { QuestionStem } from '@/components/domain/question-stem'
+import { StatusBanner } from '@/components/domain/status-banner'
 import { Button } from '@/components/primitives/button'
+import { EmptyState } from '@/components/primitives/empty-state'
 import { Pill } from '@/components/primitives/pill'
 import { ProgressBar } from '@/components/primitives/progress-bar'
 import { Spinner } from '@/components/primitives/spinner'
-import { EmptyState } from '@/components/primitives/empty-state'
-import { QuestionStem } from '@/components/domain/question-stem'
-import { OptionRow } from '@/components/domain/option-row'
-import { OptionRowResult } from '@/components/domain/option-row-result'
-import { MultiStatusLine } from '@/components/domain/multi-status-line'
-import { StatusBanner } from '@/components/domain/status-banner'
-import { MultiVoteDistribution } from '@/components/domain/multi-vote-distribution'
-import { ExplanationCard } from '@/components/domain/explanation-card'
+import type { CertCode, Letter } from '@/data/types'
+import {
+  findNextUnansweredQid,
+  useAnswer,
+  useIsBookmarked,
+  useSaveAnswer,
+  useToggleBookmark,
+} from '@/hooks/use-answer'
 import { useQuestion } from '@/hooks/use-question'
 import { useQuestionBank } from '@/hooks/use-question-bank'
-import { useAnswer, useSaveAnswer, useToggleBookmark, useIsBookmarked, findNextUnansweredQid } from '@/hooks/use-answer'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
-import type { CertCode, Letter } from '@/data/types'
 
 export default function PracticePage() {
   const params = useParams<{ cert: CertCode; qid: string }>()
@@ -40,7 +46,9 @@ export default function PracticePage() {
   const saveAnswer = useSaveAnswer()
   const toggleBookmark = useToggleBookmark()
 
-  useEffect(() => { setPicks([]) }, [qid])
+  useEffect(() => {
+    setPicks([])
+  }, [])
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
     return (
@@ -48,6 +56,7 @@ export default function PracticePage() {
         <TopBar title="..." />
         <div className="px-4 py-6 space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: skeleton loader has no stable id
             <div key={i} className="h-14 rounded-option bg-bg-alt animate-pulse" />
           ))}
         </div>
@@ -222,7 +231,11 @@ export default function PracticePage() {
             <Button variant="outline" onClick={handleNext} className="flex-1">
               {t('skip')}
             </Button>
-            <Button onClick={handleSubmit} disabled={!canSubmit || saveAnswer.isPending} className="flex-1">
+            <Button
+              onClick={handleSubmit}
+              disabled={!canSubmit || saveAnswer.isPending}
+              className="flex-1"
+            >
               {t('submit')}
             </Button>
           </>

@@ -1,9 +1,9 @@
 'use client'
+import { Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { Check } from 'lucide-react'
-import { TopBar } from '@/components/chrome/top-bar'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
+import { TopBar } from '@/components/chrome/top-bar'
 import { Button } from '@/components/primitives/button'
 import { Pill } from '@/components/primitives/pill'
 import { useT } from '@/hooks/use-t'
@@ -40,7 +40,9 @@ export default function SelectCertPage() {
           <div className="flex-1 min-w-0">
             <p className="text-card font-bold text-ink">DVA-C02</p>
             <p className="text-secondary text-ink-soft">Developer Associate</p>
-            <Pill tone="accent" className="mt-2">557 Q · HOT</Pill>
+            <Pill tone="accent" className="mt-2">
+              557 Q · HOT
+            </Pill>
           </div>
           <div className="w-7 h-7 rounded-full bg-accent text-white flex items-center justify-center">
             <Check className="w-4 h-4" strokeWidth={2.5} />

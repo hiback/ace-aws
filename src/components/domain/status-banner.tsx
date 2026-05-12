@@ -1,5 +1,5 @@
 'use client'
-import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { useT } from '@/hooks/use-t'
 
 type Tone = 'correct' | 'wrong' | 'partial'
@@ -10,10 +10,28 @@ interface StatusBannerProps {
 
 export function StatusBanner({ tone }: StatusBannerProps) {
   const t = useT()
-  const config: Record<Tone, { Icon: typeof CheckCircle2; bg: string; text: string; label: string }> = {
-    correct: { Icon: CheckCircle2, bg: 'bg-success-soft', text: 'text-success-deep', label: t('bannerCorrect') },
-    wrong:   { Icon: XCircle,      bg: 'bg-danger-soft',  text: 'text-danger-deep',  label: t('bannerWrong') },
-    partial: { Icon: AlertTriangle, bg: 'bg-info-soft',   text: 'text-info',         label: t('bannerPartial') },
+  const config: Record<
+    Tone,
+    { Icon: typeof CheckCircle2; bg: string; text: string; label: string }
+  > = {
+    correct: {
+      Icon: CheckCircle2,
+      bg: 'bg-success-soft',
+      text: 'text-success-deep',
+      label: t('bannerCorrect'),
+    },
+    wrong: {
+      Icon: XCircle,
+      bg: 'bg-danger-soft',
+      text: 'text-danger-deep',
+      label: t('bannerWrong'),
+    },
+    partial: {
+      Icon: AlertTriangle,
+      bg: 'bg-info-soft',
+      text: 'text-info',
+      label: t('bannerPartial'),
+    },
   }
   const { Icon, bg, text, label } = config[tone]
   return (

@@ -1,6 +1,6 @@
 'use client'
+import { ChevronDown, ChevronUp, Globe } from 'lucide-react'
 import { useState } from 'react'
-import { Globe, ChevronDown, ChevronUp } from 'lucide-react'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
 
@@ -33,7 +33,11 @@ export function QuestionStem({ zh, en }: QuestionStemProps) {
         >
           <Globe className="w-3.5 h-3.5" strokeWidth={2} />
           {t('enToggle')}
-          {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          {expanded ? (
+            <ChevronUp className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5" />
+          )}
         </button>
       ) : null}
       {expanded ? (

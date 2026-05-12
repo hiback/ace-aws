@@ -12,12 +12,25 @@ export interface RawQuestion {
   vote_distribution: Record<string, number>
   domain: string
   services: string[]
-  en: { question: string; options: Partial<Record<Letter, string>>; explanation_md: string; comments?: unknown[] }
-  zh: { question: string; options: Partial<Record<Letter, string>>; explanation_md: string; comments?: unknown[] }
+  en: {
+    question: string
+    options: Partial<Record<Letter, string>>
+    explanation_md: string
+    comments?: unknown[]
+  }
+  zh: {
+    question: string
+    options: Partial<Record<Letter, string>>
+    explanation_md: string
+    comments?: unknown[]
+  }
 }
 
 export const sortedKey = (letters: readonly string[]): string =>
-  [...letters].map((s) => s.toUpperCase()).sort().join('')
+  [...letters]
+    .map((s) => s.toUpperCase())
+    .sort()
+    .join('')
 
 export const unwrapCite = (md: string): string =>
   md.replace(/<cite\b[^>]*>([\s\S]*?)<\/cite>/g, '$1')
@@ -67,7 +80,9 @@ async function main(): Promise<void> {
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((e: NodeJS.ErrnoException) => {
     if (e.code === 'ENOENT') {
-      console.error(`× ${SRC} not found. Place the original question bank at refs/questions.json before running.`)
+      console.error(
+        `× ${SRC} not found. Place the original question bank at refs/questions.json before running.`,
+      )
     } else {
       console.error(e)
     }

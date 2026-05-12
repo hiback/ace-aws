@@ -5,15 +5,15 @@ export type Theme = 'light' | 'dark' | 'system'
 
 type LocalizedContent = {
   question: string
-  options: Partial<Record<Letter, string>>  // typically A-D; ~10% have E
-  explanation: string                        // markdown, <cite> already unwrapped
+  options: Partial<Record<Letter, string>> // typically A-D; ~10% have E
+  explanation: string // markdown, <cite> already unwrapped
 }
 
 interface BaseQuestion {
   id: number
   cert: CertCode
   topic: string
-  correct_answer: Letter[]                   // sorted
+  correct_answer: Letter[] // sorted
   en: LocalizedContent
   zh: LocalizedContent
 }
@@ -26,14 +26,14 @@ export type Question =
   | (BaseQuestion & {
       type: 'multi'
       answer_count: number
-      vote_distribution: Record<string, number>     // key = sorted letters concat, e.g. 'BD'
+      vote_distribution: Record<string, number> // key = sorted letters concat, e.g. 'BD'
     })
 
 export interface AnswerRecord {
   qid: number
-  picks: Letter[]                            // sorted on persistence; set semantics
+  picks: Letter[] // sorted on persistence; set semantics
   correct: boolean
-  answeredAt: number                         // Date.now()
+  answeredAt: number // Date.now()
 }
 
 export interface Prefs {

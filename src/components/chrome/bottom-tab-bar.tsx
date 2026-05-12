@@ -1,7 +1,7 @@
 'use client'
+import { Home, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Settings } from 'lucide-react'
 import { useT } from '@/hooks/use-t'
 
 const tabs = [
@@ -13,10 +13,7 @@ export function BottomTabBar() {
   const pathname = usePathname()
   const t = useT()
   return (
-    <nav
-      className="fixed bottom-0 inset-x-0 z-20 bg-surface border-t border-border safe-bottom"
-      role="navigation"
-    >
+    <nav className="fixed bottom-0 inset-x-0 z-20 bg-surface border-t border-border safe-bottom">
       <ul className="flex items-stretch justify-around max-w-md mx-auto h-14">
         {tabs.map(({ href, label, Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href)

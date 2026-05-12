@@ -1,5 +1,5 @@
+import { Check, ChevronRight, X } from 'lucide-react'
 import Link from 'next/link'
-import { ChevronRight, Check, X } from 'lucide-react'
 import { Pill } from '@/components/primitives/pill'
 
 interface QuestionListRowProps {
@@ -15,9 +15,14 @@ function formatDate(ts: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function QuestionListRow({ qid, topic, questionPreview, status, answeredAt }: QuestionListRowProps) {
-  const StatusIcon =
-    status === 'correct' ? Check : status === 'wrong' ? X : null
+export function QuestionListRow({
+  qid,
+  topic,
+  questionPreview,
+  status,
+  answeredAt,
+}: QuestionListRowProps) {
+  const StatusIcon = status === 'correct' ? Check : status === 'wrong' ? X : null
   const iconColor =
     status === 'correct' ? 'text-success' : status === 'wrong' ? 'text-danger' : 'text-ink-mute'
   return (
@@ -26,7 +31,11 @@ export function QuestionListRow({ qid, topic, questionPreview, status, answeredA
       className="flex items-start gap-3 px-4 py-3 border-b border-border hover:bg-bg-alt transition-colors"
     >
       <div className="flex-shrink-0 w-5 pt-0.5 flex justify-center">
-        {StatusIcon ? <StatusIcon className={['w-4 h-4', iconColor].join(' ')} strokeWidth={2.25} /> : <span className="w-4 h-4" />}
+        {StatusIcon ? (
+          <StatusIcon className={['w-4 h-4', iconColor].join(' ')} strokeWidth={2.25} />
+        ) : (
+          <span className="w-4 h-4" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { transformQuestion, sortedKey, unwrapCite, type RawQuestion } from '../scripts/build-questions'
+import {
+  type RawQuestion,
+  sortedKey,
+  transformQuestion,
+  unwrapCite,
+} from '../scripts/build-questions'
 
 describe('ETL: unwrapCite', () => {
   it('removes <cite> wrapper but keeps inner content', () => {
@@ -65,9 +70,9 @@ describe('ETL: transformQuestion (single)', () => {
 describe('ETL: transformQuestion (multi)', () => {
   const multi: RawQuestion = {
     id: 7,
-    correct_answer: ['D', 'B'],                 // unsorted on input
+    correct_answer: ['D', 'B'], // unsorted on input
     answer_count: 2,
-    vote_distribution: { 'DB': 63, 'BC': 33, 'CD': 4 }, // 'DB' must normalize to 'BD'
+    vote_distribution: { DB: 63, BC: 33, CD: 4 }, // 'DB' must normalize to 'BD'
     domain: 'Deployment',
     services: [],
     en: { question: 'EN q', options: { A: 'a', B: 'b', C: 'c', D: 'd' }, explanation_md: 'x' },
@@ -85,9 +90,9 @@ describe('ETL: transformQuestion (multi)', () => {
   it('normalizes vote_distribution keys to sorted letters', () => {
     const out = transformQuestion(multi)
     if (out.type !== 'multi') throw new Error('narrowing failed')
-    expect(out.vote_distribution['BD']).toBe(63)
-    expect(out.vote_distribution['BC']).toBe(33)
-    expect(out.vote_distribution['CD']).toBe(4)
-    expect(out.vote_distribution['DB']).toBeUndefined()
+    expect(out.vote_distribution.BD).toBe(63)
+    expect(out.vote_distribution.BC).toBe(33)
+    expect(out.vote_distribution.CD).toBe(4)
+    expect(out.vote_distribution.DB).toBeUndefined()
   })
 })

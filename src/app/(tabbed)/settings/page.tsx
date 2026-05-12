@@ -1,9 +1,9 @@
 'use client'
 import { ChevronRight } from 'lucide-react'
 import { TopBar } from '@/components/chrome/top-bar'
+import type { Locale, Theme } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
-import type { Locale, Theme } from '@/data/types'
 
 const APP_VERSION = '0.1.0'
 const REPO_URL = 'https://github.com/hiback/ace-aws'
@@ -36,13 +36,7 @@ function Segmented<T extends string>({
   )
 }
 
-function SettingsRow({
-  label,
-  control,
-}: {
-  label: string
-  control: React.ReactNode
-}) {
+function SettingsRow({ label, control }: { label: string; control: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
       <span className="text-body text-ink">{label}</span>
@@ -112,7 +106,9 @@ export default function SettingsPage() {
           <div className="rounded-card bg-surface border border-border">
             <SettingsRow
               label={t('settingsVersion')}
-              control={<span className="font-mono text-secondary text-ink-mute">{APP_VERSION}</span>}
+              control={
+                <span className="font-mono text-secondary text-ink-mute">{APP_VERSION}</span>
+              }
             />
             <a
               href={`${REPO_URL}#privacy`}

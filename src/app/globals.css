@@ -1,38 +1,39 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-@custom-variant dark (&:where([data-theme=dark] *));
+@custom-variant dark (&:where([data-theme="dark"] *));
 
 @theme {
   /* —— Colors / light defaults —— */
-  --color-bg: #F7F3EC;
-  --color-bg-alt: #EFE8DC;
-  --color-surface: #FFFFFF;
-  --color-border: #E5DDCD;
-  --color-border-strong: #D4C9B2;
-  --color-ink: #2A2620;
-  --color-ink-soft: #5C5448;
-  --color-ink-mute: #8A8273;
-  --color-ink-subtle: #B5AC9A;
-  --color-accent: #2E63C9;
-  --color-accent-deep: #1A4290;
-  --color-accent-soft: #D6E2F4;
-  --color-accent-softer: #EBF1FA;
-  --color-hero-from: #2E63C9;
-  --color-hero-to: #1A4290;
-  --color-btn-bg: #2E63C9;
-  --color-success: #3E8D5C;
-  --color-success-soft: #DBEDDF;
-  --color-success-deep: #1F5A3A;
-  --color-danger: #C04848;
-  --color-danger-soft: #F6DEDE;
-  --color-danger-deep: #8E2C2C;
-  --color-info: #4F7CC2;
-  --color-info-soft: #E2EAF6;
+  --color-bg: #f7f3ec;
+  --color-bg-alt: #efe8dc;
+  --color-surface: #ffffff;
+  --color-border: #e5ddcd;
+  --color-border-strong: #d4c9b2;
+  --color-ink: #2a2620;
+  --color-ink-soft: #5c5448;
+  --color-ink-mute: #8a8273;
+  --color-ink-subtle: #b5ac9a;
+  --color-accent: #2e63c9;
+  --color-accent-deep: #1a4290;
+  --color-accent-soft: #d6e2f4;
+  --color-accent-softer: #ebf1fa;
+  --color-hero-from: #2e63c9;
+  --color-hero-to: #1a4290;
+  --color-btn-bg: #2e63c9;
+  --color-success: #3e8d5c;
+  --color-success-soft: #dbeddf;
+  --color-success-deep: #1f5a3a;
+  --color-danger: #c04848;
+  --color-danger-soft: #f6dede;
+  --color-danger-deep: #8e2c2c;
+  --color-info: #4f7cc2;
+  --color-info-soft: #e2eaf6;
 
   /* —— Typography —— */
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI",
-               "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-sans:
+    var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: var(--font-mono-jb), ui-monospace, SFMono-Regular, Menlo, monospace;
   --text-hero: 64px;
   --text-page: 22px;
@@ -56,28 +57,28 @@
 }
 
 [data-theme="dark"] {
-  --color-bg: #15171B;
-  --color-bg-alt: #1E2128;
-  --color-surface: #22262E;
-  --color-border: #2D3138;
-  --color-border-strong: #3D424B;
-  --color-ink: #E8E6E1;
-  --color-ink-soft: #B8B5AD;
-  --color-ink-mute: #7E7B73;
-  --color-ink-subtle: #52514C;
-  --color-accent: #5B82C2;
-  --color-accent-deep: #89A8DB;
+  --color-bg: #15171b;
+  --color-bg-alt: #1e2128;
+  --color-surface: #22262e;
+  --color-border: #2d3138;
+  --color-border-strong: #3d424b;
+  --color-ink: #e8e6e1;
+  --color-ink-soft: #b8b5ad;
+  --color-ink-mute: #7e7b73;
+  --color-ink-subtle: #52514c;
+  --color-accent: #5b82c2;
+  --color-accent-deep: #89a8db;
   --color-accent-soft: #243450;
-  --color-accent-softer: #1B2638;
-  --color-hero-from: #2E4366;
-  --color-hero-to: #1B2A45;
-  --color-btn-bg: #3A5680;
-  --color-success: #6FAE85;
-  --color-success-soft: #1F3328;
-  --color-success-deep: #A5D9B5;
-  --color-danger: #D87878;
-  --color-danger-soft: #3A1F1F;
-  --color-danger-deep: #F0A0A0;
+  --color-accent-softer: #1b2638;
+  --color-hero-from: #2e4366;
+  --color-hero-to: #1b2a45;
+  --color-btn-bg: #3a5680;
+  --color-success: #6fae85;
+  --color-success-soft: #1f3328;
+  --color-success-deep: #a5d9b5;
+  --color-danger: #d87878;
+  --color-danger-soft: #3a1f1f;
+  --color-danger-deep: #f0a0a0;
 }
 
 /* prefers-color-scheme fallback (system theme mode).
@@ -85,30 +86,37 @@
  * update both blocks. Spec §6.1 — accepted MVP duplication; refactor in Phase 2 if drift becomes a problem. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --color-bg: #15171B;
-    --color-bg-alt: #1E2128;
-    --color-surface: #22262E;
-    --color-border: #2D3138;
-    --color-border-strong: #3D424B;
-    --color-ink: #E8E6E1;
-    --color-ink-soft: #B8B5AD;
-    --color-ink-mute: #7E7B73;
-    --color-ink-subtle: #52514C;
-    --color-accent: #5B82C2;
-    --color-accent-deep: #89A8DB;
+    --color-bg: #15171b;
+    --color-bg-alt: #1e2128;
+    --color-surface: #22262e;
+    --color-border: #2d3138;
+    --color-border-strong: #3d424b;
+    --color-ink: #e8e6e1;
+    --color-ink-soft: #b8b5ad;
+    --color-ink-mute: #7e7b73;
+    --color-ink-subtle: #52514c;
+    --color-accent: #5b82c2;
+    --color-accent-deep: #89a8db;
     --color-accent-soft: #243450;
-    --color-accent-softer: #1B2638;
-    --color-hero-from: #2E4366;
-    --color-hero-to: #1B2A45;
-    --color-btn-bg: #3A5680;
-    --color-success: #6FAE85;
-    --color-success-soft: #1F3328;
-    --color-success-deep: #A5D9B5;
-    --color-danger: #D87878;
-    --color-danger-soft: #3A1F1F;
-    --color-danger-deep: #F0A0A0;
+    --color-accent-softer: #1b2638;
+    --color-hero-from: #2e4366;
+    --color-hero-to: #1b2a45;
+    --color-btn-bg: #3a5680;
+    --color-success: #6fae85;
+    --color-success-soft: #1f3328;
+    --color-success-deep: #a5d9b5;
+    --color-danger: #d87878;
+    --color-danger-soft: #3a1f1f;
+    --color-danger-deep: #f0a0a0;
   }
 }
 
-html, body { background: var(--color-bg); color: var(--color-ink); }
-body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

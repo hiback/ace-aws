@@ -12,8 +12,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantClasses: Record<Variant, string> = {
   primary: 'bg-btn-bg text-white hover:bg-accent-deep disabled:bg-bg-alt disabled:text-ink-mute',
   outline: 'border border-border text-ink hover:bg-bg-alt disabled:text-ink-subtle',
-  ghost:   'text-ink-soft hover:bg-bg-alt disabled:text-ink-subtle',
-  danger:  'text-danger hover:bg-danger-soft disabled:text-ink-subtle',
+  ghost: 'text-ink-soft hover:bg-bg-alt disabled:text-ink-subtle',
+  danger: 'text-danger hover:bg-danger-soft disabled:text-ink-subtle',
 }
 
 const sizeClasses: Record<Size, string> = {

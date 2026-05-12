@@ -1,16 +1,16 @@
 'use client'
+import { Bell, Star, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useTransition } from 'react'
-import { XCircle, Star, Bell } from 'lucide-react'
 import { TopBar } from '@/components/chrome/top-bar'
-import { Button } from '@/components/primitives/button'
-import { Spinner } from '@/components/primitives/spinner'
 import { HeroCard } from '@/components/domain/hero-card'
 import { QuickActionCard } from '@/components/domain/quick-action-card'
+import { Button } from '@/components/primitives/button'
+import { Spinner } from '@/components/primitives/spinner'
+import { findNextUnansweredQid } from '@/hooks/use-answer'
+import { useBookmarksList, useProgressStats, useWrongList } from '@/hooks/use-progress-stats'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
-import { useProgressStats, useWrongList, useBookmarksList } from '@/hooks/use-progress-stats'
-import { findNextUnansweredQid } from '@/hooks/use-answer'
 
 export default function HomePage() {
   const router = useRouter()
@@ -30,7 +30,7 @@ export default function HomePage() {
     startTransition(async () => {
       const next = await findNextUnansweredQid(0)
       if (next === null) {
-        router.push('/list/wrong')   // empty wrong list will then show all-answered hint
+        router.push('/list/wrong') // empty wrong list will then show all-answered hint
       } else {
         router.push(`/practice/dva-c02/${next}`)
       }
@@ -62,7 +62,10 @@ export default function HomePage() {
           eyebrow="DVA-C02 · Associate"
           title="Developer Associate"
           stats={[
-            { label: t('homeAnswered'), value: `${stats.data?.answered ?? 0}/${stats.data?.total ?? 0}` },
+            {
+              label: t('homeAnswered'),
+              value: `${stats.data?.answered ?? 0}/${stats.data?.total ?? 0}`,
+            },
             { label: t('homeAccuracy'), value: `${accuracy}%` },
           ]}
           cta={
@@ -79,8 +82,18 @@ export default function HomePage() {
         />
 
         <div className="grid grid-cols-2 gap-3">
-          <QuickActionCard icon={XCircle} label={t('homeWrong')} count={wrong.data?.length ?? 0} href="/list/wrong" />
-          <QuickActionCard icon={Star} label={t('homeBookmarks')} count={bookmarks.data?.length ?? 0} href="/list/bookmarks" />
+          <QuickActionCard
+            icon={XCircle}
+            label={t('homeWrong')}
+            count={wrong.data?.length ?? 0}
+            href="/list/wrong"
+          />
+          <QuickActionCard
+            icon={Star}
+            label={t('homeBookmarks')}
+            count={bookmarks.data?.length ?? 0}
+            href="/list/bookmarks"
+          />
         </div>
       </main>
     </>

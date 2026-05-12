@@ -1,8 +1,8 @@
 'use client'
 import { XCircle } from 'lucide-react'
+import { QuestionListRow } from '@/components/domain/question-list-row'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { Spinner } from '@/components/primitives/spinner'
-import { QuestionListRow } from '@/components/domain/question-list-row'
 import { useWrongList } from '@/hooks/use-progress-stats'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
@@ -16,7 +16,9 @@ export default function WrongPage() {
 
   if (wrong.isLoading || bank.isLoading) {
     return (
-      <div className="flex justify-center py-8"><Spinner /></div>
+      <div className="flex justify-center py-8">
+        <Spinner />
+      </div>
     )
   }
 

@@ -1,5 +1,5 @@
 interface ProgressBarProps {
-  value: number          // 0..1
+  value: number // 0..1
   height?: 2 | 3 | 6
   color?: 'accent' | 'success' | 'danger'
   trackColor?: 'border' | 'bg-alt'
@@ -16,9 +16,14 @@ export function ProgressBar({
   const pct = Math.max(0, Math.min(1, value)) * 100
   const heightClass = height === 2 ? 'h-0.5' : height === 3 ? 'h-[3px]' : 'h-1.5'
   const trackClass = trackColor === 'border' ? 'bg-border' : 'bg-bg-alt'
-  const fillClass = color === 'success' ? 'bg-success' : color === 'danger' ? 'bg-danger' : 'bg-accent'
+  const fillClass =
+    color === 'success' ? 'bg-success' : color === 'danger' ? 'bg-danger' : 'bg-accent'
   return (
-    <div className={['w-full overflow-hidden rounded-pill', heightClass, trackClass, className].join(' ')}>
+    <div
+      className={['w-full overflow-hidden rounded-pill', heightClass, trackClass, className].join(
+        ' ',
+      )}
+    >
       <div
         className={['h-full transition-[width]', fillClass].join(' ')}
         style={{ width: `${pct}%` }}

@@ -1,8 +1,8 @@
 'use client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadBank } from '@/data/loaders'
-import { progressRepo } from '@/repositories/local-progress-repository'
 import type { CertCode, Letter } from '@/data/types'
+import { progressRepo } from '@/repositories/local-progress-repository'
 
 export function useAnswer(qid: number) {
   return useQuery({

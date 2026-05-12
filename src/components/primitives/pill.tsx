@@ -10,10 +10,10 @@ interface PillProps {
 
 const toneClasses: Record<Tone, string> = {
   default: 'bg-bg-alt text-ink-soft',
-  accent:  'bg-accent-soft text-accent-deep',
+  accent: 'bg-accent-soft text-accent-deep',
   success: 'bg-success-soft text-success-deep',
-  danger:  'bg-danger-soft text-danger-deep',
-  info:    'bg-info-soft text-info',
+  danger: 'bg-danger-soft text-danger-deep',
+  info: 'bg-info-soft text-info',
 }
 
 export function Pill({ tone = 'default', className = '', children }: PillProps) {

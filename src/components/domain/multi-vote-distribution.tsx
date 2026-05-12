@@ -26,7 +26,9 @@ export function MultiVoteDistribution({ distribution, correctKey }: MultiVoteDis
               <div className="flex-1 h-1.5 rounded-pill bg-bg-alt overflow-hidden">
                 <div className={['h-full', fill].join(' ')} style={{ width: `${percent}%` }} />
               </div>
-              <span className={['font-mono text-secondary font-bold w-10 text-right', text].join(' ')}>
+              <span
+                className={['font-mono text-secondary font-bold w-10 text-right', text].join(' ')}
+              >
                 {percent}%
               </span>
             </li>

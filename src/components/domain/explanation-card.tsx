@@ -1,7 +1,7 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useT } from '@/hooks/use-t'
 import { Spinner } from '@/components/primitives/spinner'
+import { useT } from '@/hooks/use-t'
 
 const ExplanationMarkdown = dynamic(() => import('./explanation-markdown'), {
   ssr: false,

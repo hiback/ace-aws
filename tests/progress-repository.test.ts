@@ -18,10 +18,10 @@ describe('LocalProgressRepository', () => {
       repo.saveAnswer(1, ['D', 'B'], true)
       const a = repo.getAnswer(1)
       expect(a).not.toBeNull()
-      expect(a!.qid).toBe(1)
-      expect(a!.picks).toEqual(['B', 'D'])
-      expect(a!.correct).toBe(true)
-      expect(typeof a!.answeredAt).toBe('number')
+      expect(a?.qid).toBe(1)
+      expect(a?.picks).toEqual(['B', 'D'])
+      expect(a?.correct).toBe(true)
+      expect(typeof a?.answeredAt).toBe('number')
     })
 
     it('lists all answers', () => {
@@ -45,8 +45,8 @@ describe('LocalProgressRepository', () => {
       repo.saveAnswer(1, ['A'], false)
       repo.saveAnswer(1, ['C'], true)
       const a = repo.getAnswer(1)
-      expect(a!.picks).toEqual(['C'])
-      expect(a!.correct).toBe(true)
+      expect(a?.picks).toEqual(['C'])
+      expect(a?.correct).toBe(true)
     })
   })
 

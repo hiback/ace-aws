@@ -1,17 +1,7 @@
 'use client'
 import { Info } from 'lucide-react'
-import dynamic from 'next/dynamic'
-import { Spinner } from '@/components/primitives/spinner'
+import { Prose } from '@/components/primitives/prose'
 import { useT } from '@/hooks/use-t'
-
-const ExplanationMarkdown = dynamic(() => import('./explanation-markdown'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex justify-center py-8">
-      <Spinner />
-    </div>
-  ),
-})
 
 interface ExplanationCardProps {
   zh: string
@@ -35,7 +25,7 @@ export function ExplanationCard({ zh, en, locale }: ExplanationCardProps) {
         </span>
       </div>
       <div className="rounded-card bg-surface border border-border shadow-sm px-4 pt-4 pb-2">
-        <ExplanationMarkdown source={source} />
+        <Prose variant="explanation" source={source} />
       </div>
     </section>
   )

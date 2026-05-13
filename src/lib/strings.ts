@@ -7,15 +7,16 @@ export const STRINGS = {
     selectCertCta: '开始练习',
     questionListTitle: '题目列表',
 
-    certDvaEyebrow: 'DVA-C02 · 助理工程师',
+    certDvaEyebrow: 'DVA-C02 · 助理级',
     certDvaTitle: 'Developer Associate',
     certDvaQCount: '557 题 · 热门',
 
-    homeContinue: '继续练习',
+    homeContinue: '继续刷题',
     homeAnswered: '已答题',
     homeAccuracy: '正确率',
     homeWrong: '错题',
     homeBookmarks: '收藏',
+    homeQuickStart: '快速开始',
 
     questionXofY: '第 {x} 题 / 共 {y} 题',
     badgeSingle: 'SINGLE',
@@ -81,6 +82,7 @@ export const STRINGS = {
     homeAccuracy: 'Accuracy',
     homeWrong: 'Wrong',
     homeBookmarks: 'Bookmarks',
+    homeQuickStart: 'Quick start',
 
     questionXofY: 'Question {x} of {y}',
     badgeSingle: 'SINGLE',

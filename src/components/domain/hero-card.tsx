@@ -28,8 +28,8 @@ export function HeroCard({ eyebrow, title, stats, cta }: HeroCardProps) {
       <div className="mt-4 flex gap-6">
         {stats.map((s) => (
           <div key={s.label}>
-            <p className="font-mono text-card font-bold">{s.value}</p>
-            <p className="text-helper opacity-80">{s.label}</p>
+            <p className="text-page font-bold tracking-tight leading-none">{s.value}</p>
+            <p className="text-helper opacity-80 mt-1">{s.label}</p>
           </div>
         ))}
       </div>

@@ -1,8 +1,8 @@
 'use client'
-import { Bell, Star, XCircle } from 'lucide-react'
+import { ArrowRight, Bell, Bookmark, Flag } from 'lucide-react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useTransition } from 'react'
-import { TopBar } from '@/components/chrome/top-bar'
 import { HeroCard } from '@/components/domain/hero-card'
 import { QuickActionCard } from '@/components/domain/quick-action-card'
 import { Button } from '@/components/primitives/button'
@@ -45,57 +45,92 @@ export default function HomePage() {
       : 0
 
   return (
-    <>
-      <TopBar
-        title={<span className="font-mono">ace-aws</span>}
-        leftAction={null}
-        rightAction={
-          <button type="button" className="p-2 text-ink-soft" aria-label="Notifications">
-            <Bell className="w-5 h-5" />
-          </button>
+    <main className="px-5 pt-5 pb-6 space-y-4">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Image src="/logo.png" alt="ace-aws" width={36} height={36} priority className="block" />
+          <div>
+            <p className="text-card font-bold text-ink tracking-tight leading-tight">
+              {t('appName')}
+            </p>
+            <p className="text-[10.5px] text-ink-mute leading-tight mt-0.5">{t('greeting')}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="w-9 h-9 rounded-lg border border-border bg-surface text-ink-soft flex items-center justify-center"
+          aria-label="Notifications"
+        >
+          <Bell className="w-[18px] h-[18px]" strokeWidth={1.75} />
+        </button>
+      </header>
+
+      <HeroCard
+        eyebrow={t('certDvaEyebrow')}
+        title={t('certDvaTitle')}
+        stats={[
+          {
+            label: t('homeAnswered'),
+            value: (
+              <>
+                {stats.data?.answered ?? 0}
+                <span className="text-[13px] font-bold opacity-70">/{stats.data?.total ?? 0}</span>
+              </>
+            ),
+          },
+          {
+            label: t('homeAccuracy'),
+            value: (
+              <>
+                {accuracy}
+                <span className="text-[13px] font-bold opacity-70">%</span>
+              </>
+            ),
+          },
+        ]}
+        cta={
+          <Button
+            variant="primary"
+            size="md"
+            fullWidth
+            className="!bg-white !text-accent-deep !font-bold gap-1.5"
+            onClick={handleContinue}
+            disabled={pending}
+          >
+            {pending ? (
+              <Spinner size={16} />
+            ) : (
+              <>
+                {t('homeContinue')}
+                <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.25} />
+              </>
+            )}
+          </Button>
         }
       />
-      <main className="px-4 pt-4 pb-6 space-y-4">
-        <p className="text-body text-ink-soft">{t('greeting')}</p>
 
-        <HeroCard
-          eyebrow={t('certDvaEyebrow')}
-          title={t('certDvaTitle')}
-          stats={[
-            {
-              label: t('homeAnswered'),
-              value: `${stats.data?.answered ?? 0}/${stats.data?.total ?? 0}`,
-            },
-            { label: t('homeAccuracy'), value: `${accuracy}%` },
-          ]}
-          cta={
-            <Button
-              variant="primary"
-              size="md"
-              className="!bg-white !text-accent-deep"
-              onClick={handleContinue}
-              disabled={pending}
-            >
-              {pending ? <Spinner size={16} /> : t('homeContinue')}
-            </Button>
-          }
+      <p className="px-1 pt-2 text-helper font-bold uppercase tracking-[1.2px] text-ink-mute">
+        {t('homeQuickStart')}
+      </p>
+      <div className="grid grid-cols-2 gap-2.5">
+        <QuickActionCard
+          icon={Flag}
+          label={t('homeWrong')}
+          count={wrong.data?.length ?? 0}
+          href="/list/wrong"
+          iconBgClass="bg-danger-soft"
+          iconColorClass="text-danger"
         />
-
-        <div className="grid grid-cols-2 gap-3">
-          <QuickActionCard
-            icon={XCircle}
-            label={t('homeWrong')}
-            count={wrong.data?.length ?? 0}
-            href="/list/wrong"
-          />
-          <QuickActionCard
-            icon={Star}
-            label={t('homeBookmarks')}
-            count={bookmarks.data?.length ?? 0}
-            href="/list/bookmarks"
-          />
-        </div>
-      </main>
-    </>
+        <QuickActionCard
+          icon={Bookmark}
+          label={t('homeBookmarks')}
+          count={bookmarks.data?.length ?? 0}
+          href="/list/bookmarks"
+          iconBgClass="bg-accent-soft"
+          iconColorClass="text-accent"
+          iconFilled
+        />
+      </div>
+    </main>
   )
 }

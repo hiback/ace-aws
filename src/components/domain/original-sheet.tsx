@@ -30,14 +30,18 @@ export function OriginalSheet({ open, onClose, enQuestion, enOptions }: Original
   const letters = Object.keys(enOptions) as Letter[]
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-end"
+      role="dialog"
+      aria-modal="true"
+    >
       <button
         type="button"
         aria-label="Close"
         onClick={onClose}
         className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
       />
-      <div className="relative h-[80%] bg-surface rounded-t-[22px] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-md h-[80%] bg-surface rounded-t-[22px] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden">
         <div className="flex justify-center pt-2 pb-1.5 shrink-0">
           <div className="w-9 h-1 rounded-full bg-border-strong/55" />
         </div>

@@ -13,8 +13,8 @@ export function BottomTabBar() {
   const pathname = usePathname()
   const t = useT()
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-20 bg-surface border-t border-border safe-bottom">
-      <ul className="flex items-stretch justify-around max-w-md mx-auto h-14">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-20 bg-surface border-t border-border safe-bottom">
+      <ul className="flex items-stretch justify-around h-14">
         {tabs.map(({ href, label, Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (

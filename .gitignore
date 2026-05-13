@@ -47,5 +47,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# ETL output
+# ETL output (intermediate JSONs ignored; committed bank exception below)
 src/data/*.json
+!src/data/dva-c02.json

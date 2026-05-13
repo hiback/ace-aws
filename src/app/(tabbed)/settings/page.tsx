@@ -1,9 +1,23 @@
 'use client'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Globe } from 'lucide-react'
+import type { ComponentType, SVGProps } from 'react'
 import { TopBar } from '@/components/chrome/top-bar'
 import type { Locale, Theme } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
+
+/** Theme icon — circle with the left half filled and a vertical divider.
+ *  Matches the design handoff's custom SVG. Signature mirrors lucide-react
+ *  icons so it can be passed through the same `icon` prop. */
+function ThemeIcon({ className, strokeWidth = 1.75, ...rest }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true" {...rest}>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={strokeWidth} />
+      <path d="M12 3 V21" stroke="currentColor" strokeWidth={strokeWidth} />
+      <path d="M12 3 A9 9 0 0 0 12 21 Z" fill="currentColor" />
+    </svg>
+  )
+}
 
 const APP_VERSION = '0.1.0'
 const REPO_URL = 'https://github.com/hiback/ace-aws'
@@ -36,10 +50,25 @@ function Segmented<T extends string>({
   )
 }
 
-function SettingsRow({ label, control }: { label: string; control: React.ReactNode }) {
+type IconComponent = ComponentType<{ className?: string; strokeWidth?: number }>
+
+function SettingsRow({
+  icon: Icon,
+  label,
+  control,
+}: {
+  icon?: IconComponent
+  label: string
+  control: React.ReactNode
+}) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
-      <span className="text-body text-ink">{label}</span>
+    <div className="flex items-center gap-3 px-3.5 py-3 border-b border-border last:border-b-0">
+      {Icon ? (
+        <div className="w-7 h-7 rounded-md bg-bg-alt flex items-center justify-center flex-shrink-0">
+          <Icon className="w-[18px] h-[18px] text-ink-soft" strokeWidth={1.75} />
+        </div>
+      ) : null}
+      <span className="flex-1 text-body text-ink">{label}</span>
       {control}
     </div>
   )
@@ -57,11 +86,12 @@ export default function SettingsPage() {
       <TopBar title={t('settingsTitle')} leftAction={null} />
       <main className="px-4 pt-4 pb-6 space-y-5">
         <section>
-          <h2 className="text-helper font-mono uppercase tracking-wide text-ink-mute mb-2 px-1">
+          <h2 className="text-helper font-bold uppercase tracking-[1.2px] text-ink-mute mb-2 px-1">
             {t('settingsAppearance')}
           </h2>
           <div className="rounded-card bg-surface border border-border">
             <SettingsRow
+              icon={ThemeIcon}
               label={t('settingsTheme')}
               control={
                 <Segmented<Theme>
@@ -79,11 +109,12 @@ export default function SettingsPage() {
         </section>
 
         <section>
-          <h2 className="text-helper font-mono uppercase tracking-wide text-ink-mute mb-2 px-1">
+          <h2 className="text-helper font-bold uppercase tracking-[1.2px] text-ink-mute mb-2 px-1">
             {t('settingsLanguage')}
           </h2>
           <div className="rounded-card bg-surface border border-border">
             <SettingsRow
+              icon={Globe}
               label={t('settingsLanguageLabel')}
               control={
                 <Segmented<Locale>
@@ -100,7 +131,7 @@ export default function SettingsPage() {
         </section>
 
         <section>
-          <h2 className="text-helper font-mono uppercase tracking-wide text-ink-mute mb-2 px-1">
+          <h2 className="text-helper font-bold uppercase tracking-[1.2px] text-ink-mute mb-2 px-1">
             {t('settingsAbout')}
           </h2>
           <div className="rounded-card bg-surface border border-border">

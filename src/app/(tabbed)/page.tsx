@@ -32,7 +32,7 @@ export default function HomePage() {
       if (next === null) {
         router.push('/list/wrong') // empty wrong list will then show all-answered hint
       } else {
-        router.push(`/practice/dva-c02/${next}`)
+        router.push(`/practice/dva-c02/${next}?from=${encodeURIComponent('/')}`)
       }
     })
   }

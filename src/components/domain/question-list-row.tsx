@@ -8,6 +8,8 @@ interface QuestionListRowProps {
   questionPreview: string
   status?: 'correct' | 'wrong' | 'unanswered'
   answeredAt?: number
+  /** Source path passed to practice page so its back button knows where to return. */
+  from: string
 }
 
 function formatDate(ts: number): string {
@@ -21,13 +23,14 @@ export function QuestionListRow({
   questionPreview,
   status,
   answeredAt,
+  from,
 }: QuestionListRowProps) {
   const StatusIcon = status === 'correct' ? Check : status === 'wrong' ? X : null
   const iconColor =
     status === 'correct' ? 'text-success' : status === 'wrong' ? 'text-danger' : 'text-ink-mute'
   return (
     <Link
-      href={`/practice/dva-c02/${qid}`}
+      href={`/practice/dva-c02/${qid}?from=${encodeURIComponent(from)}`}
       className="flex items-start gap-3 px-4 py-3 border-b border-border hover:bg-bg-alt transition-colors"
     >
       <div className="flex-shrink-0 w-5 pt-0.5 flex justify-center">

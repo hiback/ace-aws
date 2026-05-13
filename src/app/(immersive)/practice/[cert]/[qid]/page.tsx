@@ -1,6 +1,6 @@
 'use client'
 import { Bookmark, BookmarkCheck } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
 import { TopBar } from '@/components/chrome/top-bar'
@@ -29,13 +29,19 @@ import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
 
+const ALLOWED_FROM = new Set(['/', '/list/wrong', '/list/bookmarks'])
+
 export default function PracticePage() {
   const params = useParams<{ cert: CertCode; qid: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const t = useT()
   const locale = usePrefsStore((s) => s.locale)
   const qid = Number(params.qid)
   const cert = params.cert
+  const fromRaw = searchParams.get('from')
+  const from = fromRaw && ALLOWED_FROM.has(fromRaw) ? fromRaw : '/'
+  const fromQuery = `?from=${encodeURIComponent(from)}`
   const [picks, setPicks] = useState<Letter[]>([])
   const [pending, startTransition] = useTransition()
 
@@ -53,7 +59,7 @@ export default function PracticePage() {
   if (question.isLoading || answer.isLoading || bank.isLoading) {
     return (
       <>
-        <TopBar title="..." />
+        <TopBar title="..." backHref={from} />
         <div className="px-4 py-6 space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: skeleton loader has no stable id
@@ -67,7 +73,7 @@ export default function PracticePage() {
   if (!question.data) {
     return (
       <>
-        <TopBar title="" />
+        <TopBar title="" backHref={from} />
         <EmptyState
           title={t('questionNotFound')}
           action={<Button onClick={() => router.push('/')}>{t('backToHome')}</Button>}
@@ -109,7 +115,7 @@ export default function PracticePage() {
     startTransition(async () => {
       const next = await findNextUnansweredQid(qid, cert)
       if (next === null) router.push('/list/wrong')
-      else router.push(`/practice/${cert}/${next}`)
+      else router.push(`/practice/${cert}/${next}${fromQuery}`)
     })
   }
 
@@ -164,6 +170,7 @@ export default function PracticePage() {
   return (
     <>
       <TopBar
+        backHref={from}
         title={
           <span className="font-mono text-secondary text-ink-mute">
             {cert} · {q.topic}

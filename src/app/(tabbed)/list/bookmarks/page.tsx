@@ -21,6 +21,7 @@ function BookmarkRow({ qid, question, locale }: { qid: number; question: Questio
       questionPreview={text.slice(0, 80) + (text.length > 80 ? '…' : '')}
       status={status as 'correct' | 'wrong' | 'unanswered'}
       answeredAt={ans.data?.answeredAt}
+      from="/list/bookmarks"
     />
   )
 }

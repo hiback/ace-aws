@@ -7,7 +7,7 @@ export default function ListLayout({ children }: { children: React.ReactNode }) 
   const t = useT()
   return (
     <>
-      <TopBar title={t('questionListTitle')} />
+      <TopBar title={t('questionListTitle')} backHref="/" />
       <TabsBar />
       <main className="pb-6">{children}</main>
     </>

@@ -43,6 +43,7 @@ export default function WrongPage() {
               questionPreview={text.slice(0, 80) + (text.length > 80 ? '…' : '')}
               status="wrong"
               answeredAt={a.answeredAt}
+              from="/list/wrong"
             />
           </li>
         )

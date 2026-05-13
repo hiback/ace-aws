@@ -6,16 +6,24 @@ import type { ReactNode } from 'react'
 interface TopBarProps {
   title?: ReactNode
   leftAction?: 'back' | ReactNode
+  /** Logical parent route for the back button. When omitted, falls back to browser history. */
+  backHref?: string
   rightAction?: ReactNode
   className?: string
 }
 
-export function TopBar({ title, leftAction = 'back', rightAction, className = '' }: TopBarProps) {
+export function TopBar({
+  title,
+  leftAction = 'back',
+  backHref,
+  rightAction,
+  className = '',
+}: TopBarProps) {
   const router = useRouter()
   const back = (
     <button
       type="button"
-      onClick={() => router.back()}
+      onClick={() => (backHref ? router.push(backHref) : router.back())}
       className="p-2 -ml-2 text-ink-soft hover:text-ink"
       aria-label="Back"
     >

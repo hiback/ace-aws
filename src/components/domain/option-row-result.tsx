@@ -1,5 +1,6 @@
 import { Check, X } from 'lucide-react'
 import type { Letter } from '@/data/types'
+import { Prose } from '@/components/primitives/prose'
 import { VoteBar } from './vote-bar'
 
 type State = 'idle' | 'correct' | 'wrong' | 'missed-correct'
@@ -59,9 +60,9 @@ export function OptionRowResult({
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
-            <span className={['flex-1 text-option leading-[1.55]', textClass].join(' ')}>
-              {text}
-            </span>
+            <div className={['flex-1', textClass].join(' ')}>
+              <Prose variant="option" source={text} />
+            </div>
             {trailingIcon}
           </div>
           {showVoteBar && typeof votePercent === 'number' ? (

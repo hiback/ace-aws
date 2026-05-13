@@ -1,9 +1,10 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
-import { loadBank } from '@/data/loaders'
-import type { CertCode, Question } from '@/data/types'
+import { loadBank, normalizeCert } from '@/data/loaders'
+import type { Question } from '@/data/types'
 
-export function useQuestionBank(cert: CertCode = 'DVA-C02') {
+export function useQuestionBank(certInput: string = 'DVA-C02') {
+  const cert = normalizeCert(certInput)
   return useQuery<Question[]>({
     queryKey: ['question-bank', cert],
     queryFn: () => loadBank(cert),

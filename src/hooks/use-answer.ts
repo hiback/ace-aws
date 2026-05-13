@@ -1,7 +1,7 @@
 'use client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadBank } from '@/data/loaders'
-import type { CertCode, Letter } from '@/data/types'
+import type { Letter } from '@/data/types'
 import { progressRepo } from '@/repositories/local-progress-repository'
 
 export function useAnswer(qid: number) {
@@ -53,7 +53,7 @@ export function useIsBookmarked(qid: number) {
 
 export async function findNextUnansweredQid(
   currentQid: number,
-  cert: CertCode = 'DVA-C02',
+  cert: string = 'DVA-C02',
 ): Promise<number | null> {
   const bank = await loadBank(cert)
   const n = bank.length

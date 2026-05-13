@@ -2,14 +2,14 @@
 FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN corepack enable && pnpm install --frozen-lockfile --ignore-scripts && pnpm rebuild esbuild sharp
 
 # Stage 2: builder
 FROM node:24-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN corepack enable && pnpm build:data && pnpm build
+RUN corepack enable && node_modules/.bin/tsx scripts/build-questions.ts && node_modules/.bin/next build
 
 # Stage 3: runner
 FROM node:24-alpine AS runner

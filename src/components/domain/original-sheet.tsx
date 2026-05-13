@@ -62,7 +62,11 @@ export function OriginalSheet({ open, onClose, enQuestion, enOptions }: Original
         </div>
         <div className="flex-1 overflow-y-auto px-[18px] pt-3.5 pb-5">
           <div className="mb-3.5">
-            <Prose variant="stem" source={enQuestion} />
+            <Prose
+              variant="stem"
+              source={enQuestion}
+              className="[&_p]:text-[13.5px] [&_p]:leading-[1.6]"
+            />
           </div>
           <div className="flex flex-col gap-2">
             {letters.map((k) => (
@@ -71,7 +75,11 @@ export function OriginalSheet({ open, onClose, enQuestion, enOptions }: Original
                   {k}
                 </div>
                 <div className="flex-1 min-w-0 pt-0.5">
-                  <Prose variant="option" source={enOptions[k] ?? ''} />
+                  <Prose
+                    variant="option"
+                    source={enOptions[k] ?? ''}
+                    className="[&_p]:text-[12.5px] [&_p]:text-ink-soft [&_p]:leading-[1.55]"
+                  />
                 </div>
               </div>
             ))}

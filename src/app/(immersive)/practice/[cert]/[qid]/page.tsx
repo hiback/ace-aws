@@ -204,11 +204,16 @@ export default function PracticePage() {
       </div>
 
       <main className="px-4 pt-3 pb-32 space-y-4">
-        <QuestionStem zh={q.zh.question} en={q.en.question} />
-
-        {!submitted && isMulti ? (
-          <MultiStatusLine selected={picks.length} required={required} />
-        ) : null}
+        <QuestionStem
+          zhQuestion={q.zh.question}
+          enQuestion={q.en.question}
+          enOptions={q.en.options}
+          hint={
+            !submitted && isMulti ? (
+              <MultiStatusLine selected={picks.length} required={required} />
+            ) : null
+          }
+        />
 
         <div className="space-y-2">{renderOptions()}</div>
 

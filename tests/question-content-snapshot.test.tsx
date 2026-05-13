@@ -27,15 +27,13 @@ describe('question content rendering against real data', () => {
 
   it('renders a JSON-bearing option (id=75 letter A) as a <pre> block with the JSON preserved', () => {
     const q = findById(75)
-    const rawA = (q.en.options as Record<string, string>).A
-    // TODO(data): drop this shim once `pnpm build:data` emits fenced ```json``` blocks for code-bearing options.
-    const text = rawA.trim().startsWith('{') ? `\`\`\`json\n${rawA}\n\`\`\`` : rawA
+    const text = (q.en.options as Record<string, string>).A
+    expect(text.trim().startsWith('```json')).toBe(true)
     const { container } = render(
       <OptionRowResult letter={'A' as Letter} text={text} state="idle" showVoteBar={false} />,
     )
     const pre = container.querySelector('pre')
     expect(pre).not.toBeNull()
-    // The raw stored value is JSON; verify key tokens survive the pipeline.
     expect(pre?.textContent).toContain('"source"')
     expect(pre?.textContent).toContain('aws.codecommit')
   })

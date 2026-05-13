@@ -1,7 +1,6 @@
 services:
   ace-aws:
-    build: .
-    image: ace-aws:latest
+    image: ghcr.io/hiback/ace-aws:latest
     container_name: ace-aws
     restart: unless-stopped
     ports:

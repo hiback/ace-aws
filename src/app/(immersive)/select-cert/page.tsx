@@ -28,7 +28,7 @@ export default function SelectCertPage() {
   return (
     <>
       <TopBar title={t('selectCertTitle')} leftAction={null} />
-      <main className="px-4 pt-6 pb-32">
+      <main className="flex-1 px-4 pt-6 pb-6">
         <button
           type="button"
           onClick={handleStart}

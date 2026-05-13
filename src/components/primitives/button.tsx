@@ -34,7 +34,7 @@ export function Button({
     <button
       type="button"
       className={[
-        'inline-flex items-center justify-center font-medium transition-colors',
+        'inline-flex items-center justify-center font-semibold transition-colors',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         'disabled:cursor-not-allowed',
         variantClasses[variant],

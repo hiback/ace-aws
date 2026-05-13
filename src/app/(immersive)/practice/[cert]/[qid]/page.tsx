@@ -1,9 +1,8 @@
 'use client'
-import { Bookmark, BookmarkCheck } from 'lucide-react'
+import { Bookmark, BookmarkCheck, ChevronLeft } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
-import { TopBar } from '@/components/chrome/top-bar'
 import { ExplanationCard } from '@/components/domain/explanation-card'
 import { MultiStatusLine } from '@/components/domain/multi-status-line'
 import { MultiVoteDistribution } from '@/components/domain/multi-vote-distribution'
@@ -13,7 +12,6 @@ import { QuestionStem } from '@/components/domain/question-stem'
 import { StatusBanner } from '@/components/domain/status-banner'
 import { Button } from '@/components/primitives/button'
 import { EmptyState } from '@/components/primitives/empty-state'
-import { Pill } from '@/components/primitives/pill'
 import { ProgressBar } from '@/components/primitives/progress-bar'
 import { Spinner } from '@/components/primitives/spinner'
 import type { CertCode, Letter } from '@/data/types'
@@ -27,7 +25,15 @@ import {
 import { useQuestion } from '@/hooks/use-question'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
+import type { StringKey } from '@/lib/strings'
 import { usePrefsStore } from '@/stores/prefs-store'
+
+const TOPIC_KEYS: Record<string, StringKey> = {
+  Deployment: 'topicDeployment',
+  Development: 'topicDevelopment',
+  Security: 'topicSecurity',
+  Troubleshooting: 'topicTroubleshooting',
+}
 
 const ALLOWED_FROM = new Set(['/', '/list/wrong', '/list/bookmarks'])
 
@@ -58,27 +64,23 @@ export default function PracticePage() {
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
     return (
-      <>
-        <TopBar title="..." backHref={from} />
-        <div className="px-4 py-6 space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: skeleton loader has no stable id
-            <div key={i} className="h-14 rounded-option bg-bg-alt animate-pulse" />
-          ))}
-        </div>
-      </>
+      <main className="flex-1 px-4 py-6 space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: skeleton loader has no stable id
+          <div key={i} className="h-14 rounded-option bg-bg-alt animate-pulse" />
+        ))}
+      </main>
     )
   }
 
   if (!question.data) {
     return (
-      <>
-        <TopBar title="" backHref={from} />
+      <main className="flex-1">
         <EmptyState
           title={t('questionNotFound')}
           action={<Button onClick={() => router.push('/')}>{t('backToHome')}</Button>}
         />
-      </>
+      </main>
     )
   }
 
@@ -166,21 +168,45 @@ export default function PracticePage() {
   })()
 
   const correctKey = correctSorted.join('')
+  const topicLabel = TOPIC_KEYS[q.topic] ? t(TOPIC_KEYS[q.topic]) : q.topic
 
   return (
     <>
-      <TopBar
-        backHref={from}
-        title={
-          <span className="font-mono text-secondary text-ink-mute">
-            {cert} · {q.topic}
-          </span>
-        }
-        rightAction={
+      <header className="sticky top-0 z-10 bg-surface border-b border-border">
+        <div className="px-3 pt-3 pb-2.5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => router.push(from)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink"
+            aria-label="Back"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="flex-1 min-w-0 text-center">
+            <p className="font-mono text-helper text-ink-mute font-medium tracking-wide truncate">
+              {cert.toUpperCase()} · {topicLabel}
+            </p>
+            <p className="mt-0.5 text-option font-semibold text-ink flex items-center justify-center gap-2">
+              <span>
+                {t('practiceCountPrefix')} <span className="text-accent font-bold">{qid}</span>{' '}
+                {t('practiceCountMiddle')} {total}
+                {t('practiceCountSuffix') ? ` ${t('practiceCountSuffix')}` : ''}
+              </span>
+              <span
+                className={[
+                  'font-mono uppercase font-bold tracking-wider',
+                  'text-[10px] leading-none px-1.5 py-1 rounded-badge',
+                  isMulti ? 'bg-accent-soft text-accent-deep' : 'bg-bg-alt text-ink-soft',
+                ].join(' ')}
+              >
+                {isMulti ? t('badgeMulti', { n: required }) : t('badgeSingle')}
+              </span>
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => toggleBookmark.mutate(qid)}
-            className="p-2 text-ink-soft"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft"
             aria-label="Bookmark"
           >
             {bookmarked.data ? (
@@ -189,21 +215,11 @@ export default function PracticePage() {
               <Bookmark className="w-5 h-5" />
             )}
           </button>
-        }
-      />
-      <div className="px-4 pt-2 pb-1">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-secondary text-ink-mute font-mono">
-            {t('questionXofY', { x: qid, y: total })}
-          </span>
-          <Pill tone={isMulti ? 'accent' : 'default'}>
-            {isMulti ? t('badgeMulti', { n: required }) : t('badgeSingle')}
-          </Pill>
         </div>
-        <ProgressBar value={qid / Math.max(total, 1)} height={2} />
-      </div>
+        <ProgressBar value={qid / Math.max(total, 1)} height={4} className="rounded-none" />
+      </header>
 
-      <main className="px-4 pt-3 pb-32 space-y-4">
+      <main className="flex-1 px-5 pt-4 pb-6 space-y-4">
         <QuestionStem
           zhQuestion={q.zh.question}
           enQuestion={q.en.question}
@@ -219,7 +235,11 @@ export default function PracticePage() {
 
         {submitted ? (
           <>
-            <StatusBanner tone={bannerTone} />
+            <StatusBanner
+              tone={bannerTone}
+              correctLetters={correctSorted}
+              userLetters={userPicksSorted}
+            />
             {q.type === 'multi' ? (
               <MultiVoteDistribution distribution={q.vote_distribution} correctKey={correctKey} />
             ) : null}

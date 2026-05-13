@@ -9,7 +9,7 @@ export function StickyFooter({ children, className = '' }: StickyFooterProps) {
   return (
     <footer
       className={[
-        'sticky bottom-0 z-10 bg-bg/95 backdrop-blur',
+        'sticky bottom-0 z-10 bg-surface',
         'border-t border-border safe-bottom',
         className,
       ].join(' ')}

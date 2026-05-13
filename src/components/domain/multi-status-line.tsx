@@ -1,4 +1,5 @@
 'use client'
+import { Info } from 'lucide-react'
 import { useT } from '@/hooks/use-t'
 
 interface MultiStatusLineProps {
@@ -11,13 +12,15 @@ export function MultiStatusLine({ selected, required }: MultiStatusLineProps) {
   const remaining = required - selected
   const done = remaining <= 0
   return (
-    <p
+    <span
       className={[
-        'font-mono text-mono-small uppercase tracking-wide',
+        'inline-flex items-center gap-1.5',
+        'font-mono text-helper font-bold uppercase tracking-wide',
         done ? 'text-success-deep' : 'text-ink-mute',
       ].join(' ')}
     >
+      <Info className="w-3 h-3" strokeWidth={2} />
       {done ? t('selectedNofN', { n: selected, total: required }) : t('selectN', { n: remaining })}
-    </p>
+    </span>
   )
 }

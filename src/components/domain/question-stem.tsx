@@ -1,10 +1,10 @@
 'use client'
 import { Globe } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { Prose } from '@/components/primitives/prose'
 import type { Letter } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
-import { Prose } from '@/components/primitives/prose'
 import { OriginalSheet } from './original-sheet'
 
 interface QuestionStemProps {

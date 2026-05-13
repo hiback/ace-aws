@@ -23,6 +23,7 @@ export function OptionRow({ letter, text, selected, multi, onClick, disabled }: 
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: options can contain block markdown (<pre>) which is invalid inside <button>; emulating button semantics on a div instead.
     <div
       role="button"
       tabIndex={disabled ? -1 : 0}

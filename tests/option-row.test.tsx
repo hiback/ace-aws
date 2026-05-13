@@ -7,18 +7,14 @@ afterEach(cleanup)
 describe('OptionRow', () => {
   it('fires onClick when activated by mouse', () => {
     const onClick = vi.fn()
-    render(
-      <OptionRow letter="A" text="hello" selected={false} multi={false} onClick={onClick} />,
-    )
+    render(<OptionRow letter="A" text="hello" selected={false} multi={false} onClick={onClick} />)
     fireEvent.click(screen.getByRole('button', { name: /A/ }))
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
   it('fires onClick when activated by Enter or Space', () => {
     const onClick = vi.fn()
-    render(
-      <OptionRow letter="A" text="hello" selected={false} multi={false} onClick={onClick} />,
-    )
+    render(<OptionRow letter="A" text="hello" selected={false} multi={false} onClick={onClick} />)
     const el = screen.getByRole('button', { name: /A/ })
     fireEvent.keyDown(el, { key: 'Enter' })
     fireEvent.keyDown(el, { key: ' ' })

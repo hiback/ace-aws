@@ -1,6 +1,6 @@
 import { Check, X } from 'lucide-react'
-import type { Letter } from '@/data/types'
 import { Prose } from '@/components/primitives/prose'
+import type { Letter } from '@/data/types'
 import { VoteBar } from './vote-bar'
 
 type State = 'idle' | 'correct' | 'wrong' | 'missed-correct'

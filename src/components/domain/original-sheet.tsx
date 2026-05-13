@@ -1,8 +1,8 @@
 'use client'
 import { Globe, X } from 'lucide-react'
 import { useEffect } from 'react'
-import type { Letter } from '@/data/types'
 import { Prose } from '@/components/primitives/prose'
+import type { Letter } from '@/data/types'
 
 interface OriginalSheetProps {
   open: boolean

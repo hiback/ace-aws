@@ -82,7 +82,7 @@ function buildComponents(variant: ProseVariant): Components {
       )
     },
     pre: ({ children }) => (
-      <pre className="font-mono text-[11.5px] bg-bg-alt border border-border rounded-lg p-3 mb-2 mt-1 overflow-auto leading-[1.55] text-ink whitespace-pre">
+      <pre className="font-mono text-[11.5px] bg-bg-alt border border-border rounded-lg p-3 mb-3 overflow-auto leading-[1.55] text-ink whitespace-pre">
         {children}
       </pre>
     ),

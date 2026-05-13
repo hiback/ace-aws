@@ -9,7 +9,7 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN corepack enable && node_modules/.bin/tsx scripts/build-questions.ts && node_modules/.bin/next build
+RUN corepack enable && node_modules/.bin/next build
 
 # Stage 3: runner
 FROM node:24-alpine AS runner

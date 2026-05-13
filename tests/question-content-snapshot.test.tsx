@@ -29,7 +29,7 @@ describe('question content rendering against real data', () => {
     const q = findById(75)
     const rawA = (q.en.options as Record<string, string>).A
     // TODO(data): drop this shim once `pnpm build:data` emits fenced ```json``` blocks for code-bearing options.
-    const text = rawA.trim().startsWith('{') ? '```json\n' + rawA + '\n```' : rawA
+    const text = rawA.trim().startsWith('{') ? `\`\`\`json\n${rawA}\n\`\`\`` : rawA
     const { container } = render(
       <OptionRowResult letter={'A' as Letter} text={text} state="idle" showVoteBar={false} />,
     )

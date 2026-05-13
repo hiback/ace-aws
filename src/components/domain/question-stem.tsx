@@ -4,6 +4,7 @@ import { type ReactNode, useState } from 'react'
 import type { Letter } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
+import { Prose } from '@/components/primitives/prose'
 import { OriginalSheet } from './original-sheet'
 
 interface QuestionStemProps {
@@ -24,7 +25,7 @@ export function QuestionStem({ zhQuestion, enQuestion, enOptions, hint }: Questi
 
   return (
     <div className="space-y-3">
-      <p className="text-body text-ink leading-[1.65] whitespace-pre-wrap">{primaryText}</p>
+      <Prose variant="stem" source={primaryText} />
       {showRow ? (
         <div className="flex items-center gap-2.5 flex-wrap">
           {hint ? <div className="flex items-center">{hint}</div> : null}

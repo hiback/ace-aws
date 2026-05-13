@@ -1,3 +1,5 @@
+import type { KeyboardEvent } from 'react'
+import { Prose } from '@/components/primitives/prose'
 import type { Letter } from '@/data/types'
 
 interface OptionRowProps {
@@ -11,13 +13,25 @@ interface OptionRowProps {
 
 export function OptionRow({ letter, text, selected, multi, onClick, disabled }: OptionRowProps) {
   const tileShape = multi ? 'rounded-letter-square' : 'rounded-full'
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onClick()
+    }
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
+    <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled || undefined}
+      onClick={disabled ? undefined : onClick}
+      onKeyDown={handleKeyDown}
+      aria-label={letter}
       className={[
-        'w-full text-left p-3 flex items-start gap-3 transition-colors',
+        'w-full text-left p-3 flex items-start gap-3 transition-colors select-none',
         multi ? 'rounded-option-multi border-[1.5px]' : 'rounded-option border-[1.5px]',
         selected
           ? 'bg-accent-softer border-accent'
@@ -31,10 +45,13 @@ export function OptionRow({ letter, text, selected, multi, onClick, disabled }: 
           tileShape,
           selected ? 'bg-accent text-white' : 'bg-bg-alt text-ink-soft',
         ].join(' ')}
+        aria-hidden="true"
       >
         {letter}
       </span>
-      <span className="text-option text-ink leading-[1.55]">{text}</span>
-    </button>
+      <div className="flex-1 min-w-0">
+        <Prose variant="option" source={text} />
+      </div>
+    </div>
   )
 }

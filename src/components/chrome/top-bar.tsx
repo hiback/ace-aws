@@ -32,11 +32,7 @@ export function TopBar({
   )
   return (
     <header
-      className={[
-        'sticky top-0 z-10 bg-bg/90 backdrop-blur supports-[backdrop-filter]:bg-bg/70',
-        'border-b border-border',
-        className,
-      ].join(' ')}
+      className={['sticky top-0 z-10 bg-surface', 'border-b border-border', className].join(' ')}
     >
       <div className="max-w-md mx-auto h-12 px-2 flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">{leftAction === 'back' ? back : leftAction}</div>

@@ -26,9 +26,8 @@ function BookmarkRow({
     <QuestionListRow
       qid={qid}
       topic={question.topic}
-      questionPreview={text.slice(0, 80) + (text.length > 80 ? '…' : '')}
+      questionPreview={text}
       status={status as 'correct' | 'wrong' | 'unanswered'}
-      answeredAt={ans.data?.answeredAt}
       from="/list/bookmarks"
     />
   )

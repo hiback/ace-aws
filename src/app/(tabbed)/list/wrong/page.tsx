@@ -40,9 +40,8 @@ export default function WrongPage() {
             <QuestionListRow
               qid={a.qid}
               topic={q.topic}
-              questionPreview={text.slice(0, 80) + (text.length > 80 ? '…' : '')}
+              questionPreview={text}
               status="wrong"
-              answeredAt={a.answeredAt}
               from="/list/wrong"
             />
           </li>

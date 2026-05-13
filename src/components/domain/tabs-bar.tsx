@@ -12,8 +12,8 @@ export function TabsBar() {
   const pathname = usePathname()
   const t = useT()
   return (
-    <nav className="sticky top-12 z-10 bg-bg/95 backdrop-blur border-b border-border">
-      <div className="max-w-md mx-auto px-2 flex">
+    <nav className="sticky top-12 z-10 bg-surface border-b border-border">
+      <div className="max-w-md mx-auto flex items-center gap-2 overflow-x-auto px-5 py-3">
         {tabs.map(({ href, label }) => {
           const active = pathname === href
           return (
@@ -21,10 +21,8 @@ export function TabsBar() {
               key={href}
               href={href}
               className={[
-                'flex-1 text-center py-3 text-secondary font-medium',
-                active
-                  ? 'text-accent border-b-2 border-accent'
-                  : 'text-ink-mute border-b-2 border-transparent hover:text-ink-soft',
+                'px-3 py-1.5 rounded-pill text-secondary font-semibold whitespace-nowrap transition-colors',
+                active ? 'bg-accent text-white' : 'bg-bg-alt text-ink-soft hover:text-ink',
               ].join(' ')}
             >
               {t(label)}

@@ -1,56 +1,56 @@
+'use client'
 import { Check, ChevronRight, X } from 'lucide-react'
 import Link from 'next/link'
-import { Pill } from '@/components/primitives/pill'
+import { useT } from '@/hooks/use-t'
+import { TOPIC_KEYS } from '@/lib/topic'
 
 interface QuestionListRowProps {
   qid: number
   topic: string
   questionPreview: string
   status?: 'correct' | 'wrong' | 'unanswered'
-  answeredAt?: number
   /** Source path passed to practice page so its back button knows where to return. */
   from: string
-}
-
-function formatDate(ts: number): string {
-  const d = new Date(ts)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export function QuestionListRow({
   qid,
   topic,
   questionPreview,
-  status,
-  answeredAt,
+  status = 'unanswered',
   from,
 }: QuestionListRowProps) {
-  const StatusIcon = status === 'correct' ? Check : status === 'wrong' ? X : null
-  const iconColor =
-    status === 'correct' ? 'text-success' : status === 'wrong' ? 'text-danger' : 'text-ink-mute'
+  const t = useT()
+  const topicLabel = TOPIC_KEYS[topic] ? t(TOPIC_KEYS[topic]) : topic
+  const tile =
+    status === 'correct'
+      ? 'bg-success-soft text-success'
+      : status === 'wrong'
+        ? 'bg-danger-soft text-danger'
+        : 'bg-bg-alt text-ink-mute'
+  const Icon = status === 'correct' ? Check : status === 'wrong' ? X : null
   return (
     <Link
       href={`/practice/dva-c02/${qid}?from=${encodeURIComponent(from)}`}
-      className="flex items-start gap-3 px-4 py-3 border-b border-border hover:bg-bg-alt transition-colors"
+      className="flex items-start gap-3 px-5 py-3 border-b border-border hover:bg-bg-alt transition-colors"
     >
-      <div className="flex-shrink-0 w-5 pt-0.5 flex justify-center">
-        {StatusIcon ? (
-          <StatusIcon className={['w-4 h-4', iconColor].join(' ')} strokeWidth={2.25} />
-        ) : (
-          <span className="w-4 h-4" />
-        )}
+      <div
+        className={[
+          'w-[26px] h-[26px] rounded-md flex items-center justify-center flex-shrink-0 mt-0.5',
+          tile,
+        ].join(' ')}
+      >
+        {Icon ? <Icon className="w-3.5 h-3.5" strokeWidth={2.5} /> : null}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="font-mono text-secondary font-bold text-ink">Q{qid}</span>
-          <Pill>{topic}</Pill>
-        </div>
-        <p className="text-secondary text-ink-soft truncate">{questionPreview}</p>
-        {answeredAt ? (
-          <p className="text-helper text-ink-mute mt-0.5 font-mono">{formatDate(answeredAt)}</p>
-        ) : null}
+        <p className="text-option text-ink leading-[1.5] line-clamp-2 mb-1">{questionPreview}</p>
+        <p className="text-helper text-ink-mute flex items-center gap-2">
+          <span className="font-mono">#{String(qid).padStart(3, '0')}</span>
+          <span className="w-[3px] h-[3px] rounded-full bg-ink-subtle" />
+          <span>{topicLabel}</span>
+        </p>
       </div>
-      <ChevronRight className="w-4 h-4 text-ink-subtle flex-shrink-0 mt-1" />
+      <ChevronRight className="w-4 h-4 text-ink-subtle flex-shrink-0 mt-2" />
     </Link>
   )
 }

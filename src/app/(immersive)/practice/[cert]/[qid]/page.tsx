@@ -25,15 +25,8 @@ import {
 import { useQuestion } from '@/hooks/use-question'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
-import type { StringKey } from '@/lib/strings'
+import { TOPIC_KEYS } from '@/lib/topic'
 import { usePrefsStore } from '@/stores/prefs-store'
-
-const TOPIC_KEYS: Record<string, StringKey> = {
-  Deployment: 'topicDeployment',
-  Development: 'topicDevelopment',
-  Security: 'topicSecurity',
-  Troubleshooting: 'topicTroubleshooting',
-}
 
 const ALLOWED_FROM = new Set(['/', '/list/wrong', '/list/bookmarks'])
 

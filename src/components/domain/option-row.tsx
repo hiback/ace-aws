@@ -29,7 +29,6 @@ export function OptionRow({ letter, text, selected, multi, onClick, disabled }: 
       aria-disabled={disabled || undefined}
       onClick={disabled ? undefined : onClick}
       onKeyDown={handleKeyDown}
-      aria-label={letter}
       className={[
         'w-full text-left p-3 flex items-start gap-3 transition-colors select-none',
         multi ? 'rounded-option-multi border-[1.5px]' : 'rounded-option border-[1.5px]',
@@ -45,7 +44,6 @@ export function OptionRow({ letter, text, selected, multi, onClick, disabled }: 
           tileShape,
           selected ? 'bg-accent text-white' : 'bg-bg-alt text-ink-soft',
         ].join(' ')}
-        aria-hidden="true"
       >
         {letter}
       </span>

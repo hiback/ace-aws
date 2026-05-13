@@ -10,7 +10,15 @@ import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
 import type { Question } from '@/data/types'
 
-function BookmarkRow({ qid, question, locale }: { qid: number; question: Question; locale: 'zh' | 'en' }) {
+function BookmarkRow({
+  qid,
+  question,
+  locale,
+}: {
+  qid: number
+  question: Question
+  locale: 'zh' | 'en'
+}) {
   const ans = useAnswer(qid)
   const text = locale === 'zh' ? question.zh.question : question.en.question
   const status = ans.data ? (ans.data.correct ? 'correct' : 'wrong') : 'unanswered'
@@ -33,7 +41,11 @@ export default function BookmarksPage() {
   const locale = usePrefsStore((s) => s.locale)
 
   if (bookmarks.isLoading || bank.isLoading) {
-    return <div className="flex justify-center py-8"><Spinner /></div>
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner />
+      </div>
+    )
   }
 
   if (!bookmarks.data || bookmarks.data.length === 0) {

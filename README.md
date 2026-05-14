@@ -14,7 +14,7 @@ MVP — DVA-C02 only. Mock exam, dashboard, and community comments are out of sc
 
 - Node.js 24+
 - pnpm 9+
-- Optional: a copy of the source question bank at `refs/questions.json` if you need to regenerate `src/data/dva-c02.json`
+- Optional: a copy of the source question bank at `refs/dva-c02.json` if you need to regenerate `src/data/dva-c02.json`
 
 ### First-time setup
 
@@ -23,7 +23,7 @@ pnpm install
 pnpm dev               # http://localhost:3000
 ```
 
-`src/data/dva-c02.json` is committed, so local development, CI, and Docker builds do not need `refs/questions.json`. Run `pnpm build:data` only when the raw question bank changes.
+`src/data/dva-c02.json` is committed, so local development, CI, and Docker builds do not need `refs/dva-c02.json`. Run `pnpm build:data` only when the raw question bank changes.
 
 ### Tests
 

@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Letter, Question } from '../src/data/types'
 
-const SRC = 'refs/questions.json'
+const SRC = 'refs/dva-c02.json'
 const DST = 'src/data/dva-c02.json'
 
 export interface RawQuestion {
@@ -81,7 +81,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((e: NodeJS.ErrnoException) => {
     if (e.code === 'ENOENT') {
       console.error(
-        `× ${SRC} not found. Place the original question bank at refs/questions.json before running.`,
+        `× ${SRC} not found. Place the original question bank at refs/dva-c02.json before running.`,
       )
     } else {
       console.error(e)

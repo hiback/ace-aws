@@ -1,7 +1,7 @@
 'use client'
 import { Bookmark, BookmarkCheck, ChevronLeft } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
 import { ExplanationCard } from '@/components/domain/explanation-card'
 import { MultiStatusLine } from '@/components/domain/multi-status-line'
@@ -41,7 +41,7 @@ export default function PracticePage() {
   const fromRaw = searchParams.get('from')
   const from = fromRaw && ALLOWED_FROM.has(fromRaw) ? fromRaw : '/'
   const fromQuery = `?from=${encodeURIComponent(from)}`
-  const [picks, setPicks] = useState<Letter[]>([])
+  const [selection, setSelection] = useState<{ qid: number; picks: Letter[] }>({ qid, picks: [] })
   const [pending, startTransition] = useTransition()
 
   const bank = useQuestionBank(cert)
@@ -50,10 +50,7 @@ export default function PracticePage() {
   const bookmarked = useIsBookmarked(qid)
   const saveAnswer = useSaveAnswer()
   const toggleBookmark = useToggleBookmark()
-
-  useEffect(() => {
-    setPicks([])
-  }, [qid])
+  const picks = selection.qid === qid ? selection.picks : []
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
     return (
@@ -89,11 +86,12 @@ export default function PracticePage() {
 
   const handlePick = (letter: Letter) => {
     if (submitted) return
-    setPicks((prev) => {
-      if (prev.includes(letter)) return prev.filter((p) => p !== letter)
-      if (!isMulti) return [letter]
-      if (prev.length < required) return [...prev, letter]
-      return [...prev.slice(1), letter]
+    setSelection((prevSelection) => {
+      const prev = prevSelection.qid === qid ? prevSelection.picks : []
+      if (prev.includes(letter)) return { qid, picks: prev.filter((p) => p !== letter) }
+      if (!isMulti) return { qid, picks: [letter] }
+      if (prev.length < required) return { qid, picks: [...prev, letter] }
+      return { qid, picks: [...prev.slice(1), letter] }
     })
   }
 

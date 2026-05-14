@@ -1,5 +1,6 @@
 export type CertCode = 'DVA-C02'
 export type Letter = 'A' | 'B' | 'C' | 'D' | 'E'
+export type VoteKey = Letter | 'Other'
 export type Locale = 'zh' | 'en'
 export type Theme = 'light' | 'dark' | 'system'
 
@@ -21,7 +22,7 @@ interface BaseQuestion {
 export type Question =
   | (BaseQuestion & {
       type: 'single'
-      vote_distribution: Partial<Record<Letter, number>>
+      vote_distribution: Partial<Record<VoteKey, number>>
     })
   | (BaseQuestion & {
       type: 'multi'

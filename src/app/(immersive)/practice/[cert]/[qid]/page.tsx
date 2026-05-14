@@ -1,5 +1,5 @@
 'use client'
-import { Bookmark, BookmarkCheck, ChevronLeft } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Check, ChevronLeft, X } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
@@ -29,6 +29,27 @@ import { TOPIC_KEYS } from '@/lib/topic'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 const ALLOWED_FROM = new Set(['/', '/list/wrong', '/list/bookmarks'])
+
+const RESULT_CHIP_CLASS = {
+  correct: 'bg-success-soft text-success-deep',
+  wrong: 'bg-danger-soft text-danger-deep',
+  partial: 'bg-bg-alt text-accent-deep',
+} as const
+
+const RESULT_LABEL_KEY = {
+  correct: 'bannerCorrect',
+  wrong: 'bannerWrong',
+  partial: 'bannerPartial',
+} as const
+
+function HeaderPartialMark() {
+  return (
+    <svg className="h-2.5 w-2.5" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2.5" fill="none" />
+      <path d="M11 4.5 A6.5 6.5 0 0 1 11 17.5 Z" fill="currentColor" />
+    </svg>
+  )
+}
 
 export default function PracticePage() {
   const params = useParams<{ cert: CertCode; qid: string }>()
@@ -139,6 +160,7 @@ export default function PracticePage() {
           letter={letter}
           text={(locale === 'zh' ? q.zh.options[letter] : q.en.options[letter]) ?? ''}
           state={state}
+          multi={isMulti}
         />
       )
     })
@@ -155,55 +177,78 @@ export default function PracticePage() {
   })()
 
   const correctKey = correctSorted.join('')
+  const userKey = userPicksSorted.join('')
   const topicLabel = TOPIC_KEYS[q.topic] ? t(TOPIC_KEYS[q.topic]) : q.topic
+  const resultChip = submitted ? (
+    <span
+      className={[
+        'inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase leading-none tracking-[0.05em]',
+        'rounded-pill px-2 py-1',
+        RESULT_CHIP_CLASS[bannerTone],
+      ].join(' ')}
+    >
+      {bannerTone === 'correct' ? (
+        <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
+      ) : bannerTone === 'wrong' ? (
+        <X className="h-2.5 w-2.5" strokeWidth={2.5} />
+      ) : (
+        <HeaderPartialMark />
+      )}
+      {t(RESULT_LABEL_KEY[bannerTone])}
+    </span>
+  ) : null
 
   return (
     <>
       <header className="sticky top-0 z-10 bg-surface border-b border-border">
-        <div className="px-3 pt-3 pb-2.5 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => router.push(from)}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink"
-            aria-label={t('back')}
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0 text-center">
-            <p className="font-mono text-helper text-ink-mute font-medium tracking-wide truncate">
-              {cert.toUpperCase()} · {topicLabel}
-            </p>
-            <p className="mt-0.5 text-option font-semibold text-ink flex items-center justify-center gap-2">
-              <span>
-                {t('practiceCountPrefix')} <span className="text-accent font-bold">{qid}</span>{' '}
-                {t('practiceCountMiddle')} {total}
-                {t('practiceCountSuffix') ? ` ${t('practiceCountSuffix')}` : ''}
-              </span>
-              <span
-                className={[
-                  'font-mono uppercase font-bold tracking-wider',
-                  'text-[10px] leading-none px-1.5 py-1 rounded-badge',
-                  isMulti ? 'bg-accent-soft text-accent-deep' : 'bg-bg-alt text-ink-soft',
-                ].join(' ')}
-              >
-                {isMulti ? t('badgeMulti', { n: required }) : t('badgeSingle')}
-              </span>
-            </p>
+        <div className="px-5 pt-3 pb-3.5">
+          <div className="mb-2.5 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.push(from)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink"
+              aria-label={t('back')}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0 text-center">
+              <p className="font-mono text-helper text-ink-mute font-medium tracking-wide truncate">
+                {cert.toUpperCase()} · {topicLabel}
+              </p>
+              <p className="mt-0.5 text-option font-semibold text-ink flex items-center justify-center gap-2">
+                <span>
+                  {t('practiceCountPrefix')} <span className="text-accent font-bold">{qid}</span>{' '}
+                  {t('practiceCountMiddle')} {total}
+                  {t('practiceCountSuffix') ? ` ${t('practiceCountSuffix')}` : ''}
+                </span>
+                {resultChip ?? (
+                  <span
+                    className={[
+                      'font-mono uppercase font-bold tracking-wider',
+                      'text-[10px] leading-none px-1.5 py-1 rounded-badge',
+                      isMulti ? 'bg-accent-soft text-accent-deep' : 'bg-bg-alt text-ink-soft',
+                    ].join(' ')}
+                  >
+                    {isMulti ? t('badgeMulti', { n: required }) : t('badgeSingle')}
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleBookmark.mutate(qid)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft"
+              aria-label={t('bookmark')}
+            >
+              {bookmarked.data ? (
+                <BookmarkCheck className="w-5 h-5 text-accent" strokeWidth={2.25} />
+              ) : (
+                <Bookmark className="w-5 h-5" />
+              )}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => toggleBookmark.mutate(qid)}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft"
-            aria-label={t('bookmark')}
-          >
-            {bookmarked.data ? (
-              <BookmarkCheck className="w-5 h-5 text-accent" strokeWidth={2.25} />
-            ) : (
-              <Bookmark className="w-5 h-5" />
-            )}
-          </button>
+          <ProgressBar value={qid / Math.max(total, 1)} height={4} />
         </div>
-        <ProgressBar value={qid / Math.max(total, 1)} height={4} className="rounded-none" />
       </header>
 
       <main className="flex-1 px-5 pt-4 pb-6 space-y-4">
@@ -227,7 +272,12 @@ export default function PracticePage() {
               correctLetters={correctSorted}
               userLetters={userPicksSorted}
             />
-            <VoteDistribution distribution={q.vote_distribution} correctKey={correctKey} />
+            <VoteDistribution
+              distribution={q.vote_distribution}
+              correctKey={correctKey}
+              userKey={userKey}
+              isMulti={isMulti}
+            />
             <ExplanationCard zh={q.zh.explanation} en={q.en.explanation} locale={locale} />
           </>
         ) : null}

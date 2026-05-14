@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { Letter, Question } from '../src/data/types'
+import type { Letter, Question, VoteKey } from '../src/data/types'
 
 const SRC = 'refs/dva-c02.json'
 const DST = 'src/data/dva-c02.json'
@@ -57,7 +57,7 @@ export function transformQuestion(q: RawQuestion): Question {
   if (isMulti) {
     const vd: Record<string, number> = {}
     for (const [k, v] of Object.entries(q.vote_distribution)) {
-      const norm = sortedKey(k.split(''))
+      const norm = k === 'Other' ? 'Other' : sortedKey(k.split(''))
       vd[norm] = (vd[norm] ?? 0) + v
     }
     return { type: 'multi', ...base, answer_count: correct.length, vote_distribution: vd }
@@ -65,7 +65,7 @@ export function transformQuestion(q: RawQuestion): Question {
   return {
     type: 'single',
     ...base,
-    vote_distribution: q.vote_distribution as Partial<Record<Letter, number>>,
+    vote_distribution: q.vote_distribution as Partial<Record<VoteKey, number>>,
   }
 }
 

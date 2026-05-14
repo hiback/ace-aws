@@ -30,7 +30,7 @@ describe('question content rendering against real data', () => {
     const text = (q.en.options as Record<string, string>).A
     expect(text.trim().startsWith('```json')).toBe(true)
     const { container } = render(
-      <OptionRowResult letter={'A' as Letter} text={text} state="idle" showVoteBar={false} />,
+      <OptionRowResult letter={'A' as Letter} text={text} state="idle" />,
     )
     const pre = container.querySelector('pre')
     expect(pre).not.toBeNull()

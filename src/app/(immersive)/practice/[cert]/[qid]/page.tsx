@@ -5,11 +5,11 @@ import { useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
 import { ExplanationCard } from '@/components/domain/explanation-card'
 import { MultiStatusLine } from '@/components/domain/multi-status-line'
-import { MultiVoteDistribution } from '@/components/domain/multi-vote-distribution'
 import { OptionRow } from '@/components/domain/option-row'
 import { OptionRowResult } from '@/components/domain/option-row-result'
 import { QuestionStem } from '@/components/domain/question-stem'
 import { StatusBanner } from '@/components/domain/status-banner'
+import { VoteDistribution } from '@/components/domain/vote-distribution'
 import { Button } from '@/components/primitives/button'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { ProgressBar } from '@/components/primitives/progress-bar'
@@ -133,16 +133,12 @@ export default function PracticePage() {
       if (isPicked && isCorrect) state = 'correct'
       else if (isPicked && !isCorrect) state = 'wrong'
       else if (!isPicked && isCorrect) state = 'missed-correct'
-      const showVoteBar = q.type === 'single'
-      const votePercent = q.type === 'single' ? q.vote_distribution[letter] : undefined
       return (
         <OptionRowResult
           key={letter}
           letter={letter}
           text={(locale === 'zh' ? q.zh.options[letter] : q.en.options[letter]) ?? ''}
           state={state}
-          showVoteBar={showVoteBar}
-          votePercent={votePercent}
         />
       )
     })
@@ -231,9 +227,7 @@ export default function PracticePage() {
               correctLetters={correctSorted}
               userLetters={userPicksSorted}
             />
-            {q.type === 'multi' ? (
-              <MultiVoteDistribution distribution={q.vote_distribution} correctKey={correctKey} />
-            ) : null}
+            <VoteDistribution distribution={q.vote_distribution} correctKey={correctKey} />
             <ExplanationCard zh={q.zh.explanation} en={q.en.explanation} locale={locale} />
           </>
         ) : null}

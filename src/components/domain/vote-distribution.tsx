@@ -1,14 +1,22 @@
 'use client'
+import type { Letter } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 
-interface MultiVoteDistributionProps {
-  distribution: Record<string, number>
+type VoteDistribution = Partial<Record<Letter, number>> | Record<string, number>
+
+interface VoteDistributionProps {
+  distribution: VoteDistribution
   correctKey: string
 }
 
-export function MultiVoteDistribution({ distribution, correctKey }: MultiVoteDistributionProps) {
+export function VoteDistribution({ distribution, correctKey }: VoteDistributionProps) {
   const t = useT()
-  const sorted = Object.entries(distribution).sort(([, a], [, b]) => b - a)
+  const sorted = Object.entries(distribution)
+    .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+    .sort(([, a], [, b]) => b - a)
+
+  if (sorted.length === 0) return null
+
   return (
     <section className="rounded-card bg-surface border border-border p-4">
       <h3 className="font-mono text-mono-small text-ink-mute uppercase tracking-wide mb-3">

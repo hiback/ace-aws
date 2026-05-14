@@ -1,7 +1,6 @@
 import { Check, X } from 'lucide-react'
 import { Prose } from '@/components/primitives/prose'
 import type { Letter } from '@/data/types'
-import { VoteBar } from './vote-bar'
 
 type State = 'idle' | 'correct' | 'wrong' | 'missed-correct'
 
@@ -9,17 +8,9 @@ interface OptionRowResultProps {
   letter: Letter
   text: string
   state: State
-  showVoteBar: boolean
-  votePercent?: number
 }
 
-export function OptionRowResult({
-  letter,
-  text,
-  state,
-  showVoteBar,
-  votePercent,
-}: OptionRowResultProps) {
+export function OptionRowResult({ letter, text, state }: OptionRowResultProps) {
   const baseClass = 'w-full text-left p-3 flex items-start gap-3 rounded-option border-[1.5px]'
   let tileClass = 'bg-bg-alt text-ink-soft'
   let borderClass = 'border-border bg-surface'
@@ -65,18 +56,6 @@ export function OptionRowResult({
             </div>
             {trailingIcon}
           </div>
-          {showVoteBar && typeof votePercent === 'number' ? (
-            <VoteBar
-              percent={votePercent}
-              variant={
-                state === 'correct' || state === 'missed-correct'
-                  ? 'success'
-                  : state === 'wrong'
-                    ? 'accent'
-                    : 'mute'
-              }
-            />
-          ) : null}
         </div>
       </div>
     </div>

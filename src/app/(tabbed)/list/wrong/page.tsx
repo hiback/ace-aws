@@ -1,9 +1,9 @@
 'use client'
-import { XCircle } from 'lucide-react'
+import { CheckCircle, XCircle } from 'lucide-react'
 import { QuestionListRow } from '@/components/domain/question-list-row'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { Spinner } from '@/components/primitives/spinner'
-import { useWrongList } from '@/hooks/use-progress-stats'
+import { useProgressStats, useWrongList } from '@/hooks/use-progress-stats'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
@@ -11,10 +11,11 @@ import { usePrefsStore } from '@/stores/prefs-store'
 export default function WrongPage() {
   const wrong = useWrongList()
   const bank = useQuestionBank()
+  const stats = useProgressStats()
   const t = useT()
   const locale = usePrefsStore((s) => s.locale)
 
-  if (wrong.isLoading || bank.isLoading) {
+  if (wrong.isLoading || bank.isLoading || stats.isLoading) {
     return (
       <div className="flex justify-center py-8">
         <Spinner />
@@ -23,7 +24,16 @@ export default function WrongPage() {
   }
 
   if (!wrong.data || wrong.data.length === 0) {
-    return <EmptyState icon={XCircle} title={t('emptyWrong')} />
+    const allAnswered =
+      typeof stats.data?.total === 'number' &&
+      stats.data.total > 0 &&
+      stats.data.answered >= stats.data.total
+    return (
+      <EmptyState
+        icon={allAnswered ? CheckCircle : XCircle}
+        title={t(allAnswered ? 'emptyAllAnswered' : 'emptyWrong')}
+      />
+    )
   }
 
   const byId = new Map(bank.data?.map((q) => [q.id, q]) ?? [])

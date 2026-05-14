@@ -169,7 +169,7 @@ export default function PracticePage() {
             type="button"
             onClick={() => router.push(from)}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-ink"
-            aria-label="Back"
+            aria-label={t('back')}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -198,7 +198,7 @@ export default function PracticePage() {
             type="button"
             onClick={() => toggleBookmark.mutate(qid)}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft"
-            aria-label="Bookmark"
+            aria-label={t('bookmark')}
           >
             {bookmarked.data ? (
               <BookmarkCheck className="w-5 h-5 text-accent" strokeWidth={2.25} />

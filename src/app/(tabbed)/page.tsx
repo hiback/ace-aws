@@ -59,7 +59,7 @@ export default function HomePage() {
         <button
           type="button"
           className="w-9 h-9 rounded-lg border border-border bg-surface text-ink-soft flex items-center justify-center"
-          aria-label="Notifications"
+          aria-label={t('notifications')}
         >
           <Bell className="w-[18px] h-[18px]" strokeWidth={1.75} />
         </button>

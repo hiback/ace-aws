@@ -1,9 +1,15 @@
+'use client'
+
+import { useT } from '@/hooks/use-t'
+
 interface SpinnerProps {
   size?: 16 | 24 | 32
   className?: string
+  label?: string
 }
 
-export function Spinner({ size = 24, className = '' }: SpinnerProps) {
+export function Spinner({ size = 24, className = '', label }: SpinnerProps) {
+  const t = useT()
   return (
     <span
       className={[
@@ -11,7 +17,7 @@ export function Spinner({ size = 24, className = '' }: SpinnerProps) {
         className,
       ].join(' ')}
       style={{ width: size, height: size }}
-      aria-label="Loading"
+      aria-label={label ?? t('loading')}
       role="status"
     />
   )

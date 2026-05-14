@@ -3,6 +3,7 @@ import { Globe, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { Prose } from '@/components/primitives/prose'
 import type { Letter } from '@/data/types'
+import { useT } from '@/hooks/use-t'
 
 interface OriginalSheetProps {
   open: boolean
@@ -12,6 +13,8 @@ interface OriginalSheetProps {
 }
 
 export function OriginalSheet({ open, onClose, enQuestion, enOptions }: OriginalSheetProps) {
+  const t = useT()
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -38,7 +41,7 @@ export function OriginalSheet({ open, onClose, enQuestion, enOptions }: Original
     >
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t('close')}
         onClick={onClose}
         className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
       />
@@ -49,12 +52,12 @@ export function OriginalSheet({ open, onClose, enQuestion, enOptions }: Original
         <div className="px-4 pt-1 pb-3 flex items-center gap-2.5 border-b border-border shrink-0">
           <Globe className="w-3.5 h-3.5 text-accent-deep" strokeWidth={2} />
           <div className="flex-1 text-secondary font-bold text-ink tracking-tight">
-            English Original
+            {t('englishOriginal')}
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('close')}
             className="w-7 h-7 rounded-full bg-bg-alt flex items-center justify-center"
           >
             <X className="w-3.5 h-3.5 text-ink-soft" strokeWidth={2} />

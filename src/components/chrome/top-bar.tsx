@@ -2,6 +2,7 @@
 import { ChevronLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { useT } from '@/hooks/use-t'
 
 interface TopBarProps {
   title?: ReactNode
@@ -20,12 +21,13 @@ export function TopBar({
   className = '',
 }: TopBarProps) {
   const router = useRouter()
+  const t = useT()
   const back = (
     <button
       type="button"
       onClick={() => (backHref ? router.push(backHref) : router.back())}
       className="p-2 -ml-2 text-ink-soft hover:text-ink"
-      aria-label="Back"
+      aria-label={t('back')}
     >
       <ChevronLeft className="w-6 h-6" />
     </button>

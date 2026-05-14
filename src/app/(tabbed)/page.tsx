@@ -93,7 +93,7 @@ export default function HomePage() {
             variant="primary"
             size="md"
             fullWidth
-            className="!bg-white !text-accent-deep !font-bold gap-1.5"
+            className="!bg-surface !text-accent-deep disabled:!bg-bg-alt disabled:!text-ink-mute !font-bold gap-1.5"
             onClick={handleContinue}
             disabled={pending}
           >

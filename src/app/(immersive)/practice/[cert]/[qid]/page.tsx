@@ -17,20 +17,25 @@ import { Spinner } from '@/components/primitives/spinner'
 import { normalizeCert } from '@/data/loaders'
 import type { CertCode, Letter } from '@/data/types'
 import {
+  findNextListReviewQid,
   findNextUnansweredQid,
-  useAnswer,
   useIsBookmarked,
-  useSaveAnswer,
+  useQuestionProgress,
+  useRecordAnswer,
   useToggleBookmark,
 } from '@/hooks/use-answer'
 import { useQuestion } from '@/hooks/use-question'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
-import { certPath } from '@/lib/cert-catalog'
+import {
+  buildCompletionHref,
+  buildPracticeHref,
+  isListPracticeSource,
+  normalizePracticeSource,
+  parsePracticeSet,
+} from '@/lib/practice-flow'
 import { TOPIC_KEYS } from '@/lib/topic'
 import { usePrefsStore } from '@/stores/prefs-store'
-
-const ALLOWED_FROM = new Set(['/', '/list/wrong', '/list/bookmarks'])
 
 const RESULT_CHIP_CLASS = {
   correct: 'bg-success-soft text-success-deep',
@@ -61,17 +66,18 @@ export default function PracticePage() {
   const locale = usePrefsStore((s) => s.locale)
   const qid = Number(params.qid)
   const cert: CertCode = normalizeCert(params.cert)
-  const fromRaw = searchParams.get('from')
-  const from = fromRaw && ALLOWED_FROM.has(fromRaw) ? fromRaw : '/'
-  const fromQuery = `?from=${encodeURIComponent(from)}`
+  const source = normalizePracticeSource(searchParams.get('from'))
+  const setRaw = searchParams.get('set')
+  const isListReview = isListPracticeSource(source)
   const [selection, setSelection] = useState<{ qid: number; picks: Letter[] }>({ qid, picks: [] })
+  const [resultModeQid, setResultModeQid] = useState<number | null>(null)
   const [pending, startTransition] = useTransition()
 
   const bank = useQuestionBank(cert)
   const question = useQuestion(qid, cert)
-  const answer = useAnswer(qid, cert)
+  const answer = useQuestionProgress(qid, cert)
   const bookmarked = useIsBookmarked(qid, cert)
-  const saveAnswer = useSaveAnswer(cert)
+  const recordAnswer = useRecordAnswer(cert)
   const toggleBookmark = useToggleBookmark(cert)
   const picks = selection.qid === qid ? selection.picks : []
 
@@ -99,12 +105,20 @@ export default function PracticePage() {
 
   const q = question.data
   const total = bank.data?.length ?? 0
-  const submitted = answer.data !== null && answer.data !== undefined
+  const practiceSet = isListReview
+    ? parsePracticeSet(setRaw, new Set(bank.data?.map((item) => item.id) ?? []))
+    : null
+  const listPosition = practiceSet?.indexOf(qid) ?? -1
+  const displayCurrent = listPosition >= 0 ? listPosition + 1 : qid
+  const displayTotal = listPosition >= 0 && practiceSet ? practiceSet.length : total
+  const hasPreviousResult =
+    answer.data?.lastAnsweredAt !== null && answer.data?.lastAnsweredAt !== undefined
+  const submitted = hasPreviousResult && (!isListReview || resultModeQid === qid)
   const isMulti = q.type === 'multi'
   const required = q.type === 'multi' ? q.answer_count : 1
   const correctSorted = q.correct_answer
   const correctSet = new Set(correctSorted)
-  const userPicksSorted = answer.data?.picks ?? []
+  const userPicksSorted = answer.data?.lastPicks ?? []
   const userPicksSet = new Set(userPicksSorted)
 
   const handlePick = (letter: Letter) => {
@@ -120,18 +134,44 @@ export default function PracticePage() {
 
   const canSubmit = picks.length === required
   const handleSubmit = () => {
+    if (!canSubmit || recordAnswer.isPending) return
+
     const sortedPicks = [...picks].sort() as Letter[]
     const correct =
       sortedPicks.length === correctSorted.length &&
       sortedPicks.every((p, i) => p === correctSorted[i])
-    saveAnswer.mutate({ qid, picks, correct })
+    recordAnswer.mutate(
+      { qid, picks, correct },
+      {
+        onSuccess: (_savedProgress, variables) => {
+          if (variables.qid !== qid) return
+          setResultModeQid(qid)
+          setSelection({ qid, picks: [] })
+        },
+      },
+    )
+  }
+
+  const handleViewLastResult = () => {
+    setResultModeQid(qid)
   }
 
   const handleNext = () => {
     startTransition(async () => {
+      if (isListReview) {
+        const next = await findNextListReviewQid(qid, cert, source, setRaw)
+        router.push(
+          next === null
+            ? buildCompletionHref(cert, source)
+            : buildPracticeHref(cert, next, source, setRaw),
+        )
+        return
+      }
+
       const next = await findNextUnansweredQid(qid, cert)
-      if (next === null) router.push('/list/wrong')
-      else router.push(`/practice/${certPath(cert)}/${next}${fromQuery}`)
+      router.push(
+        next === null ? buildCompletionHref(cert, '/') : buildPracticeHref(cert, next, '/'),
+      )
     })
   }
 
@@ -170,7 +210,7 @@ export default function PracticePage() {
 
   const bannerTone: 'correct' | 'wrong' | 'partial' = (() => {
     if (!answer.data) return 'correct'
-    if (answer.data.correct) return 'correct'
+    if (answer.data.lastCorrect) return 'correct'
     if (isMulti) {
       const someCorrect = userPicksSorted.some((p) => correctSet.has(p))
       if (someCorrect) return 'partial'
@@ -207,7 +247,7 @@ export default function PracticePage() {
           <div className="mb-2.5 flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push(from)}
+              onClick={() => router.push(source)}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-ink"
               aria-label={t('back')}
             >
@@ -219,8 +259,9 @@ export default function PracticePage() {
               </p>
               <p className="mt-0.5 text-option font-semibold text-ink flex items-center justify-center gap-2">
                 <span>
-                  {t('practiceCountPrefix')} <span className="text-accent font-bold">{qid}</span>{' '}
-                  {t('practiceCountMiddle')} {total}
+                  {t('practiceCountPrefix')}{' '}
+                  <span className="text-accent font-bold">{displayCurrent}</span>{' '}
+                  {t('practiceCountMiddle')} {displayTotal}
                   {t('practiceCountSuffix') ? ` ${t('practiceCountSuffix')}` : ''}
                 </span>
                 {resultChip ?? (
@@ -249,7 +290,7 @@ export default function PracticePage() {
               )}
             </button>
           </div>
-          <ProgressBar value={qid / Math.max(total, 1)} height={4} />
+          <ProgressBar value={displayCurrent / Math.max(displayTotal, 1)} height={4} />
         </div>
       </header>
 
@@ -287,22 +328,22 @@ export default function PracticePage() {
 
       <StickyFooter>
         {submitted ? (
-          <>
-            <Button variant="outline" onClick={handleNext} className="flex-1" disabled={pending}>
-              {t('skip')}
-            </Button>
-            <Button onClick={handleNext} className="flex-1" disabled={pending}>
-              {pending ? <Spinner size={16} /> : t('next')}
-            </Button>
-          </>
+          <Button onClick={handleNext} className="w-full" disabled={pending}>
+            {pending ? <Spinner size={16} /> : t('next')}
+          </Button>
         ) : (
           <>
-            <Button variant="outline" onClick={handleNext} className="flex-1">
-              {t('skip')}
+            <Button
+              variant="outline"
+              onClick={isListReview && hasPreviousResult ? handleViewLastResult : handleNext}
+              className="flex-1"
+              disabled={recordAnswer.isPending}
+            >
+              {isListReview && hasPreviousResult ? t('viewLastResult') : t('skip')}
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!canSubmit || saveAnswer.isPending}
+              disabled={!canSubmit || recordAnswer.isPending}
               className="flex-1"
             >
               {t('submit')}

@@ -39,7 +39,16 @@ function WrongContent({ cert }: { cert: CertCode }) {
     )
   }
 
-  if (!wrong.data || wrong.data.length === 0) {
+  const byId = new Map(bank.data?.map((q) => [q.id, q]) ?? [])
+  const sorted = [...(wrong.data ?? [])].sort(
+    (a, b) => (b.lastAnsweredAt ?? 0) - (a.lastAnsweredAt ?? 0),
+  )
+  const visible = sorted.flatMap((progress) => {
+    const question = byId.get(progress.qid)
+    return question ? [{ progress, question }] : []
+  })
+
+  if (visible.length === 0) {
     const allAnswered =
       typeof stats.data?.total === 'number' &&
       stats.data.total > 0 &&
@@ -52,24 +61,23 @@ function WrongContent({ cert }: { cert: CertCode }) {
     )
   }
 
-  const byId = new Map(bank.data?.map((q) => [q.id, q]) ?? [])
-  const sorted = [...wrong.data].sort((a, b) => b.answeredAt - a.answeredAt)
+  const snapshot = visible.map(({ progress }) => progress.qid)
 
   return (
     <ul>
-      {sorted.map((a) => {
-        const q = byId.get(a.qid)
-        if (!q) return null
-        const text = locale === 'zh' ? q.zh.question : q.en.question
+      {visible.map(({ progress, question }) => {
+        const text = locale === 'zh' ? question.zh.question : question.en.question
         return (
-          <li key={a.qid}>
+          <li key={progress.qid}>
             <QuestionListRow
               cert={cert}
-              qid={a.qid}
-              topic={q.topic}
+              qid={progress.qid}
+              topic={question.topic}
               questionPreview={text}
               status="wrong"
+              wrongCount={progress.wrongCount}
               from="/list/wrong"
+              set={snapshot}
             />
           </li>
         )

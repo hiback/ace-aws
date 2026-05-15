@@ -6,7 +6,7 @@ import { QuestionListRow } from '@/components/domain/question-list-row'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { Spinner } from '@/components/primitives/spinner'
 import type { CertCode, Question } from '@/data/types'
-import { useAnswer } from '@/hooks/use-answer'
+import { useQuestionProgress } from '@/hooks/use-answer'
 import { useBookmarksList } from '@/hooks/use-progress-stats'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
@@ -17,23 +17,32 @@ function BookmarkRow({
   cert,
   question,
   locale,
+  set,
 }: {
   qid: number
   cert: CertCode
   question: Question
   locale: 'zh' | 'en'
+  set: readonly number[]
 }) {
-  const ans = useAnswer(qid, cert)
+  const ans = useQuestionProgress(qid, cert)
   const text = locale === 'zh' ? question.zh.question : question.en.question
-  const status = ans.data ? (ans.data.correct ? 'correct' : 'wrong') : 'unanswered'
+  const status =
+    ans.data?.lastCorrect === true
+      ? 'correct'
+      : ans.data?.lastCorrect === false
+        ? 'wrong'
+        : 'unanswered'
   return (
     <QuestionListRow
       cert={cert}
       qid={qid}
       topic={question.topic}
       questionPreview={text}
-      status={status as 'correct' | 'wrong' | 'unanswered'}
+      status={status}
+      wrongCount={ans.data?.wrongCount}
       from="/list/bookmarks"
+      set={set}
     />
   )
 }
@@ -65,20 +74,23 @@ function BookmarksContent({ cert }: { cert: CertCode }) {
     )
   }
 
-  if (!bookmarks.data || bookmarks.data.length === 0) {
+  const byId = new Map(bank.data?.map((q) => [q.id, q]) ?? [])
+  const visibleQids = (bookmarks.data ?? []).filter((qid) => byId.has(qid))
+
+  if (visibleQids.length === 0) {
     return <EmptyState icon={Star} title={t('emptyBookmarks')} />
   }
 
-  const byId = new Map(bank.data?.map((q) => [q.id, q]) ?? [])
+  const snapshot = visibleQids
 
   return (
     <ul>
-      {bookmarks.data.map((qid) => {
+      {visibleQids.map((qid) => {
         const q = byId.get(qid)
         if (!q) return null
         return (
           <li key={qid}>
-            <BookmarkRow qid={qid} cert={cert} question={q} locale={locale} />
+            <BookmarkRow qid={qid} cert={cert} question={q} locale={locale} set={snapshot} />
           </li>
         )
       })}

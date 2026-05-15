@@ -1,6 +1,7 @@
 # project-local
 refs/
 docs/superpowers/
+.worktrees/
 .agents/
 skills-lock.json
 

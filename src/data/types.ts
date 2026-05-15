@@ -30,9 +30,16 @@ export type Question =
       vote_distribution: Record<string, number> // key = sorted letters concat, e.g. 'BD'
     })
 
-export interface AnswerRecord {
+export type ProgressScope = 'anonymous' | 'account'
+
+export interface QuestionProgress {
   qid: number
-  picks: Letter[] // sorted on persistence; set semantics
-  correct: boolean
-  answeredAt: number // Date.now()
+  correctCount: number
+  wrongCount: number
+  lastPicks: Letter[]
+  lastCorrect: boolean | null
+  lastAnsweredAt: number | null
+  bookmarked: boolean
+  bookmarkUpdatedAt: number | null
+  dirtySince?: number
 }

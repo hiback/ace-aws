@@ -1,8 +1,9 @@
 'use client'
-import { ArrowRight, Bell, Bookmark, Flag } from 'lucide-react'
+import { ArrowRight, Bell, Bookmark, Flag, RefreshCw } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useEffect, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import { CertSwitcherSheet } from '@/components/domain/cert-switcher-sheet'
 import { HeroCard } from '@/components/domain/hero-card'
 import { QuickActionCard } from '@/components/domain/quick-action-card'
 import { Button } from '@/components/primitives/button'
@@ -20,6 +21,7 @@ export default function HomePage() {
   const wrong = useWrongList()
   const bookmarks = useBookmarksList()
   const [pending, startTransition] = useTransition()
+  const [certSheetOpen, setCertSheetOpen] = useState(false)
 
   // Onboarding redirect: no cert selected → /select-cert
   useEffect(() => {
@@ -35,6 +37,11 @@ export default function HomePage() {
         router.push(`/practice/dva-c02/${next}?from=${encodeURIComponent('/')}`)
       }
     })
+  }
+
+  const handleBrowseAllCerts = () => {
+    setCertSheetOpen(false)
+    router.push('/select-cert?mode=switch')
   }
 
   if (currentCert === null) return null
@@ -68,6 +75,17 @@ export default function HomePage() {
       <HeroCard
         eyebrow={t('certDvaEyebrow')}
         title={t('certDvaTitle')}
+        headerAction={
+          <button
+            type="button"
+            onClick={() => setCertSheetOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-pill border border-white/25 bg-white/15 px-2.5 py-1.5 text-secondary font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+            aria-label={t('certSwitchAria')}
+          >
+            {t('certSwitchChip')}
+            <RefreshCw className="w-3 h-3" strokeWidth={2.25} />
+          </button>
+        }
         stats={[
           {
             label: t('homeAnswered'),
@@ -131,6 +149,15 @@ export default function HomePage() {
           iconFilled
         />
       </div>
+      <CertSwitcherSheet
+        open={certSheetOpen}
+        onClose={() => setCertSheetOpen(false)}
+        onBrowseAll={handleBrowseAllCerts}
+        currentCert={currentCert}
+        answered={stats.data?.answered ?? 0}
+        total={stats.data?.total ?? 0}
+        accuracy={accuracy}
+      />
     </main>
   )
 }

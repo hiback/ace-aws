@@ -9,7 +9,7 @@ export const STRINGS = {
     questionListTitle: '题目列表',
 
     certDvaEyebrow: 'DVA-C02 · 助理级',
-    certDvaTitle: 'Developer Associate',
+    certDvaTitle: '开发人员助理级',
     certDvaQCount: '557 题 · 热门',
     certDvaSelectTitle: '开发人员',
     certClfTitle: '云从业者',
@@ -187,7 +187,7 @@ export const STRINGS = {
     practiceCountPrefix: 'Question',
     practiceCountMiddle: 'of',
     practiceCountSuffix: '',
-    selectN: '{n} more answer needed',
+    selectN: '{n} more needed',
     selectedNofN: 'Selected {n}/{total}',
     enToggle: 'EN',
     englishOriginal: 'English Original',

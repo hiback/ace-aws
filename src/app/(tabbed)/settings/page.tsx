@@ -19,7 +19,7 @@ function ThemeIcon({ className, strokeWidth = 1.75, ...rest }: SVGProps<SVGSVGEl
   )
 }
 
-const APP_VERSION = '0.1.0'
+const APP_VERSION = '0.2.1'
 const REPO_URL = 'https://github.com/hiback/ace-aws'
 
 function Segmented<T extends string>({

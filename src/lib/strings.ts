@@ -9,7 +9,7 @@ export const STRINGS = {
     questionListTitle: '题目列表',
 
     certDvaEyebrow: 'DVA-C02 · 助理级',
-    certDvaTitle: '开发人员助理级',
+    certDvaTitle: '开发人员',
     certDvaQCount: '557 题 · 热门',
     certDvaSelectTitle: '开发人员',
     certClfTitle: '云从业者',

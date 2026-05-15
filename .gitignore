@@ -1,6 +1,8 @@
 # project-local
 refs/
 docs/superpowers/
+.agents/
+skills-lock.json
 
 AGENTS.md
 CLAUDE.md

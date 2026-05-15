@@ -18,6 +18,7 @@ describe('CertSwitcherSheet', () => {
         open
         onClose={vi.fn()}
         onBrowseAll={onBrowseAll}
+        onSelectCert={vi.fn()}
         currentCert="DVA-C02"
         answered={147}
         total={557}
@@ -32,5 +33,26 @@ describe('CertSwitcherSheet', () => {
     fireEvent.click(screen.getByText('Browse all certifications'))
 
     expect(onBrowseAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers CLF as a switchable ready cert', () => {
+    const onSelectCert = vi.fn()
+
+    render(
+      <CertSwitcherSheet
+        open
+        onClose={vi.fn()}
+        onBrowseAll={vi.fn()}
+        onSelectCert={onSelectCert}
+        currentCert="DVA-C02"
+        answered={0}
+        total={557}
+        accuracy={0}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Cloud Practitioner/ }))
+
+    expect(onSelectCert).toHaveBeenCalledWith('CLF-C02')
   })
 })

@@ -1,28 +1,32 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { Letter, Question, VoteKey } from '../src/data/types'
+import type { CertCode, Letter, Question, VoteKey } from '../src/data/types'
 
-const SRC = 'refs/dva-c02.json'
-const DST = 'src/data/dva-c02.json'
+const BANK_CONFIGS = {
+  'DVA-C02': {
+    src: 'refs/dva-c02.json',
+    dst: 'src/data/dva-c02.json',
+  },
+  'CLF-C02': {
+    src: 'refs/clf-c02.json',
+    dst: 'src/data/clf-c02.json',
+  },
+} as const satisfies Record<CertCode, { src: string; dst: string }>
 
 export interface RawQuestion {
   id: number
   correct_answer: string[]
-  answer_count: number
   vote_distribution: Record<string, number>
   domain: string
-  services: string[]
   en: {
     question: string
     options: Partial<Record<Letter, string>>
     explanation_md: string
-    comments?: unknown[]
   }
   zh: {
     question: string
     options: Partial<Record<Letter, string>>
     explanation_md: string
-    comments?: unknown[]
   }
 }
 
@@ -35,23 +39,23 @@ export const sortedKey = (letters: readonly string[]): string =>
 export const unwrapCite = (md: string): string =>
   md.replace(/<cite\b[^>]*>([\s\S]*?)<\/cite>/g, '$1')
 
-export function transformQuestion(q: RawQuestion): Question {
+export function transformQuestion(q: RawQuestion, cert: CertCode): Question {
   const correct = [...q.correct_answer].map((s) => s.toUpperCase()).sort() as Letter[]
   const isMulti = correct.length >= 2
   const base = {
     id: q.id,
-    cert: 'DVA-C02' as const,
+    cert,
     topic: q.domain,
     correct_answer: correct,
     en: {
       question: q.en.question,
       options: q.en.options,
-      explanation: unwrapCite(q.en.explanation_md ?? ''),
+      explanation: unwrapCite(q.en.explanation_md),
     },
     zh: {
       question: q.zh.question,
       options: q.zh.options,
-      explanation: unwrapCite(q.zh.explanation_md ?? ''),
+      explanation: unwrapCite(q.zh.explanation_md),
     },
   }
   if (isMulti) {
@@ -69,20 +73,37 @@ export function transformQuestion(q: RawQuestion): Question {
   }
 }
 
+function normalizeBuildCert(input: string): CertCode {
+  const upper = input.toUpperCase()
+  if (upper in BANK_CONFIGS) return upper as CertCode
+  throw new Error(`Unknown cert: ${input}`)
+}
+
+async function buildOne(cert: CertCode): Promise<void> {
+  const cfg = BANK_CONFIGS[cert]
+  const raw = JSON.parse(await readFile(cfg.src, 'utf-8')) as RawQuestion[]
+  const out: Question[] = raw.map((q) => transformQuestion(q, cert))
+  await mkdir(dirname(cfg.dst), { recursive: true })
+  await writeFile(cfg.dst, JSON.stringify(out))
+  console.log(`✓ ${out.length} questions → ${cfg.dst}`)
+}
+
 async function main(): Promise<void> {
-  const raw = JSON.parse(await readFile(SRC, 'utf-8')) as RawQuestion[]
-  const out: Question[] = raw.map(transformQuestion)
-  await mkdir(dirname(DST), { recursive: true })
-  await writeFile(DST, JSON.stringify(out))
-  console.log(`✓ ${out.length} questions → ${DST}`)
+  const arg = process.argv[2]
+  const certs =
+    !arg || arg.toUpperCase() === 'ALL'
+      ? (Object.keys(BANK_CONFIGS) as CertCode[])
+      : [normalizeBuildCert(arg)]
+
+  for (const cert of certs) {
+    await buildOne(cert)
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((e: NodeJS.ErrnoException) => {
     if (e.code === 'ENOENT') {
-      console.error(
-        `× ${SRC} not found. Place the original question bank at refs/dva-c02.json before running.`,
-      )
+      console.error('× Raw question bank missing. Place source JSON files under refs/ first.')
     } else {
       console.error(e)
     }

@@ -1,13 +1,13 @@
 'use client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { loadBank } from '@/data/loaders'
-import type { Letter } from '@/data/types'
+import { loadBank, normalizeCert } from '@/data/loaders'
+import type { CertCode, Letter } from '@/data/types'
 import { progressRepo } from '@/repositories/local-progress-repository'
 
-export function useAnswer(qid: number) {
+export function useAnswer(qid: number, cert: CertCode) {
   return useQuery({
-    queryKey: ['answer', qid],
-    queryFn: () => progressRepo.getAnswer(qid),
+    queryKey: ['answer', cert, qid],
+    queryFn: () => progressRepo.getAnswer(qid, cert),
     staleTime: 0,
   })
 }
@@ -18,24 +18,24 @@ interface SaveArgs {
   correct: boolean
 }
 
-export function useSaveAnswer() {
+export function useSaveAnswer(cert: CertCode) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ qid, picks, correct }: SaveArgs) => {
-      progressRepo.saveAnswer(qid, picks, correct)
+      progressRepo.saveAnswer(qid, picks, correct, cert)
     },
     onSuccess: (_, { qid }) => {
-      qc.invalidateQueries({ queryKey: ['answer', qid] })
+      qc.invalidateQueries({ queryKey: ['answer', cert, qid] })
       qc.invalidateQueries({ queryKey: ['progress'] })
     },
   })
 }
 
-export function useToggleBookmark() {
+export function useToggleBookmark(cert: CertCode) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (qid: number) => {
-      progressRepo.toggleBookmark(qid)
+      progressRepo.toggleBookmark(qid, cert)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['progress', 'bookmarks'] })
@@ -43,22 +43,23 @@ export function useToggleBookmark() {
   })
 }
 
-export function useIsBookmarked(qid: number) {
+export function useIsBookmarked(qid: number, cert: CertCode) {
   return useQuery({
-    queryKey: ['progress', 'bookmarks', qid],
-    queryFn: () => progressRepo.isBookmarked(qid),
+    queryKey: ['progress', 'bookmarks', cert, qid],
+    queryFn: () => progressRepo.isBookmarked(qid, cert),
     staleTime: 0,
   })
 }
 
 export async function findNextUnansweredQid(
   currentQid: number,
-  cert: string = 'DVA-C02',
+  cert: string,
 ): Promise<number | null> {
-  const bank = await loadBank(cert)
+  const canonical = normalizeCert(cert)
+  const bank = await loadBank(canonical)
   const n = bank.length
   if (n === 0) return null
-  const answered = new Set(progressRepo.listAnswers().map((a) => a.qid))
+  const answered = new Set(progressRepo.listAnswers(canonical).map((a) => a.qid))
   for (let i = 1; i <= n; i++) {
     const qid = ((currentQid - 1 + i + n) % n) + 1
     if (!answered.has(qid)) return qid

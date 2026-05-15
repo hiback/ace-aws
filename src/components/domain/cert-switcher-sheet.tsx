@@ -4,13 +4,20 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
-import { CERT_GROUPS, type CertOption } from '@/lib/cert-catalog'
+import {
+  CERT_GROUPS,
+  type CertOption,
+  getCertGroupLabelKey,
+  getCertOption,
+  isReadyCertCode,
+} from '@/lib/cert-catalog'
 import type { StringKey } from '@/lib/strings'
 
 interface CertSwitcherSheetProps {
   open: boolean
   onClose: () => void
   onBrowseAll: () => void
+  onSelectCert: (cert: CertCode) => void
   currentCert: CertCode
   answered: number
   total: number
@@ -25,6 +32,7 @@ export function CertSwitcherSheet({
   open,
   onClose,
   onBrowseAll,
+  onSelectCert,
   currentCert,
   answered,
   total,
@@ -49,9 +57,13 @@ export function CertSwitcherSheet({
   if (!open) return null
 
   const completion = total > 0 ? Math.round((answered / total) * 100) : 0
-  const upcoming = CERT_GROUPS.flatMap((group) =>
+  const current = getCertOption(currentCert)
+  const currentLevelKey = getCertGroupLabelKey(currentCert)
+  const allOther = CERT_GROUPS.flatMap((group) =>
     group.certs.map((cert) => ({ ...cert, groupLabelKey: group.labelKey })),
   ).filter((cert) => cert.code !== currentCert)
+  const switchable = allOther.filter((cert) => isReadyCertCode(cert.code))
+  const upcoming = allOther.filter((cert) => !isReadyCertCode(cert.code))
 
   return (
     <div
@@ -93,14 +105,14 @@ export function CertSwitcherSheet({
             <div className="pointer-events-none absolute -top-6 -right-6 h-24 w-24 rounded-full bg-white/10" />
             <div className="relative flex items-center gap-3">
               <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] border border-white/25 bg-white/20 font-mono text-helper font-bold tracking-[0.4px]">
-                DVA
+                {currentCert.split('-')[0]}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-mono text-helper tracking-[0.4px] opacity-85">
-                  {currentCert} · {t('certGroupAssociate')}
+                  {currentCert} · {t(currentLevelKey)}
                 </p>
                 <p className="mt-0.5 truncate text-[14.5px] font-bold tracking-tight">
-                  {t('certDvaTitle')}
+                  {t(current.heroTitleKey ?? current.titleKey)}
                 </p>
               </div>
               <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-accent-deep">
@@ -120,10 +132,25 @@ export function CertSwitcherSheet({
             </div>
           </div>
 
+          {switchable.length > 0 ? (
+            <>
+              <SectionLabel className="mt-[18px]">{t('certSwitchAvailable')}</SectionLabel>
+              <div className="flex flex-col gap-1.5">
+                {switchable.map((cert) => {
+                  const code = cert.code
+                  if (!isReadyCertCode(code)) return null
+                  return (
+                    <CertSwitchRow key={code} cert={cert} onSelect={() => onSelectCert(code)} />
+                  )
+                })}
+              </div>
+            </>
+          ) : null}
+
           <SectionLabel className="mt-[18px]">{t('certSwitchComingSoon')}</SectionLabel>
           <div className="flex flex-col gap-1.5">
             {upcoming.map((cert) => (
-              <UpcomingCertRow key={cert.code} cert={cert} />
+              <CertSwitchRow key={cert.code} cert={cert} />
             ))}
           </div>
         </div>
@@ -156,28 +183,57 @@ function SectionLabel({ children, className = '' }: { children: ReactNode; class
   )
 }
 
-function UpcomingCertRow({ cert }: { cert: UpcomingCert }) {
+function CertSwitchRow({ cert, onSelect }: { cert: UpcomingCert; onSelect?: () => void }) {
   const t = useT()
   const prefix = cert.code.split('-')[0]
+  const ready = isReadyCertCode(cert.code)
+  const content = (
+    <>
+      <div
+        className={[
+          'flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] font-mono text-mono-small font-bold tracking-[0.4px]',
+          ready
+            ? 'bg-[linear-gradient(135deg,var(--color-hero-from),var(--color-hero-to))] text-white'
+            : 'bg-bg-alt text-ink-mute',
+        ].join(' ')}
+      >
+        {prefix}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-option font-semibold text-ink">{t(cert.titleKey)}</p>
+        <p className="mt-0.5 font-mono text-helper text-ink-mute">
+          {cert.code} ·{' '}
+          {ready ? t('certQuestions', { count: cert.count ?? 0 }) : t(cert.groupLabelKey)}
+        </p>
+      </div>
+      {ready ? (
+        <ChevronRight className="h-4 w-4 text-ink-subtle" strokeWidth={2} />
+      ) : (
+        <span className="rounded-[5px] bg-bg-alt px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.5px] text-ink-mute">
+          {t('certComingSoon')}
+        </span>
+      )}
+    </>
+  )
+
+  if (ready && onSelect) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex w-full items-center gap-3 rounded-button border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:bg-bg-alt"
+      >
+        {content}
+      </button>
+    )
+  }
 
   return (
     <div
       className="flex items-center gap-3 rounded-button border border-border bg-surface px-3 py-2.5 opacity-60"
       aria-disabled="true"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-bg-alt font-mono text-mono-small font-bold tracking-[0.4px] text-ink-mute">
-        {prefix}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-option font-semibold text-ink">{t(cert.titleKey)}</p>
-        <p className="mt-0.5 font-mono text-helper text-ink-mute">
-          {cert.code} · {t(cert.groupLabelKey)}
-        </p>
-      </div>
-      <span className="rounded-[5px] bg-bg-alt px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.5px] text-ink-mute">
-        {t('certComingSoon')}
-      </span>
-      <ChevronRight className="hidden h-4 w-4 text-ink-subtle" strokeWidth={2} />
+      {content}
     </div>
   )
 }

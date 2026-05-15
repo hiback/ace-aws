@@ -37,10 +37,8 @@ describe('ETL: transformQuestion (single)', () => {
   const single: RawQuestion = {
     id: 1,
     correct_answer: ['C'],
-    answer_count: 1,
     vote_distribution: { C: 88, A: 8, D: 4 },
     domain: 'Security',
-    services: ['Secrets Manager'],
     en: {
       question: 'EN q',
       options: { A: 'a', B: 'b', C: 'c', D: 'd' },
@@ -54,7 +52,7 @@ describe('ETL: transformQuestion (single)', () => {
   }
 
   it('produces single-type question', () => {
-    const out = transformQuestion(single)
+    const out = transformQuestion(single, 'DVA-C02')
     expect(out.type).toBe('single')
     if (out.type !== 'single') throw new Error('narrowing failed')
     expect(out.id).toBe(1)
@@ -65,22 +63,25 @@ describe('ETL: transformQuestion (single)', () => {
     expect(out.en.explanation).toBe('EN ref end')
     expect(out.zh.explanation).toBe('ZH 解释')
   })
+
+  it('uses the configured cert code', () => {
+    const out = transformQuestion(single, 'CLF-C02')
+    expect(out.cert).toBe('CLF-C02')
+  })
 })
 
 describe('ETL: transformQuestion (multi)', () => {
   const multi: RawQuestion = {
     id: 7,
     correct_answer: ['D', 'B'], // unsorted on input
-    answer_count: 2,
     vote_distribution: { DB: 63, BC: 33, CD: 4, Other: 2 }, // 'DB' must normalize to 'BD'
     domain: 'Deployment',
-    services: [],
     en: { question: 'EN q', options: { A: 'a', B: 'b', C: 'c', D: 'd' }, explanation_md: 'x' },
     zh: { question: 'ZH q', options: { A: 'a', B: 'b', C: 'c', D: 'd' }, explanation_md: 'x' },
   }
 
   it('produces multi-type question with sorted correct_answer', () => {
-    const out = transformQuestion(multi)
+    const out = transformQuestion(multi, 'DVA-C02')
     expect(out.type).toBe('multi')
     if (out.type !== 'multi') throw new Error('narrowing failed')
     expect(out.correct_answer).toEqual(['B', 'D'])
@@ -88,7 +89,7 @@ describe('ETL: transformQuestion (multi)', () => {
   })
 
   it('normalizes vote_distribution keys to sorted letters', () => {
-    const out = transformQuestion(multi)
+    const out = transformQuestion(multi, 'DVA-C02')
     if (out.type !== 'multi') throw new Error('narrowing failed')
     expect(out.vote_distribution.BD).toBe(63)
     expect(out.vote_distribution.BC).toBe(33)
@@ -97,7 +98,7 @@ describe('ETL: transformQuestion (multi)', () => {
   })
 
   it('preserves real Other vote bucket without letter-sorting it', () => {
-    const out = transformQuestion(multi)
+    const out = transformQuestion(multi, 'DVA-C02')
     if (out.type !== 'multi') throw new Error('narrowing failed')
     expect(out.vote_distribution.Other).toBe(2)
     expect(out.vote_distribution.EHOORT).toBeUndefined()

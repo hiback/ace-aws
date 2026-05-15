@@ -14,6 +14,10 @@ describe('normalizeCert', () => {
     expect(normalizeCert('Dva-C02')).toBe('DVA-C02')
   })
 
+  it('normalizes CLF cert input', () => {
+    expect(normalizeCert('clf-c02')).toBe('CLF-C02')
+  })
+
   it('throws on unknown cert', () => {
     expect(() => normalizeCert('unknown')).toThrow(/Unknown cert/)
   })
@@ -31,5 +35,11 @@ describe('loadBank (integration with normalization)', () => {
     const bank = await loadBank('DVA-C02')
     expect(Array.isArray(bank)).toBe(true)
     expect(bank.length).toBeGreaterThan(0)
+  })
+
+  it('loads the CLF bank', async () => {
+    const bank = await loadBank('CLF-C02')
+    expect(bank).toHaveLength(719)
+    expect(bank[0]?.cert).toBe('CLF-C02')
   })
 })

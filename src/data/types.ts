@@ -1,4 +1,4 @@
-export type CertCode = 'DVA-C02'
+export type CertCode = 'DVA-C02' | 'CLF-C02'
 export type Letter = 'A' | 'B' | 'C' | 'D' | 'E'
 export type VoteKey = Letter | 'Other'
 export type Locale = 'zh' | 'en'
@@ -35,16 +35,4 @@ export interface AnswerRecord {
   picks: Letter[] // sorted on persistence; set semantics
   correct: boolean
   answeredAt: number // Date.now()
-}
-
-export interface Prefs {
-  locale: Locale
-  theme: Theme
-  currentCert: CertCode | null
-}
-
-export const DEFAULT_PREFS: Prefs = {
-  locale: 'zh',
-  theme: 'system',
-  currentCert: null,
 }

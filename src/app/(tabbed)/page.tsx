@@ -8,33 +8,44 @@ import { HeroCard } from '@/components/domain/hero-card'
 import { QuickActionCard } from '@/components/domain/quick-action-card'
 import { Button } from '@/components/primitives/button'
 import { Spinner } from '@/components/primitives/spinner'
+import type { CertCode } from '@/data/types'
 import { findNextUnansweredQid } from '@/hooks/use-answer'
 import { useBookmarksList, useProgressStats, useWrongList } from '@/hooks/use-progress-stats'
 import { useT } from '@/hooks/use-t'
+import { certPath, getCertGroupLabelKey, getCertOption } from '@/lib/cert-catalog'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 export default function HomePage() {
   const router = useRouter()
-  const t = useT()
   const currentCert = usePrefsStore((s) => s.currentCert)
-  const stats = useProgressStats()
-  const wrong = useWrongList()
-  const bookmarks = useBookmarksList()
-  const [pending, startTransition] = useTransition()
-  const [certSheetOpen, setCertSheetOpen] = useState(false)
 
   // Onboarding redirect: no cert selected → /select-cert
   useEffect(() => {
     if (currentCert === null) router.replace('/select-cert')
   }, [currentCert, router])
 
+  if (currentCert === null) return null
+
+  return <HomeContent cert={currentCert} />
+}
+
+function HomeContent({ cert }: { cert: CertCode }) {
+  const router = useRouter()
+  const t = useT()
+  const setCurrentCert = usePrefsStore((s) => s.setCurrentCert)
+  const stats = useProgressStats(cert)
+  const wrong = useWrongList(cert)
+  const bookmarks = useBookmarksList(cert)
+  const [pending, startTransition] = useTransition()
+  const [certSheetOpen, setCertSheetOpen] = useState(false)
+
   const handleContinue = () => {
     startTransition(async () => {
-      const next = await findNextUnansweredQid(0)
+      const next = await findNextUnansweredQid(0, cert)
       if (next === null) {
         router.push('/list/wrong') // empty wrong list will then show all-answered hint
       } else {
-        router.push(`/practice/dva-c02/${next}?from=${encodeURIComponent('/')}`)
+        router.push(`/practice/${certPath(cert)}/${next}?from=${encodeURIComponent('/')}`)
       }
     })
   }
@@ -44,7 +55,13 @@ export default function HomePage() {
     router.push('/select-cert?mode=switch')
   }
 
-  if (currentCert === null) return null
+  const handleSelectCert = (nextCert: CertCode) => {
+    setCurrentCert(nextCert)
+    setCertSheetOpen(false)
+  }
+
+  const certOption = getCertOption(cert)
+  const certLevelKey = getCertGroupLabelKey(cert)
 
   const accuracy =
     stats.data && stats.data.answered > 0
@@ -73,8 +90,8 @@ export default function HomePage() {
       </header>
 
       <HeroCard
-        eyebrow={t('certDvaEyebrow')}
-        title={t('certDvaTitle')}
+        eyebrow={`${cert} · ${t(certLevelKey)}`}
+        title={t(certOption.heroTitleKey ?? certOption.titleKey)}
         headerAction={
           <button
             type="button"
@@ -153,7 +170,8 @@ export default function HomePage() {
         open={certSheetOpen}
         onClose={() => setCertSheetOpen(false)}
         onBrowseAll={handleBrowseAllCerts}
-        currentCert={currentCert}
+        onSelectCert={handleSelectCert}
+        currentCert={cert}
         answered={stats.data?.answered ?? 0}
         total={stats.data?.total ?? 0}
         accuracy={accuracy}

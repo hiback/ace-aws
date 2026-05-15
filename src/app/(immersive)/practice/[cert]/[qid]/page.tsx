@@ -14,6 +14,7 @@ import { Button } from '@/components/primitives/button'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { ProgressBar } from '@/components/primitives/progress-bar'
 import { Spinner } from '@/components/primitives/spinner'
+import { normalizeCert } from '@/data/loaders'
 import type { CertCode, Letter } from '@/data/types'
 import {
   findNextUnansweredQid,
@@ -25,6 +26,7 @@ import {
 import { useQuestion } from '@/hooks/use-question'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
+import { certPath } from '@/lib/cert-catalog'
 import { TOPIC_KEYS } from '@/lib/topic'
 import { usePrefsStore } from '@/stores/prefs-store'
 
@@ -52,13 +54,13 @@ function HeaderPartialMark() {
 }
 
 export default function PracticePage() {
-  const params = useParams<{ cert: CertCode; qid: string }>()
+  const params = useParams<{ cert: string; qid: string }>()
   const router = useRouter()
   const searchParams = useSearchParams()
   const t = useT()
   const locale = usePrefsStore((s) => s.locale)
   const qid = Number(params.qid)
-  const cert = params.cert
+  const cert: CertCode = normalizeCert(params.cert)
   const fromRaw = searchParams.get('from')
   const from = fromRaw && ALLOWED_FROM.has(fromRaw) ? fromRaw : '/'
   const fromQuery = `?from=${encodeURIComponent(from)}`
@@ -67,10 +69,10 @@ export default function PracticePage() {
 
   const bank = useQuestionBank(cert)
   const question = useQuestion(qid, cert)
-  const answer = useAnswer(qid)
-  const bookmarked = useIsBookmarked(qid)
-  const saveAnswer = useSaveAnswer()
-  const toggleBookmark = useToggleBookmark()
+  const answer = useAnswer(qid, cert)
+  const bookmarked = useIsBookmarked(qid, cert)
+  const saveAnswer = useSaveAnswer(cert)
+  const toggleBookmark = useToggleBookmark(cert)
   const picks = selection.qid === qid ? selection.picks : []
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
@@ -129,7 +131,7 @@ export default function PracticePage() {
     startTransition(async () => {
       const next = await findNextUnansweredQid(qid, cert)
       if (next === null) router.push('/list/wrong')
-      else router.push(`/practice/${cert}/${next}${fromQuery}`)
+      else router.push(`/practice/${certPath(cert)}/${next}${fromQuery}`)
     })
   }
 

@@ -10,7 +10,7 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono-jb', di
 
 export const metadata: Metadata = {
   title: 'ace-aws',
-  description: 'AWS certification practice — DVA-C02',
+  description: 'AWS certification practice',
 }
 
 const themeInitScript = `(function(){try{

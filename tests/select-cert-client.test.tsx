@@ -50,6 +50,18 @@ describe('SelectCertClient', () => {
     expect(routerMocks.replace).toHaveBeenCalledWith('/')
   })
 
+  it('selects and confirms CLF', () => {
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    const clf = screen.getByRole('button', { name: /Cloud Practitioner/ })
+    const cta = screen.getByRole('button', { name: 'Start practicing' }) as HTMLButtonElement
+
+    fireEvent.click(clf)
+    fireEvent.click(cta)
+
+    expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
+  })
+
   it('cancels the selected cert when clicked again', () => {
     render(<SelectCertClient requestedMode="onboarding" />)
 
@@ -69,7 +81,7 @@ describe('SelectCertClient', () => {
     render(<SelectCertClient requestedMode="switch" />)
 
     expect(screen.getByText('All certifications')).not.toBeNull()
-    expect(screen.getByText(/DVA-C02 is the only ready bank/)).not.toBeNull()
+    expect(screen.getByText(/CLF-C02 and DVA-C02 banks are ready/)).not.toBeNull()
     expect(screen.getByText('Continue current certification')).not.toBeNull()
     expect(screen.getByRole('button', { name: /Developer/ }).getAttribute('aria-pressed')).toBe(
       'true',
@@ -90,5 +102,21 @@ describe('SelectCertClient', () => {
 
     expect(dva.getAttribute('aria-pressed')).toBe('true')
     expect(cta.disabled).toBe(false)
+  })
+
+  it('switches from DVA to CLF in switch mode', () => {
+    usePrefsStore.setState({ locale: 'en', currentCert: 'DVA-C02' })
+
+    render(<SelectCertClient requestedMode="switch" />)
+
+    const clf = screen.getByRole('button', { name: /Cloud Practitioner/ })
+    const cta = screen.getByRole('button', {
+      name: 'Continue current certification',
+    }) as HTMLButtonElement
+
+    fireEvent.click(clf)
+    fireEvent.click(cta)
+
+    expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
   })
 })

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { loadBank, normalizeCert } from '@/data/loaders'
 import type { Question } from '@/data/types'
 
-export function useQuestionBank(certInput: string = 'DVA-C02') {
+export function useQuestionBank(certInput: string) {
   const cert = normalizeCert(certInput)
   return useQuery<Question[]>({
     queryKey: ['question-bank', cert],

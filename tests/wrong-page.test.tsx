@@ -3,6 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WrongPage from '../src/app/(tabbed)/list/wrong/page'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
+const routerMocks = vi.hoisted(() => ({
+  replace: vi.fn(),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => routerMocks,
+}))
+
 vi.mock('../src/hooks/use-progress-stats', () => ({
   useProgressStats: () => ({
     data: { answered: 2, correct: 2, total: 2 },
@@ -25,7 +33,8 @@ vi.mock('../src/hooks/use-question-bank', () => ({
 }))
 
 beforeEach(() => {
-  usePrefsStore.setState({ locale: 'en' })
+  routerMocks.replace.mockClear()
+  usePrefsStore.setState({ locale: 'en', currentCert: 'DVA-C02' })
 })
 
 afterEach(cleanup)

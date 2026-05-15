@@ -1,26 +1,34 @@
-import type { AnswerRecord, Letter, Prefs } from '@/data/types'
-import { DEFAULT_PREFS } from '@/data/types'
+import type { AnswerRecord, CertCode, Letter } from '@/data/types'
 import type { ProgressRepository } from './progress-repository'
 
-const PROGRESS_KEY = 'ace-aws/progress/v1'
-const PREFS_KEY = 'ace-aws/prefs/v1'
+const PROGRESS_KEY = 'ace-aws/progress/v2'
 
 interface ProgressData {
+  byCert: Partial<Record<CertCode, CertProgressData>>
+}
+
+interface CertProgressData {
   answers: Record<number, AnswerRecord>
   bookmarks: number[]
 }
 
-const EMPTY: ProgressData = { answers: {}, bookmarks: [] }
+const EMPTY_CERT_PROGRESS: CertProgressData = { answers: {}, bookmarks: [] }
+const EMPTY: ProgressData = { byCert: {} }
+
+function emptyCertProgress(): CertProgressData {
+  return { answers: {}, bookmarks: [] }
+}
 
 export class LocalProgressRepository implements ProgressRepository {
   private read(): ProgressData {
     if (typeof window === 'undefined') return EMPTY
     const raw = window.localStorage.getItem(PROGRESS_KEY)
-    if (!raw) return { answers: {}, bookmarks: [] }
+    if (!raw) return { byCert: {} }
     try {
-      return JSON.parse(raw) as ProgressData
+      const parsed = JSON.parse(raw) as ProgressData
+      return parsed && typeof parsed === 'object' && 'byCert' in parsed ? parsed : { byCert: {} }
     } catch {
-      return { answers: {}, bookmarks: [] }
+      return { byCert: {} }
     }
   }
 
@@ -29,13 +37,25 @@ export class LocalProgressRepository implements ProgressRepository {
     window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(data))
   }
 
-  getAnswer(qid: number): AnswerRecord | null {
-    return this.read().answers[qid] ?? null
+  private certData(data: ProgressData, cert: CertCode): CertProgressData {
+    const existing = data.byCert[cert]
+    if (existing) return existing
+    const next = emptyCertProgress()
+    data.byCert[cert] = next
+    return next
   }
 
-  saveAnswer(qid: number, picks: Letter[], correct: boolean): void {
+  private readCert(cert: CertCode): CertProgressData {
+    return this.read().byCert[cert] ?? EMPTY_CERT_PROGRESS
+  }
+
+  getAnswer(qid: number, cert: CertCode): AnswerRecord | null {
+    return this.readCert(cert).answers[qid] ?? null
+  }
+
+  saveAnswer(qid: number, picks: Letter[], correct: boolean, cert: CertCode): void {
     const data = this.read()
-    data.answers[qid] = {
+    this.certData(data, cert).answers[qid] = {
       qid,
       picks: [...picks].sort() as Letter[],
       correct,
@@ -44,51 +64,33 @@ export class LocalProgressRepository implements ProgressRepository {
     this.write(data)
   }
 
-  listAnswers(): AnswerRecord[] {
-    return Object.values(this.read().answers)
+  listAnswers(cert: CertCode): AnswerRecord[] {
+    return Object.values(this.readCert(cert).answers)
   }
 
-  listWrong(): AnswerRecord[] {
-    return this.listAnswers().filter((a) => !a.correct)
+  listWrong(cert: CertCode): AnswerRecord[] {
+    return this.listAnswers(cert).filter((a) => !a.correct)
   }
 
-  toggleBookmark(qid: number): void {
+  toggleBookmark(qid: number, cert: CertCode): void {
     const data = this.read()
-    const idx = data.bookmarks.indexOf(qid)
-    if (idx >= 0) data.bookmarks.splice(idx, 1)
-    else data.bookmarks.push(qid)
+    const certData = this.certData(data, cert)
+    const idx = certData.bookmarks.indexOf(qid)
+    if (idx >= 0) certData.bookmarks.splice(idx, 1)
+    else certData.bookmarks.push(qid)
     this.write(data)
   }
 
-  isBookmarked(qid: number): boolean {
-    return this.read().bookmarks.includes(qid)
+  isBookmarked(qid: number, cert: CertCode): boolean {
+    return this.readCert(cert).bookmarks.includes(qid)
   }
 
-  listBookmarks(): number[] {
-    return [...this.read().bookmarks]
+  listBookmarks(cert: CertCode): number[] {
+    return [...this.readCert(cert).bookmarks]
   }
 
-  getPrefs(): Prefs {
-    if (typeof window === 'undefined') return DEFAULT_PREFS
-    const raw = window.localStorage.getItem(PREFS_KEY)
-    if (!raw) return DEFAULT_PREFS
-    try {
-      const wrapped = JSON.parse(raw) as { state?: Prefs }
-      return { ...DEFAULT_PREFS, ...(wrapped.state ?? {}) }
-    } catch {
-      return DEFAULT_PREFS
-    }
-  }
-
-  updatePrefs(patch: Partial<Prefs>): void {
-    void patch
-    throw new Error(
-      'updatePrefs() should be called via usePrefsStore.setState, not the repository directly. See spec §5.3.',
-    )
-  }
-
-  getStats(): { answered: number; correct: number; total: number } {
-    const all = this.listAnswers()
+  getStats(cert: CertCode): { answered: number; correct: number; total: number } {
+    const all = this.listAnswers(cert)
     return {
       answered: all.length,
       correct: all.filter((a) => a.correct).length,

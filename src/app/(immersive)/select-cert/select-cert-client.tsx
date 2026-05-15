@@ -8,7 +8,7 @@ import { Button } from '@/components/primitives/button'
 import { Pill } from '@/components/primitives/pill'
 import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
-import { CERT_GROUPS, type CertOption } from '@/lib/cert-catalog'
+import { CERT_GROUPS, type CertOption, isReadyCertCode } from '@/lib/cert-catalog'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 interface SelectCertClientProps {
@@ -35,9 +35,12 @@ export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
   }, [currentCert, isSwitchMode])
 
   const handleSelect = (cert: CertOption) => {
-    if (cert.code !== 'DVA-C02') return
-    if (isSwitchMode) return
-    setSelectedCert((selected) => (selected === 'DVA-C02' ? null : 'DVA-C02'))
+    const code = cert.code
+    if (!isReadyCertCode(code)) return
+    setSelectedCert((selected) => {
+      if (selected === code) return isSwitchMode ? selected : null
+      return code
+    })
   }
 
   const handleCta = () => {

@@ -1,10 +1,13 @@
 'use client'
 import { Check, ChevronRight, X } from 'lucide-react'
 import Link from 'next/link'
+import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
+import { certPath } from '@/lib/cert-catalog'
 import { TOPIC_KEYS } from '@/lib/topic'
 
 interface QuestionListRowProps {
+  cert: CertCode
   qid: number
   topic: string
   questionPreview: string
@@ -14,6 +17,7 @@ interface QuestionListRowProps {
 }
 
 export function QuestionListRow({
+  cert,
   qid,
   topic,
   questionPreview,
@@ -31,7 +35,7 @@ export function QuestionListRow({
   const Icon = status === 'correct' ? Check : status === 'wrong' ? X : null
   return (
     <Link
-      href={`/practice/dva-c02/${qid}?from=${encodeURIComponent(from)}`}
+      href={`/practice/${certPath(cert)}/${qid}?from=${encodeURIComponent(from)}`}
       className="flex items-start gap-3 px-5 py-3 border-b border-border hover:bg-bg-alt transition-colors"
     >
       <div

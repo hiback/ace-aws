@@ -2,9 +2,11 @@ import type { CertCode, Letter, ProgressScope, QuestionProgress } from '@/data/t
 import type { ProgressRepository } from './progress-repository'
 
 const PROGRESS_KEYS: Record<ProgressScope, string> = {
-  anonymous: 'ace-aws/anonymous-progress/v1',
+  anonymous: 'ace-aws/progress/v1',
   account: 'ace-aws/account-progress/v1',
 }
+
+export const ACCOUNT_PROGRESS_OWNER_KEY = 'ace-aws/account-owner/v1'
 
 interface ProgressData {
   byCert: Partial<Record<CertCode, CertProgressData>>
@@ -92,6 +94,26 @@ export class LocalProgressRepository implements ProgressRepository {
 
   constructor(scope: ProgressScope = 'anonymous') {
     this.storageKey = PROGRESS_KEYS[scope]
+  }
+
+  static clearScope(scope: ProgressScope): void {
+    if (typeof window === 'undefined') return
+    window.localStorage.removeItem(PROGRESS_KEYS[scope])
+    if (scope === 'account') {
+      window.localStorage.removeItem(ACCOUNT_PROGRESS_OWNER_KEY)
+    }
+  }
+
+  static prepareAccountOwner(userId: string): boolean {
+    if (typeof window === 'undefined') return false
+    const ownerId = window.localStorage.getItem(ACCOUNT_PROGRESS_OWNER_KEY)
+    if (ownerId !== userId) {
+      LocalProgressRepository.clearScope('account')
+      window.localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, userId)
+      return true
+    }
+    window.localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, userId)
+    return false
   }
 
   private read(): ProgressData {
@@ -188,6 +210,10 @@ export class LocalProgressRepository implements ProgressRepository {
       total: 0,
     }
   }
+}
+
+export function clearProgressScope(scope: ProgressScope): void {
+  LocalProgressRepository.clearScope(scope)
 }
 
 export const progressRepo: LocalProgressRepository = new LocalProgressRepository()

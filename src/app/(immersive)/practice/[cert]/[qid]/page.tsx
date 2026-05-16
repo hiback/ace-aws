@@ -14,6 +14,7 @@ import { Button } from '@/components/primitives/button'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { ProgressBar } from '@/components/primitives/progress-bar'
 import { Spinner } from '@/components/primitives/spinner'
+import { useProgressRepository } from '@/components/providers/progress-scope-provider'
 import { normalizeCert } from '@/data/loaders'
 import type { CertCode, Letter } from '@/data/types'
 import {
@@ -79,6 +80,7 @@ export default function PracticePage() {
   const bookmarked = useIsBookmarked(qid, cert)
   const recordAnswer = useRecordAnswer(cert)
   const toggleBookmark = useToggleBookmark(cert)
+  const progressRepository = useProgressRepository()
   const picks = selection.qid === qid ? selection.picks : []
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
@@ -159,7 +161,7 @@ export default function PracticePage() {
   const handleNext = () => {
     startTransition(async () => {
       if (isListReview) {
-        const next = await findNextListReviewQid(qid, cert, source, setRaw)
+        const next = await findNextListReviewQid(qid, cert, source, setRaw, progressRepository)
         router.push(
           next === null
             ? buildCompletionHref(cert, source)
@@ -168,7 +170,7 @@ export default function PracticePage() {
         return
       }
 
-      const next = await findNextUnansweredQid(qid, cert)
+      const next = await findNextUnansweredQid(qid, cert, progressRepository)
       router.push(
         next === null ? buildCompletionHref(cert, '/') : buildPracticeHref(cert, next, '/'),
       )

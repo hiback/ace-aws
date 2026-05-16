@@ -1,16 +1,17 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
+import { useProgressScope } from '@/components/providers/progress-scope-provider'
 import { loadBank } from '@/data/loaders'
 import type { CertCode } from '@/data/types'
-import { progressRepo } from '@/repositories/local-progress-repository'
 
 export function useProgressStats(cert: CertCode) {
+  const { repository, scope } = useProgressScope()
   return useQuery({
-    queryKey: ['progress', 'stats', cert],
+    queryKey: ['progress', scope, 'stats', cert],
     queryFn: async () => {
       const [bank, base] = await Promise.all([
         loadBank(cert),
-        Promise.resolve(progressRepo.getStats(cert)),
+        Promise.resolve(repository.getStats(cert)),
       ])
       return { ...base, total: bank.length }
     },
@@ -19,17 +20,19 @@ export function useProgressStats(cert: CertCode) {
 }
 
 export function useWrongList(cert: CertCode) {
+  const { repository, scope } = useProgressScope()
   return useQuery({
-    queryKey: ['progress', 'wrong', cert],
-    queryFn: () => progressRepo.listWrong(cert),
+    queryKey: ['progress', scope, 'wrong', cert],
+    queryFn: () => repository.listWrong(cert),
     staleTime: 0,
   })
 }
 
 export function useBookmarksList(cert: CertCode) {
+  const { repository, scope } = useProgressScope()
   return useQuery({
-    queryKey: ['progress', 'bookmarks', cert],
-    queryFn: () => progressRepo.listBookmarks(cert),
+    queryKey: ['progress', scope, 'bookmarks', cert],
+    queryFn: () => repository.listBookmarks(cert),
     staleTime: 0,
   })
 }

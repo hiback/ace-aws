@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
+import { AuthSessionProvider } from '@/components/providers/auth-session-provider'
 import { I18nProvider } from '@/components/providers/i18n-provider'
+import { ProgressScopeProvider } from '@/components/providers/progress-scope-provider'
 import { QueryProvider } from '@/components/providers/query-provider'
 import { ThemeProvider } from '@/components/providers/theme-provider'
 
@@ -30,11 +32,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="bg-bg text-ink antialiased min-h-dvh">
-        <QueryProvider>
-          <ThemeProvider>
-            <I18nProvider>{children}</I18nProvider>
-          </ThemeProvider>
-        </QueryProvider>
+        <AuthSessionProvider>
+          <QueryProvider>
+            <ProgressScopeProvider>
+              <ThemeProvider>
+                <I18nProvider>{children}</I18nProvider>
+              </ThemeProvider>
+            </ProgressScopeProvider>
+          </QueryProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   )

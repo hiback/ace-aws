@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LocalProgressRepository } from '../src/repositories/local-progress-repository'
+import {
+  ACCOUNT_PROGRESS_OWNER_KEY,
+  LocalProgressRepository,
+} from '../src/repositories/local-progress-repository'
 
 const CERT = 'DVA-C02'
+const ANONYMOUS_PROGRESS_KEY = 'ace-aws/progress/v1'
 
 describe('LocalProgressRepository', () => {
   let repo: LocalProgressRepository
@@ -167,9 +171,54 @@ describe('LocalProgressRepository', () => {
       expect(repo2.isBookmarked(2, CERT)).toBe(true)
     })
 
+    it('keeps anonymous progress on the original persisted storage key', () => {
+      localStorage.setItem(
+        ANONYMOUS_PROGRESS_KEY,
+        JSON.stringify({
+          byCert: {
+            'DVA-C02': {
+              progress: {
+                1: {
+                  qid: 1,
+                  correctCount: 1,
+                  wrongCount: 0,
+                  lastPicks: ['A'],
+                  lastCorrect: true,
+                  lastAnsweredAt: 1_700_000_000_000,
+                  bookmarked: false,
+                  bookmarkUpdatedAt: null,
+                },
+              },
+            },
+          },
+        }),
+      )
+
+      expect(repo.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
+    })
+
+    it('clears only the requested progress scope', () => {
+      const accountRepo = new LocalProgressRepository('account')
+      repo.recordAnswer(1, ['A'], true, CERT)
+      accountRepo.recordAnswer(1, ['B'], false, CERT)
+
+      LocalProgressRepository.clearScope('account')
+
+      expect(repo.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
+      expect(accountRepo.getProgress(1, CERT)).toBeNull()
+    })
+
+    it('removes account owner metadata when clearing account scope', () => {
+      localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
+
+      LocalProgressRepository.clearScope('account')
+
+      expect(localStorage.getItem(ACCOUNT_PROGRESS_OWNER_KEY)).toBeNull()
+    })
+
     it('treats invalid cert progress data as empty progress', () => {
       localStorage.setItem(
-        'ace-aws/anonymous-progress/v1',
+        ANONYMOUS_PROGRESS_KEY,
         JSON.stringify({ byCert: { 'DVA-C02': {}, 'CLF-C02': { progress: null } } }),
       )
 
@@ -179,7 +228,7 @@ describe('LocalProgressRepository', () => {
 
     it('normalizes malformed question progress entries', () => {
       localStorage.setItem(
-        'ace-aws/anonymous-progress/v1',
+        ANONYMOUS_PROGRESS_KEY,
         JSON.stringify({
           byCert: {
             'DVA-C02': {

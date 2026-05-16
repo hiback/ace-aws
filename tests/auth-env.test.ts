@@ -66,6 +66,39 @@ describe('auth environment handling', () => {
     expect(process.env.NEXTAUTH_URL).toBe('http://localhost:3000')
   })
 
+  it('does not expose a separate GitHub username field in the session', async () => {
+    vi.resetModules()
+    vi.stubEnv('AUTH_GITHUB_ID', 'github-id')
+    vi.stubEnv('AUTH_GITHUB_SECRET', 'github-secret')
+    vi.stubEnv('AUTH_SECRET', 'secret')
+    vi.stubEnv('AUTH_URL', 'http://localhost:3000')
+    vi.stubEnv('DATABASE_URL', 'postgres://user:pass@localhost:5432/ace_aws')
+    vi.stubEnv('NEXT_PHASE', '')
+
+    const { authOptions } = await importAuthOptions()
+    const session = {
+      user: { id: 'user-1', name: 'hiback', email: 'hiback@example.com', image: null },
+      expires: '2099-01-01T00:00:00.000Z',
+    }
+
+    const result = await authOptions.callbacks?.session?.({
+      session,
+      token: {},
+      user: {
+        id: 'user-1',
+        name: 'hiback',
+        email: 'hiback@example.com',
+        emailVerified: null,
+        image: null,
+      },
+      newSession: undefined,
+      trigger: 'update',
+    })
+
+    expect(result?.user).toMatchObject({ id: 'user-1', name: 'hiback' })
+    expect(result?.user).not.toHaveProperty('githubUsername')
+  })
+
   it('allows import during the Next production build phase without GitHub OAuth env', async () => {
     vi.resetModules()
     vi.stubEnv('AUTH_GITHUB_ID', '')

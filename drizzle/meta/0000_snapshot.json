@@ -365,12 +365,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "github_username": {
-          "name": "github_username",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},

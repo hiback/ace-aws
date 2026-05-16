@@ -74,25 +74,24 @@ describe('SettingsPage account UI', () => {
     authMocks.session = {
       user: {
         id: 'user-1',
-        name: 'Alice',
+        name: 'hiback',
         email: 'alice@example.com',
         image: null,
-        githubUsername: 'alice-gh',
       },
       expires: '2099-01-01T00:00:00.000Z',
     }
 
     renderSettings()
 
-    expect(screen.getByText('Alice')).not.toBeNull()
-    expect(screen.getByText('@alice-gh')).not.toBeNull()
+    expect(screen.getByText('hiback')).not.toBeNull()
+    expect(screen.getByText('alice@example.com')).not.toBeNull()
     expect(screen.getByText('Sync coming soon')).not.toBeNull()
   })
 
   it('clears account progress before signing out', () => {
     authMocks.status = 'authenticated'
     authMocks.session = {
-      user: { id: 'user-1', name: 'Alice', email: null, image: null, githubUsername: 'alice-gh' },
+      user: { id: 'user-1', name: 'Alice', email: null, image: null },
       expires: '2099-01-01T00:00:00.000Z',
     }
     new LocalProgressRepository('account').recordAnswer(1, ['B'], false, 'DVA-C02')
@@ -110,7 +109,7 @@ describe('SettingsPage account UI', () => {
   it('removes cached account progress before signing out', () => {
     authMocks.status = 'authenticated'
     authMocks.session = {
-      user: { id: 'user-1', name: 'Alice', email: null, image: null, githubUsername: 'alice-gh' },
+      user: { id: 'user-1', name: 'Alice', email: null, image: null },
       expires: '2099-01-01T00:00:00.000Z',
     }
     const client = createQueryClient()
@@ -127,7 +126,7 @@ describe('SettingsPage account UI', () => {
   it('still signs out when clearing account progress throws', () => {
     authMocks.status = 'authenticated'
     authMocks.session = {
-      user: { id: 'user-1', name: 'Alice', email: null, image: null, githubUsername: 'alice-gh' },
+      user: { id: 'user-1', name: 'Alice', email: null, image: null },
       expires: '2099-01-01T00:00:00.000Z',
     }
     renderSettings()

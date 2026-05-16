@@ -3,6 +3,7 @@ refs/
 docs/superpowers/
 .worktrees/
 .agents/
+.superpowers
 skills-lock.json
 
 AGENTS.md

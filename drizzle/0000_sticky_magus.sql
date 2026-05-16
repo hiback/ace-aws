@@ -46,7 +46,6 @@ CREATE TABLE "users" (
 	"email" text,
 	"email_verified" timestamp with time zone,
 	"image" text,
-	"github_username" text,
 	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint

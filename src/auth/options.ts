@@ -1,8 +1,6 @@
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
-import { eq } from 'drizzle-orm'
 import type { NextAuthOptions } from 'next-auth'
 import GitHubProvider from 'next-auth/providers/github'
-import { githubUsernameFromProfile } from '@/auth/github-profile'
 import { db } from '@/db'
 import { accounts, sessions, users, verificationTokens } from '@/db/schema'
 
@@ -58,17 +56,8 @@ export const authOptions: NextAuthOptions = {
     session({ session, user }) {
       if (session.user) {
         session.user.id = user.id
-        session.user.githubUsername = user.githubUsername ? user.githubUsername : null
       }
       return session
-    },
-  },
-  events: {
-    async signIn({ user, profile }) {
-      const githubUsername = githubUsernameFromProfile(profile)
-      if (!user.id || !githubUsername) return
-
-      await db.update(users).set({ githubUsername }).where(eq(users.id, user.id))
     },
   },
 }

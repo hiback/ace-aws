@@ -32,7 +32,7 @@ describe('database schema', () => {
 
   it('exposes columns needed by Auth.js and sync planning', () => {
     expect(users.id).toBeDefined()
-    expect(users.githubUsername).toBeDefined()
+    expect(users).not.toHaveProperty('githubUsername')
     expect(accounts.providerAccountId).toBeDefined()
     expect(sessions.sessionToken).toBeDefined()
     expect(verificationTokens.token).toBeDefined()
@@ -44,6 +44,7 @@ describe('database schema', () => {
   it('generates migration SQL for auth and progress schema intent', () => {
     const sql = readGeneratedMigrationSql()
 
+    expect(sql).not.toContain('github_username')
     expect(sql).toContain('"updated_at" timestamp with time zone DEFAULT now() NOT NULL')
     expect(sql).toContain('"last_answered_at" timestamp with time zone')
     expect(sql).toContain('"bookmark_updated_at" timestamp with time zone')

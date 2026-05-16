@@ -18,7 +18,6 @@ export const users = pgTable('users', {
   email: text('email').unique(),
   emailVerified: timestamp('email_verified', { mode: 'date', withTimezone: true }),
   image: text('image'),
-  githubUsername: text('github_username'),
 })
 
 export const accounts = pgTable(

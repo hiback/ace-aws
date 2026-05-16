@@ -38,7 +38,6 @@ type SessionUser = {
   name?: string | null
   email?: string | null
   image?: string | null
-  githubUsername?: string | null
 }
 
 function Segmented<T extends string>({
@@ -105,7 +104,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function AccountAvatar({ user }: { user: SessionUser }) {
-  const fallback = (user.name ?? user.githubUsername ?? user.email ?? '?').slice(0, 1).toUpperCase()
+  const fallback = (user.name ?? user.email ?? '?').slice(0, 1).toUpperCase()
 
   if (user.image) {
     return (
@@ -137,8 +136,8 @@ export default function SettingsPage() {
   const queryClient = useQueryClient()
   const user = (session?.user ?? null) as SessionUser | null
   const isSignedIn = status === 'authenticated' && user !== null
-  const displayName = user?.name ?? user?.githubUsername ?? user?.email ?? t('accountGitHubUser')
-  const accountHandle = user?.githubUsername ? `@${user.githubUsername}` : user?.email
+  const displayName = user?.name ?? user?.email ?? t('accountGitHubUser')
+  const accountHandle = user?.email ?? null
 
   function handleSignIn() {
     void signIn('github')

@@ -71,8 +71,30 @@ describe('database schema', () => {
     expect(sql).toContain(
       'ALTER TABLE "cert_progress_revisions" ADD CONSTRAINT "cert_progress_revisions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
     )
-    expect(sql).toContain('CREATE UNIQUE INDEX "question_progress_user_cert_qid_unique"')
-    expect(sql).toContain('CREATE UNIQUE INDEX "cert_progress_revisions_user_cert_unique"')
+    expect(sql).toContain(
+      'CONSTRAINT "cert_progress_revisions_user_id_cert_pk" PRIMARY KEY("user_id","cert")',
+    )
+    expect(sql).toContain(
+      'CONSTRAINT "question_progress_user_id_cert_qid_pk" PRIMARY KEY("user_id","cert","qid")',
+    )
+    expect(sql).toContain('CONSTRAINT "question_progress_qid_positive" CHECK ("qid" > 0)')
+    expect(sql).toContain(
+      'CONSTRAINT "question_progress_counts_non_negative" CHECK ("correct_count" >= 0 AND "wrong_count" >= 0)',
+    )
+    expect(sql).toContain('CONSTRAINT "question_progress_answer_state_consistent" CHECK')
+    expect(sql).not.toContain('"correct_count" + "wrong_count"')
+    expect(sql).toContain('CONSTRAINT "question_progress_non_empty" CHECK')
+    expect(sql).toContain(
+      'CONSTRAINT "question_progress_bookmark_timestamp_required" CHECK ("bookmarked" = false OR "bookmark_updated_at" IS NOT NULL)',
+    )
+    expect(sql).toContain(
+      'CONSTRAINT "question_progress_latest_correctness_count_consistent" CHECK',
+    )
+    expect(sql).toContain(
+      'CONSTRAINT "cert_progress_revisions_revision_non_negative" CHECK ("revision" >= 0)',
+    )
+    expect(sql).not.toContain('question_progress_user_cert_qid_unique')
+    expect(sql).not.toContain('cert_progress_revisions_user_cert_unique')
 
     for (const tableName of [
       'users',

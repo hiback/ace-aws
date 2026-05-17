@@ -1,13 +1,5 @@
 import { sql } from 'drizzle-orm'
-import {
-  boolean,
-  integer,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core'
+import { boolean, check, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core'
 import type { Account } from 'next-auth'
 
 export const users = pgTable('users', {
@@ -92,10 +84,27 @@ export const questionProgress = pgTable(
     updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true }).notNull().defaultNow(),
   },
   (progress) => [
-    uniqueIndex('question_progress_user_cert_qid_unique').on(
-      progress.userId,
-      progress.cert,
-      progress.qid,
+    primaryKey({ columns: [progress.userId, progress.cert, progress.qid] }),
+    check('question_progress_qid_positive', sql`${progress.qid} > 0`),
+    check(
+      'question_progress_counts_non_negative',
+      sql`${progress.correctCount} >= 0 AND ${progress.wrongCount} >= 0`,
+    ),
+    check(
+      'question_progress_answer_state_consistent',
+      sql`((array_length(${progress.lastPicks}, 1) IS NULL AND ${progress.lastCorrect} IS NULL AND ${progress.lastAnsweredAt} IS NULL AND ${progress.correctCount} = 0 AND ${progress.wrongCount} = 0) OR (array_length(${progress.lastPicks}, 1) IS NOT NULL AND ${progress.lastCorrect} IS NOT NULL AND ${progress.lastAnsweredAt} IS NOT NULL AND (${progress.correctCount} > 0 OR ${progress.wrongCount} > 0)))`,
+    ),
+    check(
+      'question_progress_non_empty',
+      sql`array_length(${progress.lastPicks}, 1) IS NOT NULL OR ${progress.bookmarkUpdatedAt} IS NOT NULL`,
+    ),
+    check(
+      'question_progress_bookmark_timestamp_required',
+      sql`${progress.bookmarked} = false OR ${progress.bookmarkUpdatedAt} IS NOT NULL`,
+    ),
+    check(
+      'question_progress_latest_correctness_count_consistent',
+      sql`${progress.lastCorrect} IS NULL OR (${progress.lastCorrect} = true AND ${progress.correctCount} > 0) OR (${progress.lastCorrect} = false AND ${progress.wrongCount} > 0)`,
     ),
   ],
 )
@@ -111,6 +120,7 @@ export const certProgressRevisions = pgTable(
     updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true }).notNull().defaultNow(),
   },
   (revision) => [
-    uniqueIndex('cert_progress_revisions_user_cert_unique').on(revision.userId, revision.cert),
+    primaryKey({ columns: [revision.userId, revision.cert] }),
+    check('cert_progress_revisions_revision_non_negative', sql`${revision.revision} >= 0`),
   ],
 )

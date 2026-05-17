@@ -17,7 +17,9 @@ CREATE TABLE "cert_progress_revisions" (
 	"user_id" text NOT NULL,
 	"cert" text NOT NULL,
 	"revision" integer DEFAULT 0 NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "cert_progress_revisions_user_id_cert_pk" PRIMARY KEY("user_id","cert"),
+	CONSTRAINT "cert_progress_revisions_revision_non_negative" CHECK ("revision" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "question_progress" (
@@ -31,7 +33,14 @@ CREATE TABLE "question_progress" (
 	"last_answered_at" timestamp with time zone,
 	"bookmarked" boolean DEFAULT false NOT NULL,
 	"bookmark_updated_at" timestamp with time zone,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "question_progress_user_id_cert_qid_pk" PRIMARY KEY("user_id","cert","qid"),
+	CONSTRAINT "question_progress_qid_positive" CHECK ("qid" > 0),
+	CONSTRAINT "question_progress_counts_non_negative" CHECK ("correct_count" >= 0 AND "wrong_count" >= 0),
+	CONSTRAINT "question_progress_answer_state_consistent" CHECK ((array_length("last_picks", 1) IS NULL AND "last_correct" IS NULL AND "last_answered_at" IS NULL AND "correct_count" = 0 AND "wrong_count" = 0) OR (array_length("last_picks", 1) IS NOT NULL AND "last_correct" IS NOT NULL AND "last_answered_at" IS NOT NULL AND ("correct_count" > 0 OR "wrong_count" > 0))),
+	CONSTRAINT "question_progress_non_empty" CHECK (array_length("last_picks", 1) IS NOT NULL OR "bookmark_updated_at" IS NOT NULL),
+	CONSTRAINT "question_progress_bookmark_timestamp_required" CHECK ("bookmarked" = false OR "bookmark_updated_at" IS NOT NULL),
+	CONSTRAINT "question_progress_latest_correctness_count_consistent" CHECK ("last_correct" IS NULL OR ("last_correct" = true AND "correct_count" > 0) OR ("last_correct" = false AND "wrong_count" > 0))
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
@@ -66,6 +75,4 @@ ALTER TABLE "accounts" ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY
 ALTER TABLE "cert_progress_revisions" ADD CONSTRAINT "cert_progress_revisions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "question_progress" ADD CONSTRAINT "question_progress_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "cert_progress_revisions_user_cert_unique" ON "cert_progress_revisions" USING btree ("user_id","cert");--> statement-breakpoint
-CREATE UNIQUE INDEX "question_progress_user_cert_qid_unique" ON "question_progress" USING btree ("user_id","cert","qid");
+ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;

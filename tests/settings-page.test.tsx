@@ -79,7 +79,7 @@ describe('SettingsPage account UI', () => {
     expect(authMocks.signIn).toHaveBeenCalledWith('github')
   })
 
-  it('shows signed-in GitHub identity and sync placeholder', () => {
+  it('shows signed-in GitHub identity and cert sync status', () => {
     authMocks.status = 'authenticated'
     authMocks.session = {
       user: {
@@ -95,7 +95,10 @@ describe('SettingsPage account UI', () => {
 
     expect(screen.getByText('hiback')).not.toBeNull()
     expect(screen.getByText('alice@example.com')).not.toBeNull()
-    expect(screen.getByText('Sync coming soon')).not.toBeNull()
+    expect(screen.getByText('Certification sync enabled')).not.toBeNull()
+    expect(
+      screen.getByText('Your selected certification follows this GitHub account.'),
+    ).not.toBeNull()
   })
 
   it('clears account progress before signing out', async () => {

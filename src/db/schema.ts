@@ -66,6 +66,14 @@ export const verificationTokens = pgTable(
   ],
 )
 
+export const userPreferences = pgTable('user_preferences', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  currentCert: text('current_cert').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true }).notNull().defaultNow(),
+})
+
 export const questionProgress = pgTable(
   'question_progress',
   {

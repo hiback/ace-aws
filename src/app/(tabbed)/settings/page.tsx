@@ -187,10 +187,10 @@ export default function SettingsPage() {
                       {t('accountSyncStatus')}
                     </p>
                     <p className="mt-1 text-body font-bold text-ink">
-                      {t('accountSyncComingSoon')}
+                      {t('accountSyncCurrentCert')}
                     </p>
                     <p className="mt-1 text-secondary text-ink-mute">
-                      {t('accountSyncComingSoonDescription')}
+                      {t('accountSyncCurrentCertDescription')}
                     </p>
                   </div>
                 </div>

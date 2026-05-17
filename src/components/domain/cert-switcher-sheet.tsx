@@ -22,6 +22,8 @@ interface CertSwitcherSheetProps {
   answered: number
   total: number
   accuracy: number
+  busy?: boolean
+  errorMessage?: string | null
 }
 
 interface UpcomingCert extends CertOption {
@@ -37,6 +39,8 @@ export function CertSwitcherSheet({
   answered,
   total,
   accuracy,
+  busy = false,
+  errorMessage = null,
 }: CertSwitcherSheetProps) {
   const t = useT()
 
@@ -140,7 +144,12 @@ export function CertSwitcherSheet({
                   const code = cert.code
                   if (!isReadyCertCode(code)) return null
                   return (
-                    <CertSwitchRow key={code} cert={cert} onSelect={() => onSelectCert(code)} />
+                    <CertSwitchRow
+                      key={code}
+                      cert={cert}
+                      disabled={busy}
+                      onSelect={() => onSelectCert(code)}
+                    />
                   )
                 })}
               </div>
@@ -154,6 +163,15 @@ export function CertSwitcherSheet({
             ))}
           </div>
         </div>
+
+        {errorMessage ? (
+          <p
+            className="mx-4 mb-2 rounded-card border border-danger/25 bg-danger/10 px-3 py-2 text-helper text-danger"
+            role="alert"
+          >
+            {errorMessage}
+          </p>
+        ) : null}
 
         <div className="shrink-0 border-t border-border bg-bg px-4 pt-2.5 pb-4">
           <button
@@ -183,7 +201,15 @@ function SectionLabel({ children, className = '' }: { children: ReactNode; class
   )
 }
 
-function CertSwitchRow({ cert, onSelect }: { cert: UpcomingCert; onSelect?: () => void }) {
+function CertSwitchRow({
+  cert,
+  onSelect,
+  disabled = false,
+}: {
+  cert: UpcomingCert
+  onSelect?: () => void
+  disabled?: boolean
+}) {
   const t = useT()
   const prefix = cert.code.split('-')[0]
   const ready = isReadyCertCode(cert.code)
@@ -220,8 +246,9 @@ function CertSwitchRow({ cert, onSelect }: { cert: UpcomingCert; onSelect?: () =
     return (
       <button
         type="button"
+        disabled={disabled}
         onClick={onSelect}
-        className="flex w-full items-center gap-3 rounded-button border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:bg-bg-alt"
+        className="flex w-full items-center gap-3 rounded-button border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:bg-bg-alt disabled:opacity-60"
       >
         {content}
       </button>

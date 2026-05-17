@@ -17,6 +17,13 @@ const onboardingMocks = vi.hoisted(() => ({
   completeOnboardingStep: vi.fn(),
 }))
 
+const accountPreferenceMocks = vi.hoisted(() => ({
+  status: 'resolved' as 'idle' | 'loading' | 'resolved' | 'error',
+  resolvedCert: null as 'DVA-C02' | 'CLF-C02' | null,
+  error: null as Error | null,
+  saveCurrentCert: vi.fn(),
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMocks,
 }))
@@ -30,6 +37,10 @@ vi.mock('@/lib/onboarding-client', () => ({
   completeOnboardingStep: onboardingMocks.completeOnboardingStep,
 }))
 
+vi.mock('@/components/providers/account-preferences-provider', () => ({
+  useAccountPreferences: () => accountPreferenceMocks,
+}))
+
 beforeEach(() => {
   authMocks.status = 'unauthenticated'
   authMocks.session = null
@@ -37,6 +48,10 @@ beforeEach(() => {
   routerMocks.replace.mockClear()
   onboardingMocks.completeOnboardingStep.mockReset()
   onboardingMocks.completeOnboardingStep.mockResolvedValue(undefined)
+  accountPreferenceMocks.status = 'resolved'
+  accountPreferenceMocks.resolvedCert = null
+  accountPreferenceMocks.error = null
+  accountPreferenceMocks.saveCurrentCert.mockReset()
   usePrefsStore.setState({ locale: 'en', theme: 'light', currentCert: null })
 })
 
@@ -50,12 +65,15 @@ describe('LoginClient', () => {
     expect(screen.getByText('ace-aws')).not.toBeNull()
     expect(screen.getByText('AWS certification practice')).not.toBeNull()
     expect(screen.getByText('Welcome back')).not.toBeNull()
-    expect(screen.getByText('Sync progress across all devices after signing in')).not.toBeNull()
+    expect(screen.getByText('Sign in to sync progress across devices')).not.toBeNull()
     expect(screen.getByLabelText('Switch language')).not.toBeNull()
     expect(screen.getByText('Sign in with GitHub')).not.toBeNull()
     expect(screen.getByText('or')).not.toBeNull()
     expect(screen.getByText('Continue as guest')).not.toBeNull()
     expect(screen.getByText('Guest mode: progress is stored on this device only')).not.toBeNull()
+    expect(screen.queryByText('Email')).toBeNull()
+    expect(screen.queryByText('Password')).toBeNull()
+    expect(screen.queryByText('Sign up')).toBeNull()
   })
 
   it('starts GitHub sign-in with the login callback URL', () => {
@@ -73,11 +91,11 @@ describe('LoginClient', () => {
 
     await waitFor(() => {
       expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-auth-gate')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/select-cert')
     })
-    expect(routerMocks.replace).toHaveBeenCalledWith('/select-cert')
   })
 
-  it('automatically completes the auth gate when already authenticated', async () => {
+  it('routes authenticated users with no account cert to select-cert', async () => {
     authMocks.status = 'authenticated'
     authMocks.session = {
       user: { id: 'user-1', name: 'Alice', email: 'alice@example.com', image: null },
@@ -88,8 +106,41 @@ describe('LoginClient', () => {
 
     await waitFor(() => {
       expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-auth-gate')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/select-cert')
     })
-    expect(routerMocks.replace).toHaveBeenCalledWith('/select-cert')
+  })
+
+  it('routes authenticated users with resolved account cert to home', async () => {
+    authMocks.status = 'authenticated'
+    authMocks.session = {
+      user: { id: 'user-1', name: 'Alice', email: 'alice@example.com', image: null },
+      expires: '2099-01-01T00:00:00.000Z',
+    }
+    accountPreferenceMocks.resolvedCert = 'CLF-C02'
+
+    render(<LoginClient hasAuthError={false} />)
+
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-auth-gate')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
+  })
+
+  it('stays on login when account preference resolution fails', async () => {
+    authMocks.status = 'authenticated'
+    authMocks.session = {
+      user: { id: 'user-1', name: 'Alice', email: 'alice@example.com', image: null },
+      expires: '2099-01-01T00:00:00.000Z',
+    }
+    accountPreferenceMocks.status = 'error'
+    accountPreferenceMocks.error = new Error('network')
+
+    render(<LoginClient hasAuthError={false} />)
+
+    expect(
+      await screen.findByText('Could not load your account preferences. Please try again.'),
+    ).not.toBeNull()
+    expect(routerMocks.replace).not.toHaveBeenCalled()
   })
 
   it('renders the OAuth error message', () => {
@@ -107,6 +158,9 @@ describe('LoginClient', () => {
 
     expect(usePrefsStore.getState().locale).toBe('zh')
     expect(screen.getByText('欢迎回来')).not.toBeNull()
+    expect(screen.queryByText('邮箱')).toBeNull()
+    expect(screen.queryByText('密码')).toBeNull()
+    expect(screen.queryByText('注册')).toBeNull()
   })
 
   it('shows a save error and stays on login when guest onboarding fails', async () => {

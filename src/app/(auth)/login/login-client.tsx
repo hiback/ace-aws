@@ -1,10 +1,12 @@
 'use client'
 
+import { Globe, UserRound } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { signIn, useSession } from 'next-auth/react'
 import { useEffect, useState, useTransition } from 'react'
 import { GitHubIcon } from '@/components/icons/github-icon'
+import { useAccountPreferences } from '@/components/providers/account-preferences-provider'
 import { useT } from '@/hooks/use-t'
 import { completeOnboardingStep } from '@/lib/onboarding-client'
 import { usePrefsStore } from '@/stores/prefs-store'
@@ -17,20 +19,25 @@ export function LoginClient({ hasAuthError }: LoginClientProps) {
   const t = useT()
   const router = useRouter()
   const { status } = useSession()
+  const accountPreferences = useAccountPreferences()
   const locale = usePrefsStore((s) => s.locale)
   const setLocale = usePrefsStore((s) => s.setLocale)
   const [error, setError] = useState<string | null>(null)
+  const [authGateCompleted, setAuthGateCompleted] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    if (status !== 'authenticated') return
+    if (status !== 'authenticated') {
+      setAuthGateCompleted(false)
+      return
+    }
 
     let active = true
 
     async function finishAuthGate() {
       try {
         await completeOnboardingStep('complete-auth-gate')
-        if (active) router.replace('/select-cert')
+        if (active) setAuthGateCompleted(true)
       } catch {
         if (active) setError(t('loginOnboardingError'))
       }
@@ -41,7 +48,20 @@ export function LoginClient({ hasAuthError }: LoginClientProps) {
     return () => {
       active = false
     }
-  }, [router, status, t])
+  }, [status, t])
+
+  useEffect(() => {
+    if (!authGateCompleted) return
+
+    if (accountPreferences.status === 'resolved') {
+      router.replace(accountPreferences.resolvedCert ? '/' : '/select-cert')
+      return
+    }
+
+    if (accountPreferences.status === 'error') {
+      setError(t('loginAccountPreferencesError'))
+    }
+  }, [accountPreferences.resolvedCert, accountPreferences.status, authGateCompleted, router, t])
 
   function handleGitHubSignIn() {
     void signIn('github', { callbackUrl: '/login' })
@@ -66,71 +86,73 @@ export function LoginClient({ hasAuthError }: LoginClientProps) {
   }
 
   return (
-    <main className="min-h-dvh bg-bg px-5 py-6 text-ink">
-      <div className="mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-md flex-col">
-        <div className="flex justify-end">
+    <main className="min-h-dvh bg-bg text-ink">
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col overflow-y-auto px-7 pt-8 pb-6">
+        <div className="mb-5 flex justify-end">
           <button
             type="button"
             aria-label={t('loginLanguageToggle')}
             onClick={handleLanguageToggle}
-            className="rounded-full border border-border bg-surface px-3 py-1.5 text-secondary font-bold text-ink-mute"
+            className="inline-flex items-center gap-1 rounded-pill bg-bg-alt px-3 py-1.5 text-secondary font-medium text-ink-soft"
           >
-            {locale === 'en' ? '中文' : 'EN'}
+            <Globe className="h-3.5 w-3.5" strokeWidth={1.8} />
+            {locale === 'zh' ? 'EN' : '中文'}
           </button>
         </div>
 
-        <section className="flex flex-1 flex-col justify-center py-10">
-          <div className="mb-8 flex flex-col items-center text-center">
-            <Image src="/logo.png" alt="ace-aws" width={96} height={96} priority />
-            <p className="mt-4 text-title font-black tracking-tight">{t('appName')}</p>
-            <p className="mt-1 text-secondary text-ink-mute">{t('appTagline')}</p>
+        <section className="flex flex-1 flex-col">
+          <div className="mb-8 flex items-center gap-3">
+            <Image src="/logo.png" alt="ace-aws" width={44} height={44} priority />
+            <div>
+              <p className="text-[20px] font-bold leading-tight tracking-[-0.4px] text-ink">
+                {t('appName')}
+              </p>
+              <p className="mt-0.5 text-secondary text-ink-mute">{t('appTagline')}</p>
+            </div>
           </div>
 
-          <div className="rounded-card border border-border bg-surface p-5 shadow-sm">
-            <div className="text-center">
-              <h1 className="text-heading font-black tracking-tight">{t('loginWelcome')}</h1>
-              <p className="mt-2 text-body text-ink-mute">{t('loginSubtitle')}</p>
-            </div>
+          <h1 className="m-0 text-[28px] font-bold tracking-[-0.6px] text-ink">
+            {t('loginWelcome')}
+          </h1>
+          <p className="mt-2 mb-7 text-[14px] leading-[1.5] text-ink-mute">{t('loginSubtitle')}</p>
 
-            {hasAuthError ? (
-              <p className="mt-5 rounded-card border border-danger/25 bg-danger/10 px-3 py-2 text-secondary text-danger">
-                {t('loginAuthError')}
-              </p>
-            ) : null}
-            {error ? (
-              <p className="mt-5 rounded-card border border-danger/25 bg-danger/10 px-3 py-2 text-secondary text-danger">
-                {error}
-              </p>
-            ) : null}
+          {hasAuthError ? (
+            <p className="mb-3 rounded-card border border-danger/25 bg-danger/10 px-3 py-2 text-secondary text-danger">
+              {t('loginAuthError')}
+            </p>
+          ) : null}
+          {error ? (
+            <p className="mb-3 rounded-card border border-danger/25 bg-danger/10 px-3 py-2 text-secondary text-danger">
+              {error}
+            </p>
+          ) : null}
 
-            <div className="mt-6 space-y-4">
-              <button
-                type="button"
-                onClick={handleGitHubSignIn}
-                className="flex w-full items-center justify-center gap-2 rounded-button bg-ink px-4 py-3 text-body font-bold text-bg"
-              >
-                <GitHubIcon className="h-5 w-5" />
-                {t('signInWithGitHub')}
-              </button>
+          <button
+            type="button"
+            onClick={handleGitHubSignIn}
+            className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-btn-bg px-4 py-3.5 text-[15px] font-semibold text-white shadow-[0_4px_14px_rgb(46_99_201_/_25%)]"
+          >
+            <GitHubIcon className="h-4 w-4" />
+            {t('signInWithGitHub')}
+          </button>
 
-              <div className="flex items-center gap-3 text-helper font-bold uppercase tracking-[1px] text-ink-subtle">
-                <div className="h-px flex-1 bg-border" />
-                {t('loginOr')}
-                <div className="h-px flex-1 bg-border" />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGuestContinue}
-                disabled={isPending}
-                className="w-full rounded-button border border-border bg-surface px-4 py-3 text-body font-bold text-ink hover:bg-bg-alt disabled:opacity-60"
-              >
-                {t('continueAsGuest')}
-              </button>
-            </div>
-
-            <p className="mt-4 text-center text-helper text-ink-subtle">{t('guestModeNotice')}</p>
+          <div className="my-6 flex items-center gap-3 text-helper uppercase tracking-[1px] text-ink-mute">
+            <div className="h-px flex-1 bg-border" />
+            {t('loginOr')}
+            <div className="h-px flex-1 bg-border" />
           </div>
+
+          <button
+            type="button"
+            onClick={handleGuestContinue}
+            disabled={isPending}
+            className="flex w-full items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-border bg-transparent px-4 py-3.5 text-[14px] font-semibold text-ink disabled:opacity-60"
+          >
+            <UserRound className="h-4 w-4" strokeWidth={1.8} />
+            {t('continueAsGuest')}
+          </button>
+
+          <p className="mt-2 text-center text-helper text-ink-subtle">{t('guestModeNotice')}</p>
         </section>
       </div>
     </main>

@@ -2,12 +2,14 @@
 import { ArrowRight, Bell, Bookmark, Flag, RefreshCw } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { useEffect, useState, useTransition } from 'react'
 import { CertSwitcherSheet } from '@/components/domain/cert-switcher-sheet'
 import { HeroCard } from '@/components/domain/hero-card'
 import { QuickActionCard } from '@/components/domain/quick-action-card'
 import { Button } from '@/components/primitives/button'
 import { Spinner } from '@/components/primitives/spinner'
+import { useAccountPreferences } from '@/components/providers/account-preferences-provider'
 import type { CertCode } from '@/data/types'
 import { findNextUnansweredQid } from '@/hooks/use-answer'
 import { useBookmarksList, useProgressStats, useWrongList } from '@/hooks/use-progress-stats'
@@ -32,12 +34,16 @@ export default function HomePage() {
 function HomeContent({ cert }: { cert: CertCode }) {
   const router = useRouter()
   const t = useT()
+  const { status } = useSession()
+  const accountPreferences = useAccountPreferences()
   const setCurrentCert = usePrefsStore((s) => s.setCurrentCert)
   const stats = useProgressStats(cert)
   const wrong = useWrongList(cert)
   const bookmarks = useBookmarksList(cert)
   const [pending, startTransition] = useTransition()
+  const [certSwitchPending, startCertSwitchTransition] = useTransition()
   const [certSheetOpen, setCertSheetOpen] = useState(false)
+  const [certSwitchError, setCertSwitchError] = useState(false)
 
   const handleContinue = () => {
     startTransition(async () => {
@@ -51,13 +57,25 @@ function HomeContent({ cert }: { cert: CertCode }) {
   }
 
   const handleBrowseAllCerts = () => {
+    setCertSwitchError(false)
     setCertSheetOpen(false)
     router.push('/select-cert?mode=switch')
   }
 
   const handleSelectCert = (nextCert: CertCode) => {
-    setCurrentCert(nextCert)
-    setCertSheetOpen(false)
+    if (nextCert === cert || certSwitchPending) return
+    setCertSwitchError(false)
+    startCertSwitchTransition(async () => {
+      try {
+        if (status === 'authenticated') {
+          await accountPreferences.saveCurrentCert(nextCert)
+        }
+        setCurrentCert(nextCert)
+        setCertSheetOpen(false)
+      } catch {
+        setCertSwitchError(true)
+      }
+    })
   }
 
   const certOption = getCertOption(cert)
@@ -175,6 +193,8 @@ function HomeContent({ cert }: { cert: CertCode }) {
         answered={stats.data?.answered ?? 0}
         total={stats.data?.total ?? 0}
         accuracy={accuracy}
+        busy={certSwitchPending}
+        errorMessage={certSwitchError ? t('selectCertSaveFailed') : null}
       />
     </main>
   )

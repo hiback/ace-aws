@@ -1,11 +1,13 @@
 'use client'
 import { Check, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
 import { TopBar } from '@/components/chrome/top-bar'
 import { Button } from '@/components/primitives/button'
 import { Pill } from '@/components/primitives/pill'
+import { useAccountPreferences } from '@/components/providers/account-preferences-provider'
 import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import { CERT_GROUPS, type CertOption, isReadyCertCode } from '@/lib/cert-catalog'
@@ -18,6 +20,8 @@ interface SelectCertClientProps {
 
 export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
   const router = useRouter()
+  const { status } = useSession()
+  const accountPreferences = useAccountPreferences()
   const t = useT()
   const setCurrentCert = usePrefsStore((s) => s.setCurrentCert)
   const currentCert = usePrefsStore((s) => s.currentCert)
@@ -65,6 +69,9 @@ export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
     startTransition(async () => {
       setSaveError(false)
       try {
+        if (status === 'authenticated') {
+          await accountPreferences.saveCurrentCert(selectedCert)
+        }
         await completeOnboardingStep('complete-cert-selection')
         startTransition(() => {
           setCurrentCert(selectedCert)

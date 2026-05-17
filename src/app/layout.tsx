@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
+import { AccountPreferencesProvider } from '@/components/providers/account-preferences-provider'
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider'
 import { I18nProvider } from '@/components/providers/i18n-provider'
 import { ProgressScopeProvider } from '@/components/providers/progress-scope-provider'
@@ -35,9 +36,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthSessionProvider>
           <QueryProvider>
             <ProgressScopeProvider>
-              <ThemeProvider>
-                <I18nProvider>{children}</I18nProvider>
-              </ThemeProvider>
+              <AccountPreferencesProvider>
+                <ThemeProvider>
+                  <I18nProvider>{children}</I18nProvider>
+                </ThemeProvider>
+              </AccountPreferencesProvider>
             </ProgressScopeProvider>
           </QueryProvider>
         </AuthSessionProvider>

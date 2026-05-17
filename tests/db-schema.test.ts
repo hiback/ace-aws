@@ -7,6 +7,7 @@ import {
   certProgressRevisions,
   questionProgress,
   sessions,
+  userPreferences,
   users,
   verificationTokens,
 } from '../src/db/schema'
@@ -26,6 +27,7 @@ describe('database schema', () => {
     expect(getTableName(accounts)).toBe('accounts')
     expect(getTableName(sessions)).toBe('sessions')
     expect(getTableName(verificationTokens)).toBe('verification_tokens')
+    expect(getTableName(userPreferences)).toBe('user_preferences')
     expect(getTableName(questionProgress)).toBe('question_progress')
     expect(getTableName(certProgressRevisions)).toBe('cert_progress_revisions')
   })
@@ -36,6 +38,9 @@ describe('database schema', () => {
     expect(accounts.providerAccountId).toBeDefined()
     expect(sessions.sessionToken).toBeDefined()
     expect(verificationTokens.token).toBeDefined()
+    expect(userPreferences.userId).toBeDefined()
+    expect(userPreferences.currentCert).toBeDefined()
+    expect(userPreferences.updatedAt).toBeDefined()
     expect(questionProgress.lastPicks).toBeDefined()
     expect(questionProgress.bookmarkUpdatedAt).toBeDefined()
     expect(certProgressRevisions.revision).toBeDefined()
@@ -46,6 +51,8 @@ describe('database schema', () => {
 
     expect(sql).not.toContain('github_username')
     expect(sql).toContain('"updated_at" timestamp with time zone DEFAULT now() NOT NULL')
+    expect(sql).toContain('"user_id" text PRIMARY KEY NOT NULL')
+    expect(sql).toContain('"current_cert" text NOT NULL')
     expect(sql).toContain('"last_answered_at" timestamp with time zone')
     expect(sql).toContain('"bookmark_updated_at" timestamp with time zone')
     expect(sql).toContain('"last_picks" text[] DEFAULT ARRAY[]::text[] NOT NULL')
@@ -54,6 +61,9 @@ describe('database schema', () => {
     )
     expect(sql).toContain(
       'ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
+    )
+    expect(sql).toContain(
+      'ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
     )
     expect(sql).toContain(
       'ALTER TABLE "question_progress" ADD CONSTRAINT "question_progress_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
@@ -69,6 +79,7 @@ describe('database schema', () => {
       'accounts',
       'sessions',
       'verification_tokens',
+      'user_preferences',
       'question_progress',
       'cert_progress_revisions',
     ]) {

@@ -13,11 +13,28 @@ const onboardingMocks = vi.hoisted(() => ({
   completeOnboardingStep: vi.fn(),
 }))
 
+const authMocks = vi.hoisted(() => ({
+  status: 'unauthenticated' as 'authenticated' | 'unauthenticated' | 'loading',
+  session: null as unknown,
+}))
+
+const accountPreferenceMocks = vi.hoisted(() => ({
+  saveCurrentCert: vi.fn(),
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMocks,
 }))
 
 vi.mock('@/lib/onboarding-client', () => onboardingMocks)
+
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({ data: authMocks.session, status: authMocks.status }),
+}))
+
+vi.mock('@/components/providers/account-preferences-provider', () => ({
+  useAccountPreferences: () => accountPreferenceMocks,
+}))
 
 beforeEach(() => {
   routerMocks.replace.mockClear()
@@ -25,6 +42,12 @@ beforeEach(() => {
   routerMocks.back.mockClear()
   onboardingMocks.completeOnboardingStep.mockReset()
   onboardingMocks.completeOnboardingStep.mockResolvedValue(undefined)
+  authMocks.status = 'unauthenticated'
+  authMocks.session = null
+  accountPreferenceMocks.saveCurrentCert.mockReset()
+  accountPreferenceMocks.saveCurrentCert.mockImplementation(
+    async (cert: 'DVA-C02' | 'CLF-C02') => cert,
+  )
   usePrefsStore.setState({ locale: 'en', currentCert: null })
 })
 
@@ -82,9 +105,44 @@ describe('SelectCertClient', () => {
 
     await waitFor(() => {
       expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(accountPreferenceMocks.saveCurrentCert).not.toHaveBeenCalled()
       expect(usePrefsStore.getState().currentCert).toBe('DVA-C02')
       expect(routerMocks.replace).toHaveBeenCalledWith('/')
     })
+  })
+
+  it('saves account preferences before local cert for signed-in users', async () => {
+    authMocks.status = 'authenticated'
+    authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Cloud Practitioner/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start practicing' }))
+
+    await waitFor(() => {
+      expect(accountPreferenceMocks.saveCurrentCert).toHaveBeenCalledWith('CLF-C02')
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
+    expect(accountPreferenceMocks.saveCurrentCert.mock.invocationCallOrder[0]).toBeLessThan(
+      onboardingMocks.completeOnboardingStep.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('does not update local cert or route when signed-in cloud save fails', async () => {
+    authMocks.status = 'authenticated'
+    authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
+    accountPreferenceMocks.saveCurrentCert.mockRejectedValueOnce(new Error('failed'))
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Developer/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start practicing' }))
+
+    expect(await screen.findByText('Could not save your selection. Try again.')).not.toBeNull()
+    expect(usePrefsStore.getState().currentCert).toBeNull()
+    expect(onboardingMocks.completeOnboardingStep).not.toHaveBeenCalled()
+    expect(routerMocks.replace).not.toHaveBeenCalledWith('/')
   })
 
   it('selects and confirms CLF', async () => {

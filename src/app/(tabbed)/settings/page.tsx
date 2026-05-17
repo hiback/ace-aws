@@ -5,8 +5,10 @@ import Image from 'next/image'
 import { signIn, signOut, useSession } from 'next-auth/react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { TopBar } from '@/components/chrome/top-bar'
+import { GitHubIcon } from '@/components/icons/github-icon'
 import type { Locale, Theme } from '@/data/types'
 import { useT } from '@/hooks/use-t'
+import { resetOnboarding } from '@/lib/onboarding-client'
 import { clearProgressScope } from '@/repositories/local-progress-repository'
 import { usePrefsStore } from '@/stores/prefs-store'
 
@@ -19,14 +21,6 @@ function ThemeIcon({ className, strokeWidth = 1.75, ...rest }: SVGProps<SVGSVGEl
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={strokeWidth} />
       <path d="M12 3 V21" stroke="currentColor" strokeWidth={strokeWidth} />
       <path d="M12 3 A9 9 0 0 0 12 21 Z" fill="currentColor" />
-    </svg>
-  )
-}
-
-function GitHubIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.53 2.87 8.36 6.84 9.72.5.09.68-.22.68-.49v-1.73c-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.35 9.35 0 0 1 12 7c.85 0 1.7.12 2.5.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9v2.81c0 .27.18.59.69.49A10.2 10.2 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
     </svg>
   )
 }
@@ -144,13 +138,20 @@ export default function SettingsPage() {
   }
 
   function handleSignOut() {
-    try {
-      clearProgressScope('account')
-    } catch {
-      // localStorage can be unavailable; sign-out should still proceed.
-    }
-    queryClient.removeQueries({ queryKey: ['progress', 'account'] })
-    void signOut({ callbackUrl: '/settings' })
+    void (async () => {
+      try {
+        clearProgressScope('account')
+      } catch {
+        // localStorage can be unavailable; sign-out should still proceed.
+      }
+      queryClient.removeQueries({ queryKey: ['progress', 'account'] })
+      try {
+        await resetOnboarding()
+      } catch {
+        // Cookie cleanup is best-effort; authentication state must still clear.
+      }
+      void signOut({ callbackUrl: '/login' })
+    })()
   }
 
   return (

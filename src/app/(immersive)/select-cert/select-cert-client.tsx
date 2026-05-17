@@ -1,7 +1,7 @@
 'use client'
 import { Check, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
 import { TopBar } from '@/components/chrome/top-bar'
 import { Button } from '@/components/primitives/button'
@@ -9,6 +9,7 @@ import { Pill } from '@/components/primitives/pill'
 import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import { CERT_GROUPS, type CertOption, isReadyCertCode } from '@/lib/cert-catalog'
+import { completeOnboardingStep } from '@/lib/onboarding-client'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 interface SelectCertClientProps {
@@ -24,10 +25,25 @@ export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
   const [selectedCert, setSelectedCert] = useState<CertCode | null>(
     requestedMode === 'switch' ? currentCert : null,
   )
+  const [saveError, setSaveError] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const autoCompleteStarted = useRef(false)
 
   // Onboarding picker should not reopen after the user has already selected a cert.
   useEffect(() => {
-    if (currentCert && !isSwitchMode) router.replace('/')
+    if (!currentCert || isSwitchMode || autoCompleteStarted.current) return
+    autoCompleteStarted.current = true
+    startTransition(async () => {
+      setSaveError(false)
+      try {
+        await completeOnboardingStep('complete-cert-selection')
+        router.replace('/')
+      } catch {
+        startTransition(() => {
+          setSaveError(true)
+        })
+      }
+    })
   }, [currentCert, isSwitchMode, router])
 
   useEffect(() => {
@@ -37,6 +53,7 @@ export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
   const handleSelect = (cert: CertOption) => {
     const code = cert.code
     if (!isReadyCertCode(code)) return
+    setSaveError(false)
     setSelectedCert((selected) => {
       if (selected === code) return isSwitchMode ? selected : null
       return code
@@ -44,9 +61,21 @@ export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
   }
 
   const handleCta = () => {
-    if (!selectedCert) return
-    setCurrentCert(selectedCert)
-    router.replace('/')
+    if (!selectedCert || isPending) return
+    startTransition(async () => {
+      setSaveError(false)
+      try {
+        await completeOnboardingStep('complete-cert-selection')
+        startTransition(() => {
+          setCurrentCert(selectedCert)
+        })
+        router.replace('/')
+      } catch {
+        startTransition(() => {
+          setSaveError(true)
+        })
+      }
+    })
   }
 
   return (
@@ -80,9 +109,14 @@ export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
             </section>
           ))}
         </div>
+        {saveError ? (
+          <p className="mt-4 text-helper font-medium text-danger" role="alert">
+            {t('selectCertSaveFailed')}
+          </p>
+        ) : null}
       </main>
       <StickyFooter>
-        <Button onClick={handleCta} fullWidth size="lg" disabled={!selectedCert}>
+        <Button onClick={handleCta} fullWidth size="lg" disabled={!selectedCert || isPending}>
           {t(isSwitchMode ? 'selectCertBrowseCta' : 'selectCertCta')}
         </Button>
       </StickyFooter>

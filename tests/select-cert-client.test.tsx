@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SelectCertClient } from '../src/app/(immersive)/select-cert/select-cert-client'
 import { usePrefsStore } from '../src/stores/prefs-store'
@@ -9,14 +9,22 @@ const routerMocks = vi.hoisted(() => ({
   back: vi.fn(),
 }))
 
+const onboardingMocks = vi.hoisted(() => ({
+  completeOnboardingStep: vi.fn(),
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMocks,
 }))
+
+vi.mock('@/lib/onboarding-client', () => onboardingMocks)
 
 beforeEach(() => {
   routerMocks.replace.mockClear()
   routerMocks.push.mockClear()
   routerMocks.back.mockClear()
+  onboardingMocks.completeOnboardingStep.mockReset()
+  onboardingMocks.completeOnboardingStep.mockResolvedValue(undefined)
   usePrefsStore.setState({ locale: 'en', currentCert: null })
 })
 
@@ -33,7 +41,33 @@ describe('SelectCertClient', () => {
     expect(cta.disabled).toBe(true)
   })
 
-  it('selects and confirms the ready cert', () => {
+  it('completes cert selection before auto-routing when onboarding already has a cert', async () => {
+    usePrefsStore.setState({ locale: 'en', currentCert: 'DVA-C02' })
+
+    const { rerender } = render(<SelectCertClient requestedMode="onboarding" />)
+    rerender(<SelectCertClient requestedMode="onboarding" />)
+
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
+    expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledTimes(1)
+    expect(onboardingMocks.completeOnboardingStep.mock.invocationCallOrder[0]).toBeLessThan(
+      routerMocks.replace.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('does not auto-route when completing existing cert selection fails', async () => {
+    onboardingMocks.completeOnboardingStep.mockRejectedValueOnce(new Error('failed'))
+    usePrefsStore.setState({ locale: 'en', currentCert: 'DVA-C02' })
+
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    expect(await screen.findByText('Could not save your selection. Try again.')).not.toBeNull()
+    expect(routerMocks.replace).not.toHaveBeenCalledWith('/')
+  })
+
+  it('selects and confirms the ready cert', async () => {
     render(<SelectCertClient requestedMode="onboarding" />)
 
     const dva = screen.getByRole('button', { name: /Developer/ })
@@ -46,11 +80,14 @@ describe('SelectCertClient', () => {
 
     fireEvent.click(cta)
 
-    expect(usePrefsStore.getState().currentCert).toBe('DVA-C02')
-    expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(usePrefsStore.getState().currentCert).toBe('DVA-C02')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
   })
 
-  it('selects and confirms CLF', () => {
+  it('selects and confirms CLF', async () => {
     render(<SelectCertClient requestedMode="onboarding" />)
 
     const clf = screen.getByRole('button', { name: /Cloud Practitioner/ })
@@ -59,7 +96,11 @@ describe('SelectCertClient', () => {
     fireEvent.click(clf)
     fireEvent.click(cta)
 
-    expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
   })
 
   it('cancels the selected cert when clicked again', () => {
@@ -104,7 +145,7 @@ describe('SelectCertClient', () => {
     expect(cta.disabled).toBe(false)
   })
 
-  it('switches from DVA to CLF in switch mode', () => {
+  it('switches from DVA to CLF in switch mode', async () => {
     usePrefsStore.setState({ locale: 'en', currentCert: 'DVA-C02' })
 
     render(<SelectCertClient requestedMode="switch" />)
@@ -117,6 +158,26 @@ describe('SelectCertClient', () => {
     fireEvent.click(clf)
     fireEvent.click(cta)
 
-    expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
+  })
+
+  it('does not save or route when cert selection completion fails', async () => {
+    onboardingMocks.completeOnboardingStep.mockRejectedValueOnce(new Error('failed'))
+
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    const dva = screen.getByRole('button', { name: /Developer/ })
+    const cta = screen.getByRole('button', { name: 'Start practicing' }) as HTMLButtonElement
+
+    fireEvent.click(dva)
+    fireEvent.click(cta)
+
+    expect(await screen.findByText('Could not save your selection. Try again.')).not.toBeNull()
+    expect(usePrefsStore.getState().currentCert).toBeNull()
+    expect(routerMocks.replace).not.toHaveBeenCalledWith('/')
   })
 })

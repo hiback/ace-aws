@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
     volumes:
-      - ace-aws-postgres-dev:/var/lib/postgresql/data
+      - ace-aws-postgres-dev:/var/lib/postgresql
   adminer:
     image: adminer
     restart: always

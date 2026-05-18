@@ -60,7 +60,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker-compose.yml` pulls `ghcr.io/hiback/ace-aws:latest`; it does not build locally. The stack starts the app and an internal PostgreSQL service with a persistent Docker volume. PostgreSQL is not exposed on the host. The app waits for PostgreSQL, runs pending Drizzle migrations on every container start, and exits if migrations fail.
+`docker-compose.yml` pulls `ghcr.io/hiback/ace-aws:latest`; it does not build locally. The stack starts the app and an internal PostgreSQL service with a persistent Docker volume mounted at `/var/lib/postgresql`, matching the PostgreSQL 18+ image layout. PostgreSQL is not exposed on the host. The app waits for PostgreSQL, runs pending Drizzle migrations on every container start, and exits if migrations fail.
 
 The container exposes HTTP on port 3000. TLS / reverse proxy are intentionally NOT in this repo — front it with your own ingress (Caddy, Traefik, nginx, etc.).
 

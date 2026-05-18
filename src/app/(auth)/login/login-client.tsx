@@ -9,6 +9,7 @@ import { GitHubIcon } from '@/components/icons/github-icon'
 import { useAccountPreferences } from '@/components/providers/account-preferences-provider'
 import { useT } from '@/hooks/use-t'
 import { completeOnboardingStep } from '@/lib/onboarding-client'
+import { consumeSyncExpiredLoginMessage } from '@/lib/sync-login-message'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 type LoginClientProps = {
@@ -25,6 +26,10 @@ export function LoginClient({ hasAuthError }: LoginClientProps) {
   const [error, setError] = useState<string | null>(null)
   const [authGateCompleted, setAuthGateCompleted] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (consumeSyncExpiredLoginMessage()) setError(t('loginSyncExpired'))
+  }, [t])
 
   useEffect(() => {
     if (status !== 'authenticated') {

@@ -4,10 +4,13 @@ import { ChevronRight, Globe, LogOut, UserRound } from 'lucide-react'
 import Image from 'next/image'
 import { signIn, signOut, useSession } from 'next-auth/react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
+import { useState } from 'react'
 import { TopBar } from '@/components/chrome/top-bar'
 import { GitHubIcon } from '@/components/icons/github-icon'
+import { useAccountProgressSync } from '@/components/providers/account-progress-sync-provider'
 import type { Locale, Theme } from '@/data/types'
 import { useT } from '@/hooks/use-t'
+import { useToast } from '@/hooks/use-toast'
 import { resetOnboarding } from '@/lib/onboarding-client'
 import { clearProgressScope } from '@/repositories/local-progress-repository'
 import { usePrefsStore } from '@/stores/prefs-store'
@@ -128,6 +131,10 @@ export default function SettingsPage() {
   const locale = usePrefsStore((s) => s.locale)
   const setLocale = usePrefsStore((s) => s.setLocale)
   const queryClient = useQueryClient()
+  const progressSync = useAccountProgressSync()
+  const { toast } = useToast()
+  const [signOutBlocked, setSignOutBlocked] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const user = (session?.user ?? null) as SessionUser | null
   const isSignedIn = status === 'authenticated' && user !== null
   const displayName = user?.name ?? user?.email ?? t('accountGitHubUser')
@@ -137,21 +144,81 @@ export default function SettingsPage() {
     void signIn('github')
   }
 
-  function handleSignOut() {
-    void (async () => {
+  const syncStateLabel = {
+    syncing: t('accountProgressSyncStateSyncing'),
+    failed: t('accountProgressSyncStateFailed'),
+    dirty: t('accountProgressSyncStateDirty'),
+    synced: t('accountProgressSyncStateSynced'),
+  }[progressSync.status]
+  const formattedLastSyncedAt = progressSync.lastSyncedAt
+    ? new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(progressSync.lastSyncedAt)
+    : null
+  const syncDisabled = progressSync.status === 'syncing' || progressSync.isImporting || signingOut
+
+  async function finishSignOut(clearSyncState: boolean) {
+    setSigningOut(true)
+    if (clearSyncState) {
+      progressSync.discardAccountSyncState()
+    } else {
       try {
         clearProgressScope('account')
       } catch {
         // localStorage can be unavailable; sign-out should still proceed.
       }
       queryClient.removeQueries({ queryKey: ['progress', 'account'] })
-      try {
-        await resetOnboarding()
-      } catch {
-        // Cookie cleanup is best-effort; authentication state must still clear.
-      }
-      void signOut({ callbackUrl: '/login' })
+    }
+    try {
+      await resetOnboarding()
+    } catch {
+      // Cookie cleanup is best-effort; authentication state must still clear.
+    }
+    await signOut({ callbackUrl: '/login' })
+  }
+
+  function handleSyncNow() {
+    void (async () => {
+      setSignOutBlocked(false)
+      await progressSync.syncNow()
     })()
+  }
+
+  function handleImportAnonymousProgress() {
+    void (async () => {
+      const result = await progressSync.importAnonymousProgress()
+      toast(
+        result.ok
+          ? t('settingsAnonymousImportSuccessToast')
+          : t('settingsAnonymousImportFailureToast'),
+      )
+    })()
+  }
+
+  function handleSignOut() {
+    void (async () => {
+      const result = await progressSync.syncBeforeSignOut()
+      if (!result.ok && result.reason === 'temporary') {
+        setSignOutBlocked(true)
+        return
+      }
+      await finishSignOut(false)
+    })()
+  }
+
+  function handleRetrySignOutSync() {
+    void (async () => {
+      const result = await progressSync.syncBeforeSignOut()
+      if (result.ok || result.reason === 'fatal') {
+        setSignOutBlocked(false)
+        await finishSignOut(false)
+      }
+    })()
+  }
+
+  function handleStillSignOut() {
+    void finishSignOut(true)
   }
 
   return (
@@ -186,20 +253,79 @@ export default function SettingsPage() {
                     <p className="text-helper font-bold uppercase tracking-[1px] text-ink-mute">
                       {t('accountSyncStatus')}
                     </p>
-                    <p className="mt-1 text-body font-bold text-ink">
-                      {t('accountSyncCurrentCert')}
-                    </p>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <p className="text-body font-bold text-ink">{t('accountSyncCurrentCert')}</p>
+                      <span className="rounded-full bg-surface border border-border px-2 py-0.5 text-helper font-bold text-ink-mute">
+                        {syncStateLabel}
+                      </span>
+                    </div>
                     <p className="mt-1 text-secondary text-ink-mute">
-                      {t('accountSyncCurrentCertDescription')}
+                      {formattedLastSyncedAt
+                        ? t('accountProgressSyncLastSynced', { time: formattedLastSyncedAt })
+                        : t('accountProgressSyncNeverSynced')}
                     </p>
+                    {progressSync.status === 'failed' && (
+                      <p className="mt-1 text-secondary text-danger">
+                        {t('accountProgressSyncManualFailure')}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-2">
+                  {signOutBlocked ? (
+                    <div className="rounded-card bg-bg-alt border border-border p-3 space-y-3">
+                      <div>
+                        <p className="text-body font-bold text-ink">
+                          {t('accountProgressSyncSignOutBlockedTitle')}
+                        </p>
+                        <p className="mt-1 text-secondary text-ink-mute">
+                          {t('accountProgressSyncSignOutBlockedDescription')}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={handleRetrySignOutSync}
+                          disabled={syncDisabled}
+                          className="rounded-button bg-ink px-3 py-2.5 text-body font-bold text-bg disabled:opacity-50"
+                        >
+                          {t('accountProgressSyncRetrySync')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleStillSignOut}
+                          disabled={progressSync.isImporting || signingOut}
+                          className="rounded-button border border-border bg-surface px-3 py-2.5 text-body font-bold text-ink disabled:opacity-50"
+                        >
+                          {t('accountProgressSyncStillSignOut')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {progressSync.anonymousImportAvailable ? (
+                    <button
+                      type="button"
+                      onClick={handleImportAnonymousProgress}
+                      disabled={progressSync.isImporting || signingOut}
+                      className="w-full rounded-button border border-border bg-bg-alt px-4 py-2.5 text-body font-bold text-ink flex items-center justify-center gap-2 hover:bg-surface disabled:opacity-50"
+                    >
+                      {t('settingsAnonymousImportCta')}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleSyncNow}
+                    disabled={syncDisabled}
+                    className="w-full rounded-button bg-ink px-4 py-2.5 text-body font-bold text-bg flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {t('accountProgressSyncSyncNow')}
+                  </button>
                   <button
                     type="button"
                     onClick={handleSignOut}
-                    className="w-full rounded-button border border-border bg-surface px-4 py-2.5 text-body font-bold text-ink flex items-center justify-center gap-2 hover:bg-bg-alt"
+                    disabled={syncDisabled}
+                    className="w-full rounded-button border border-border bg-surface px-4 py-2.5 text-body font-bold text-ink flex items-center justify-center gap-2 hover:bg-bg-alt disabled:opacity-50"
                   >
                     <LogOut className="w-4 h-4" strokeWidth={1.75} />
                     {t('signOut')}
@@ -221,10 +347,6 @@ export default function SettingsPage() {
                       {t('accountSignedOutDescription')}
                     </p>
                   </div>
-                </div>
-
-                <div className="rounded-card bg-bg-alt border border-border px-3 py-2.5 text-secondary text-ink-mute">
-                  {t('accountLocalProgressNotice')}
                 </div>
 
                 <button

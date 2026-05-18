@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LoginClient } from '../src/app/(auth)/login/login-client'
+import { storeSyncExpiredLoginMessage } from '../src/lib/sync-login-message'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const authMocks = vi.hoisted(() => ({
@@ -42,6 +43,7 @@ vi.mock('@/components/providers/account-preferences-provider', () => ({
 }))
 
 beforeEach(() => {
+  sessionStorage.clear()
   authMocks.status = 'unauthenticated'
   authMocks.session = null
   authMocks.signIn.mockClear()
@@ -149,6 +151,22 @@ describe('LoginClient', () => {
     expect(
       screen.getByText('GitHub sign-in was not completed. Try again or continue as guest.'),
     ).not.toBeNull()
+  })
+
+  it('displays and clears the one-time expired sync session message', () => {
+    storeSyncExpiredLoginMessage()
+
+    const { unmount } = render(<LoginClient hasAuthError={false} />)
+
+    expect(
+      screen.getByText('Your sync session expired. Sign in again to continue syncing.'),
+    ).not.toBeNull()
+    unmount()
+    render(<LoginClient hasAuthError={false} />)
+
+    expect(
+      screen.queryByText('Your sync session expired. Sign in again to continue syncing.'),
+    ).toBeNull()
   })
 
   it('toggles the login language', () => {

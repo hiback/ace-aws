@@ -1,5 +1,6 @@
 'use client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAccountProgressSync } from '@/components/providers/account-progress-sync-provider'
 import {
   useProgressRepository,
   useProgressScope,
@@ -36,6 +37,7 @@ interface SaveArgs {
 export function useRecordAnswer(cert: CertCode) {
   const qc = useQueryClient()
   const { repository, scope } = useProgressScope()
+  const { enqueueDirtySync } = useAccountProgressSync()
   return useMutation({
     mutationFn: async ({ qid, picks, correct }: SaveArgs) => {
       repository.recordAnswer(qid, picks, correct, cert)
@@ -48,6 +50,7 @@ export function useRecordAnswer(cert: CertCode) {
       }
       qc.invalidateQueries({ queryKey: ['progress', scope, 'question', cert, qid] })
       qc.invalidateQueries({ queryKey: ['progress', scope] })
+      if (scope === 'account') enqueueDirtySync(cert)
     },
   })
 }
@@ -55,6 +58,7 @@ export function useRecordAnswer(cert: CertCode) {
 export function useToggleBookmark(cert: CertCode) {
   const qc = useQueryClient()
   const { repository, scope } = useProgressScope()
+  const { enqueueDirtySync } = useAccountProgressSync()
   return useMutation({
     mutationFn: async (qid: number) => {
       repository.toggleBookmark(qid, cert)
@@ -62,6 +66,7 @@ export function useToggleBookmark(cert: CertCode) {
     onSuccess: (_, qid) => {
       qc.invalidateQueries({ queryKey: ['progress', scope, 'question', cert, qid] })
       qc.invalidateQueries({ queryKey: ['progress', scope, 'bookmarks'] })
+      if (scope === 'account') enqueueDirtySync(cert)
     },
   })
 }

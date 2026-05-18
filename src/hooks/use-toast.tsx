@@ -1,4 +1,5 @@
 'use client'
+import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import { create } from 'zustand'
 
@@ -19,6 +20,7 @@ export function useToast() {
 }
 
 export function ToastHost() {
+  const pathname = usePathname() ?? ''
   const { message, clear } = useToastStore()
   useEffect(() => {
     if (!message) return
@@ -26,8 +28,17 @@ export function ToastHost() {
     return () => window.clearTimeout(id)
   }, [message, clear])
   if (!message) return null
+  const bottomClass =
+    ['/', '/wrong', '/bookmarks', '/settings', '/list'].includes(pathname) ||
+    pathname.startsWith('/list/')
+      ? 'bottom-20'
+      : 'bottom-4'
   return (
-    <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-pill bg-ink text-bg text-secondary shadow-lg max-w-sm text-center">
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed ${bottomClass} left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-pill bg-ink text-bg text-secondary shadow-lg max-w-sm text-center`}
+    >
       {message}
     </div>
   )

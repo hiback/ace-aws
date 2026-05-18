@@ -10,6 +10,7 @@ import { QuickActionCard } from '@/components/domain/quick-action-card'
 import { Button } from '@/components/primitives/button'
 import { Spinner } from '@/components/primitives/spinner'
 import { useAccountPreferences } from '@/components/providers/account-preferences-provider'
+import { useProgressRepository } from '@/components/providers/progress-scope-provider'
 import type { CertCode } from '@/data/types'
 import { findNextUnansweredQid } from '@/hooks/use-answer'
 import { useBookmarksList, useProgressStats, useWrongList } from '@/hooks/use-progress-stats'
@@ -34,8 +35,9 @@ export default function HomePage() {
 function HomeContent({ cert }: { cert: CertCode }) {
   const router = useRouter()
   const t = useT()
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const accountPreferences = useAccountPreferences()
+  const progressRepository = useProgressRepository()
   const setCurrentCert = usePrefsStore((s) => s.setCurrentCert)
   const stats = useProgressStats(cert)
   const wrong = useWrongList(cert)
@@ -47,7 +49,7 @@ function HomeContent({ cert }: { cert: CertCode }) {
 
   const handleContinue = () => {
     startTransition(async () => {
-      const next = await findNextUnansweredQid(0, cert)
+      const next = await findNextUnansweredQid(0, cert, progressRepository)
       if (next === null) {
         router.push('/list/wrong') // empty wrong list will then show all-answered hint
       } else {
@@ -80,6 +82,11 @@ function HomeContent({ cert }: { cert: CertCode }) {
 
   const certOption = getCertOption(cert)
   const certLevelKey = getCertGroupLabelKey(cert)
+  const displayName =
+    status === 'authenticated'
+      ? session?.user?.name?.trim() || session?.user?.email?.trim() || null
+      : null
+  const greeting = displayName ? t('greetingWithName', { name: displayName }) : t('greeting')
 
   const accuracy =
     stats.data && stats.data.answered > 0
@@ -95,7 +102,7 @@ function HomeContent({ cert }: { cert: CertCode }) {
             <p className="text-card font-bold text-ink tracking-tight leading-tight">
               {t('appName')}
             </p>
-            <p className="text-[10.5px] text-ink-mute leading-tight mt-0.5">{t('greeting')}</p>
+            <p className="text-[10.5px] text-ink-mute leading-tight mt-0.5">{greeting}</p>
           </div>
         </div>
         <button

@@ -9,6 +9,7 @@ import { ProgressScopeProvider } from '@/components/providers/progress-scope-pro
 import { QueryProvider } from '@/components/providers/query-provider'
 import { ThemeProvider } from '@/components/providers/theme-provider'
 import { ToastHost } from '@/hooks/use-toast'
+import { themeInitScript } from '@/lib/theme-init-script'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono-jb', display: 'swap' })
@@ -17,15 +18,6 @@ export const metadata: Metadata = {
   title: 'ace-aws',
   description: 'AWS certification practice',
 }
-
-const themeInitScript = `(function(){try{
-  var p = localStorage.getItem('ace-aws/prefs/v1');
-  var t = p ? JSON.parse(p).state.theme : 'system';
-  var r = t === 'system'
-    ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : t;
-  if (r === 'dark') document.documentElement.setAttribute('data-theme','dark');
-}catch(e){}})();`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -46,6 +46,10 @@ export const authOptions: NextAuthOptions = {
   }),
   session: { strategy: 'database' },
   secret: authSecret,
+  pages: {
+    signIn: '/login',
+    error: '/login',
+  },
   providers: [
     GitHubProvider({
       clientId: githubClientId,

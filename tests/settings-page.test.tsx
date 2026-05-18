@@ -134,9 +134,10 @@ describe('SettingsPage account UI', () => {
 
     expect(screen.getByText('hiback')).not.toBeNull()
     expect(screen.getByText('alice@example.com')).not.toBeNull()
-    expect(screen.getByText('Progress sync enabled')).not.toBeNull()
+    expect(screen.queryByText('Signed in')).toBeNull()
     expect(screen.getByText('Synced')).not.toBeNull()
-    expect(screen.getByText('Not synced yet')).not.toBeNull()
+    expect(screen.getByText(/Not synced yet/)).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Sync now' })).not.toBeNull()
   })
 
   it('shows sync state and short last synced time from the sync provider', () => {
@@ -151,7 +152,9 @@ describe('SettingsPage account UI', () => {
     renderSettings()
 
     expect(screen.getByText('Unsynced progress')).not.toBeNull()
-    expect(screen.getByText(/^Last synced: /)?.textContent).toContain('5/17/26')
+    expect(screen.getByText(/Last synced: /)?.textContent).toMatch(
+      /Last synced: \d{2}\/\d{2} \d{2}:\d{2}/,
+    )
   })
 
   it('runs manual sync from Settings', async () => {

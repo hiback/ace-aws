@@ -28,7 +28,7 @@ function ThemeIcon({ className, strokeWidth = 1.75, ...rest }: SVGProps<SVGSVGEl
   )
 }
 
-const APP_VERSION = '0.3.1'
+const APP_VERSION = '0.3.2'
 const REPO_URL = 'https://github.com/hiback/ace-aws'
 
 function formatSettingsTimestamp(date: Date | number) {

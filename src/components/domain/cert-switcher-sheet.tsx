@@ -1,7 +1,7 @@
 'use client'
-import { ArrowRight, Check, ChevronRight, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { BottomSheet } from '@/components/primitives/bottom-sheet'
 import { useProgressRepository } from '@/components/providers/progress-scope-provider'
 import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
@@ -48,20 +48,6 @@ export function CertSwitcherSheet({
   const t = useT()
   const progressRepository = useProgressRepository()
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [open, onClose])
-
   if (!open) return null
 
   const completion = total > 0 ? Math.round((answered / total) * 100) : 0
@@ -90,102 +76,37 @@ export function CertSwitcherSheet({
     .map((entry) => entry.cert)
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-end"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="cert-switcher-title"
-    >
-      <button
-        type="button"
-        aria-label={t('close')}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40 backdrop-blur-[1.5px]"
-      />
-      <div className="relative flex max-h-[88dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[20px] bg-bg shadow-[0_-12px_36px_rgba(0,0,0,0.22)]">
-        <div className="flex shrink-0 justify-center pt-2 pb-1">
-          <div className="h-1 w-9 rounded-full bg-border-strong" />
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      closeLabel={t('close')}
+      ariaLabelledby="cert-switcher-title"
+      backdropClassName="backdrop-blur-[1.5px]"
+      panelClassName="max-h-[80%] rounded-t-[20px] bg-bg shadow-[0_-12px_36px_rgba(0,0,0,0.22)]"
+      handleClassName="[&>div:first-child]:pb-1 [&>div:first-child>div]:bg-border-strong"
+      headerClassName="justify-between gap-3 px-[18px] pt-1.5 pb-3"
+      contentClassName="flex-1 overflow-y-auto px-4 pt-3 pb-4"
+      closeButtonClassName="h-[30px] w-[30px] text-ink-soft"
+      closeIconStrokeWidth={2.25}
+      header={
+        <div className="min-w-0">
+          <h2 id="cert-switcher-title" className="text-card font-bold tracking-tight text-ink">
+            {t('certSwitchTitle')}
+          </h2>
+          <p className="mt-0.5 text-helper text-ink-mute">{t('certSwitchSubtitle')}</p>
         </div>
-        <div className="flex shrink-0 items-center justify-between gap-3 px-[18px] pt-1.5 pb-3">
-          <div className="min-w-0">
-            <h2 id="cert-switcher-title" className="text-card font-bold tracking-tight text-ink">
-              {t('certSwitchTitle')}
-            </h2>
-            <p className="mt-0.5 text-helper text-ink-mute">{t('certSwitchSubtitle')}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('close')}
-            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-bg-alt text-ink-soft"
-          >
-            <X className="h-3.5 w-3.5" strokeWidth={2.25} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4">
-          <SectionLabel>{t('certSwitchCurrent')}</SectionLabel>
-          <div className="relative overflow-hidden rounded-[14px] p-3.5 text-white bg-[linear-gradient(135deg,var(--color-hero-from),var(--color-hero-to))]">
-            <div className="pointer-events-none absolute -top-6 -right-6 h-24 w-24 rounded-full bg-white/10" />
-            <div className="relative flex items-center gap-3">
-              <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] border border-white/25 bg-white/20 font-mono text-helper font-bold tracking-[0.4px]">
-                {currentCert.split('-')[0]}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-mono text-helper tracking-[0.4px] opacity-85">
-                  {currentCert} · {t(currentLevelKey)}
-                </p>
-                <p className="mt-0.5 truncate text-[14.5px] font-bold tracking-tight">
-                  {t(current.heroTitleKey ?? current.titleKey)}
-                </p>
-              </div>
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-accent-deep">
-                <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-              </div>
-            </div>
-            <div className="relative mt-3 flex items-baseline gap-3 font-mono text-helper opacity-90">
-              <span>
-                {answered}/{total} · {completion}%
-              </span>
-              <span>
-                {t('homeAccuracy')} {accuracy}%
-              </span>
-            </div>
-            <div className="relative mt-2 h-1 overflow-hidden rounded-full bg-white/25">
-              <div className="h-full rounded-full bg-white" style={{ width: `${completion}%` }} />
-            </div>
-          </div>
-
-          {otherCerts.length > 0 ? (
-            <>
-              <SectionLabel className="mt-[18px]">{t('certSwitchOther')}</SectionLabel>
-              <div className="flex flex-col gap-1.5">
-                {otherCerts.map((cert) => {
-                  const code = cert.code
-                  const ready = isReadyCertCode(code)
-                  return (
-                    <CertSwitchRow
-                      key={code}
-                      cert={cert}
-                      disabled={busy}
-                      onSelect={ready ? () => onSelectCert(code) : undefined}
-                    />
-                  )
-                })}
-              </div>
-            </>
-          ) : null}
-        </div>
-
-        {errorMessage ? (
+      }
+      error={
+        errorMessage ? (
           <p
             className="mx-4 mb-2 rounded-card border border-danger/25 bg-danger/10 px-3 py-2 text-helper text-danger"
             role="alert"
           >
             {errorMessage}
           </p>
-        ) : null}
-
+        ) : null
+      }
+      footer={
         <div className="shrink-0 border-t border-border bg-bg px-4 pt-2.5 pb-4">
           <button
             type="button"
@@ -196,8 +117,60 @@ export function CertSwitcherSheet({
             <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
           </button>
         </div>
+      }
+    >
+      <SectionLabel>{t('certSwitchCurrent')}</SectionLabel>
+      <div className="relative overflow-hidden rounded-[14px] p-3.5 text-white bg-[linear-gradient(135deg,var(--color-hero-from),var(--color-hero-to))]">
+        <div className="pointer-events-none absolute -top-6 -right-6 h-24 w-24 rounded-full bg-white/10" />
+        <div className="relative flex items-center gap-3">
+          <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] border border-white/25 bg-white/20 font-mono text-helper font-bold tracking-[0.4px]">
+            {currentCert.split('-')[0]}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-helper tracking-[0.4px] opacity-85">
+              {currentCert} · {t(currentLevelKey)}
+            </p>
+            <p className="mt-0.5 truncate text-[14.5px] font-bold tracking-tight">
+              {t(current.heroTitleKey ?? current.titleKey)}
+            </p>
+          </div>
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-accent-deep">
+            <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </div>
+        </div>
+        <div className="relative mt-3 flex items-baseline gap-3 font-mono text-helper opacity-90">
+          <span>
+            {answered}/{total} · {completion}%
+          </span>
+          <span>
+            {t('homeAccuracy')} {accuracy}%
+          </span>
+        </div>
+        <div className="relative mt-2 h-1 overflow-hidden rounded-full bg-white/25">
+          <div className="h-full rounded-full bg-white" style={{ width: `${completion}%` }} />
+        </div>
       </div>
-    </div>
+
+      {otherCerts.length > 0 ? (
+        <>
+          <SectionLabel className="mt-[18px]">{t('certSwitchOther')}</SectionLabel>
+          <div className="flex flex-col gap-1.5">
+            {otherCerts.map((cert) => {
+              const code = cert.code
+              const ready = isReadyCertCode(code)
+              return (
+                <CertSwitchRow
+                  key={code}
+                  cert={cert}
+                  disabled={busy}
+                  onSelect={ready ? () => onSelectCert(code) : undefined}
+                />
+              )
+            })}
+          </div>
+        </>
+      ) : null}
+    </BottomSheet>
   )
 }
 

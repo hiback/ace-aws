@@ -1,6 +1,6 @@
 'use client'
-import { Globe, X } from 'lucide-react'
-import { useEffect } from 'react'
+import { Globe } from 'lucide-react'
+import { BottomSheet } from '@/components/primitives/bottom-sheet'
 import { Prose } from '@/components/primitives/prose'
 import type { Letter } from '@/data/types'
 import { useT } from '@/hooks/use-t'
@@ -15,80 +15,50 @@ interface OriginalSheetProps {
 export function OriginalSheet({ open, onClose, enQuestion, enOptions }: OriginalSheetProps) {
   const t = useT()
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [open, onClose])
-
   if (!open) return null
 
   const letters = Object.keys(enOptions) as Letter[]
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-end"
-      role="dialog"
-      aria-modal="true"
-    >
-      <button
-        type="button"
-        aria-label={t('close')}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
-      />
-      <div className="relative w-full max-w-md max-h-[80%] bg-surface rounded-t-[22px] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden">
-        <div className="flex justify-center pt-2 pb-1.5 shrink-0">
-          <div className="w-9 h-1 rounded-full bg-border-strong/55" />
-        </div>
-        <div className="px-4 pt-1 pb-3 flex items-center gap-2.5 border-b border-border shrink-0">
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      closeLabel={t('close')}
+      panelClassName="max-h-[80%]"
+      headerClassName="border-b border-border"
+      contentClassName="min-h-0 overflow-y-auto px-[18px] pt-3.5 pb-5"
+      header={
+        <div className="flex min-w-0 items-center gap-2.5">
           <Globe className="w-3.5 h-3.5 text-accent-deep" strokeWidth={2} />
           <div className="flex-1 text-secondary font-bold text-ink tracking-tight">
             {t('englishOriginal')}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('close')}
-            className="w-7 h-7 rounded-full bg-bg-alt flex items-center justify-center"
-          >
-            <X className="w-3.5 h-3.5 text-ink-soft" strokeWidth={2} />
-          </button>
         </div>
-        <div className="min-h-0 overflow-y-auto px-[18px] pt-3.5 pb-5">
-          <div className="mb-3.5">
-            <Prose
-              variant="stem"
-              source={enQuestion}
-              className="[&_p]:text-[13.5px] [&_p]:leading-[1.6]"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            {letters.map((k) => (
-              <div key={k} className="flex gap-2.5 items-start px-2.5 py-2 rounded-lg bg-bg-alt">
-                <div className="w-[22px] h-[22px] rounded-[5px] bg-surface text-ink-soft border border-border flex items-center justify-center text-[11px] font-bold shrink-0">
-                  {k}
-                </div>
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <Prose
-                    variant="option"
-                    source={enOptions[k] ?? ''}
-                    className="[&_p]:text-[12.5px] [&_p]:text-ink-soft [&_p]:leading-[1.55]"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      }
+    >
+      <div className="mb-3.5">
+        <Prose
+          variant="stem"
+          source={enQuestion}
+          className="[&_p]:text-[13.5px] [&_p]:leading-[1.6]"
+        />
       </div>
-    </div>
+      <div className="flex flex-col gap-2">
+        {letters.map((k) => (
+          <div key={k} className="flex gap-2.5 items-start px-2.5 py-2 rounded-lg bg-bg-alt">
+            <div className="w-[22px] h-[22px] rounded-[5px] bg-surface text-ink-soft border border-border flex items-center justify-center text-[11px] font-bold shrink-0">
+              {k}
+            </div>
+            <div className="flex-1 min-w-0 pt-0.5">
+              <Prose
+                variant="option"
+                source={enOptions[k] ?? ''}
+                className="[&_p]:text-[12.5px] [&_p]:text-ink-soft [&_p]:leading-[1.55]"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </BottomSheet>
   )
 }

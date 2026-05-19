@@ -45,6 +45,26 @@ describe('CertSwitcherSheet', () => {
     expect(onBrowseAll).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the cert switcher capped to eighty percent height', () => {
+    render(
+      <CertSwitcherSheet
+        open
+        onClose={vi.fn()}
+        onBrowseAll={vi.fn()}
+        onSelectCert={vi.fn()}
+        currentCert="DVA-C02"
+        answered={0}
+        total={557}
+        accuracy={0}
+      />,
+    )
+
+    const dialog = screen.getByRole('dialog')
+    const panel = dialog.lastElementChild as HTMLElement
+
+    expect(panel.className.split(/\s+/)).toContain('max-h-[80%]')
+  })
+
   it('offers CLF as a switchable ready cert', () => {
     const onSelectCert = vi.fn()
 

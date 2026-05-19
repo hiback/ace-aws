@@ -45,7 +45,7 @@ export function OriginalSheet({ open, onClose, enQuestion, enOptions }: Original
         onClick={onClose}
         className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
       />
-      <div className="relative w-full max-w-md h-[80%] bg-surface rounded-t-[22px] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-md max-h-[80%] bg-surface rounded-t-[22px] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden">
         <div className="flex justify-center pt-2 pb-1.5 shrink-0">
           <div className="w-9 h-1 rounded-full bg-border-strong/55" />
         </div>
@@ -63,7 +63,7 @@ export function OriginalSheet({ open, onClose, enQuestion, enOptions }: Original
             <X className="w-3.5 h-3.5 text-ink-soft" strokeWidth={2} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-[18px] pt-3.5 pb-5">
+        <div className="min-h-0 overflow-y-auto px-[18px] pt-3.5 pb-5">
           <div className="mb-3.5">
             <Prose
               variant="stem"

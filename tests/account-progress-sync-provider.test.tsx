@@ -840,16 +840,251 @@ describe('AccountProgressSyncProvider', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('does not fetch a snapshot when the current cert already has revision metadata', () => {
+  it('checks the current cert revision in the background when a baseline already exists', async () => {
     authenticate('user-1')
     usePrefsStore.setState({ currentCert: 'DVA-C02' })
     localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
     LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 4, [])
+    vi.mocked(fetch)
+      .mockReset()
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 4,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
+
+    const beforeSyncedAt = LocalProgressRepository.getAccountSyncBaseline(
+      'user-1',
+      'DVA-C02',
+    )?.lastSyncedAt
+    const view = renderGateWithProgressScope()
+
+    expect(screen.getByText('App content')).not.toBeNull()
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    expect(fetch).toHaveBeenCalledWith('/api/progress/dva-c02/sync', expect.any(Object))
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).not.toContain('/snapshot')
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string)).toEqual({
+      baseRevision: 4,
+      progress: [],
+    })
+    expect(LocalProgressRepository.getAccountSyncBaseline('user-1', 'DVA-C02')).toMatchObject({
+      revision: 4,
+      lastSyncedAt: expect.any(Number),
+    })
+    expect(
+      LocalProgressRepository.getAccountSyncBaseline('user-1', 'DVA-C02')?.lastSyncedAt,
+    ).toBeGreaterThan(beforeSyncedAt ?? 0)
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <ProgressScopeProvider>
+          <AccountProgressSyncProvider>
+            <div>App content</div>
+          </AccountProgressSyncProvider>
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+    await Promise.resolve()
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('checks another cert the first time it becomes current in this page lifetime', async () => {
+    authenticate('user-1')
+    usePrefsStore.setState({ currentCert: 'DVA-C02' })
+    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
+    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 4, [])
+    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'CLF-C02', 9, [])
+    vi.mocked(fetch)
+      .mockReset()
+      .mockImplementation(
+        async (input) =>
+          ({
+            ok: true,
+            json: async () => ({
+              cert: String(input).includes('clf-c02') ? 'CLF-C02' : 'DVA-C02',
+              revision: String(input).includes('clf-c02') ? 9 : 4,
+              accepted: [],
+              rejected: [],
+              snapshotRequired: false,
+            }),
+          }) as Response,
+      )
+
+    renderGateWithProgressScope()
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+
+    act(() => usePrefsStore.setState({ currentCert: 'CLF-C02' }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/progress/clf-c02/sync', expect.any(Object))
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[1][1]?.body as string)).toEqual({
+      baseRevision: 9,
+      progress: [],
+    })
+  })
+
+  it('fetches and applies a snapshot when a background revision check requires one', async () => {
+    authenticate('user-1')
+    usePrefsStore.setState({ currentCert: 'DVA-C02' })
+    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
+    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 4, [])
+    vi.mocked(fetch)
+      .mockReset()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 4,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: true,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 6,
+          progress: [
+            {
+              qid: 3,
+              correctCount: 1,
+              wrongCount: 0,
+              lastPicks: ['B'],
+              lastCorrect: true,
+              lastAnsweredAt: '2026-01-02T00:00:00.000Z',
+              bookmarked: false,
+              bookmarkUpdatedAt: null,
+            },
+          ],
+        }),
+      } as Response)
 
     renderGateWithProgressScope()
 
-    expect(screen.getByText('App content')).not.toBeNull()
-    expect(fetch).not.toHaveBeenCalled()
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/progress/dva-c02/snapshot', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    })
+    expect(new LocalProgressRepository('account').getProgress(3, 'DVA-C02')).toMatchObject({
+      qid: 3,
+      lastPicks: ['B'],
+    })
+    expect(LocalProgressRepository.getAccountSyncBaseline('user-1', 'DVA-C02')).toMatchObject({
+      revision: 6,
+    })
+  })
+
+  it('keeps content visible after a temporary revision check failure and retries online', async () => {
+    authenticate('user-1')
+    usePrefsStore.setState({ currentCert: 'DVA-C02' })
+    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
+    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 4, [])
+    vi.mocked(fetch)
+      .mockReset()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 4,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
+    function Status() {
+      const { status: syncStatus } = useAccountProgressSync()
+      return <div>Sync state: {syncStatus}</div>
+    }
+
+    renderGateWithProgressScope(undefined, <Status />)
+
+    expect(screen.getByText('Sync state: synced')).not.toBeNull()
+    await waitFor(() => expect(screen.getByText('Sync state: failed')).not.toBeNull())
+    window.dispatchEvent(new Event('online'))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByText('Sync state: synced')).not.toBeNull())
+  })
+
+  it('treats a background revision payload error as fatal and does not retry it online', async () => {
+    authenticate('user-1')
+    usePrefsStore.setState({ currentCert: 'DVA-C02' })
+    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
+    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 4, [])
+    vi.mocked(fetch)
+      .mockReset()
+      .mockResolvedValue({ ok: false, status: 400 } as Response)
+    function Status() {
+      const { status: syncStatus } = useAccountProgressSync()
+      return <div>Sync state: {syncStatus}</div>
+    }
+
+    renderGateWithProgressScope(
+      undefined,
+      <>
+        <Status />
+        <ToastHost />
+      </>,
+    )
+
+    expect(screen.getByText('Sync state: synced')).not.toBeNull()
+    await waitFor(() => expect(screen.getByText('Sync state: failed')).not.toBeNull())
+    expect(screen.getByRole('status').textContent).toBe(
+      'Progress sync paused. Local progress is still saved.',
+    )
+
+    window.dispatchEvent(new Event('online'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('flushes dirty progress instead of sending an extra empty revision check', async () => {
+    authenticate('user-1')
+    usePrefsStore.setState({ currentCert: 'DVA-C02' })
+    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
+    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 4, [])
+    new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
+    vi.mocked(fetch)
+      .mockReset()
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 5,
+          accepted: [
+            {
+              qid: 1,
+              correctCount: 1,
+              wrongCount: 0,
+              lastPicks: ['A'],
+              lastCorrect: true,
+              lastAnsweredAt: '2026-01-01T00:00:00.000Z',
+              bookmarked: false,
+              bookmarkUpdatedAt: null,
+            },
+          ],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
+
+    renderGateWithProgressScope()
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string)
+    expect(body.progress).toHaveLength(1)
+    expect(body.progress[0]).toMatchObject({ qid: 1 })
   })
 
   it('waits for account progress scope before showing app content when a baseline already exists', async () => {
@@ -868,7 +1103,9 @@ describe('AccountProgressSyncProvider', () => {
 
     await waitFor(() => expect(screen.getByText('App content')).not.toBeNull())
     expect(seenScopes).toEqual(['account'])
-    expect(fetch).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith('/api/progress/dva-c02/sync', expect.any(Object)),
+    )
   })
 
   it('blocks signed-in account content until the current cert snapshot creates a baseline', async () => {
@@ -937,7 +1174,7 @@ describe('AccountProgressSyncProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     await waitFor(() => expect(screen.getByText('App content')).not.toBeNull())
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
     expect(LocalProgressRepository.getAccountSyncBaseline('user-1', 'DVA-C02')).toMatchObject({
       revision: 6,
     })
@@ -960,7 +1197,7 @@ describe('AccountProgressSyncProvider', () => {
     window.dispatchEvent(new Event('online'))
 
     await waitFor(() => expect(screen.getByText('App content')).not.toBeNull())
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
     expect(LocalProgressRepository.getAccountSyncBaseline('user-1', 'DVA-C02')).toMatchObject({
       revision: 8,
     })
@@ -1002,7 +1239,7 @@ describe('AccountProgressSyncProvider', () => {
       await Promise.resolve()
     })
     expect(screen.getByText('App content')).not.toBeNull()
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
   })
 
   it('stops automatic first-baseline retries for an unknown certification without changing current cert', async () => {
@@ -1210,6 +1447,8 @@ describe('AccountProgressSyncProvider', () => {
     const { client } = renderGateWithProgressScope(undefined, <AnswerButton />)
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Answer' })).not.toBeNull())
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    vi.mocked(fetch).mockClear()
     vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
@@ -1272,6 +1511,8 @@ describe('AccountProgressSyncProvider', () => {
 
     renderGateWithProgressScope(undefined, <AnswerButton />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Answer' })).not.toBeNull())
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    vi.mocked(fetch).mockClear()
     vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     await Promise.resolve()
@@ -1522,7 +1763,8 @@ describe('AccountProgressSyncProvider', () => {
 
     renderGateWithProgressScope(undefined, <ClfAnswerButton />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Answer CLF' })).not.toBeNull())
-    expect(fetch).not.toHaveBeenCalled()
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    vi.mocked(fetch).mockClear()
     accountRepo.recordAnswer(2, ['B'], false, 'DVA-C02')
     vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: 'Answer CLF' }))
@@ -1571,7 +1813,8 @@ describe('AccountProgressSyncProvider', () => {
 
     renderGateWithProgressScope()
     await waitFor(() => expect(screen.getByText('App content')).not.toBeNull())
-    expect(fetch).not.toHaveBeenCalled()
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    vi.mocked(fetch).mockClear()
 
     new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     window.dispatchEvent(new Event('online'))
@@ -1586,6 +1829,22 @@ describe('AccountProgressSyncProvider', () => {
     usePrefsStore.setState({ currentCert: 'DVA-C02' })
     localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
     LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
+    vi.mocked(fetch)
+      .mockReset()
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 3,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
+
+    renderGateWithProgressScope()
+    await waitFor(() => expect(screen.getByText('App content')).not.toBeNull())
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
     vi.mocked(fetch)
       .mockReset()
       .mockResolvedValueOnce({
@@ -1606,10 +1865,6 @@ describe('AccountProgressSyncProvider', () => {
           progress: [],
         }),
       } as Response)
-
-    renderGateWithProgressScope()
-    await waitFor(() => expect(screen.getByText('App content')).not.toBeNull())
-    expect(fetch).not.toHaveBeenCalled()
 
     new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     window.dispatchEvent(new Event('online'))
@@ -1807,6 +2062,16 @@ describe('AccountProgressSyncProvider', () => {
     let resolveSnapshot: (response: Response) => void = () => {}
     vi.mocked(fetch)
       .mockReset()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 3,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
       .mockImplementationOnce(
         () =>
           new Promise<Response>((resolve) => {
@@ -1821,7 +2086,7 @@ describe('AccountProgressSyncProvider', () => {
       )
 
     renderGateWithProgressScope()
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
     expect(screen.getByText('App content')).not.toBeNull()
 
     usePrefsStore.setState({ currentCert: 'CLF-C02' })
@@ -1841,7 +2106,7 @@ describe('AccountProgressSyncProvider', () => {
       await Promise.resolve()
     })
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3))
     expect(screen.queryByText('App content')).toBeNull()
     expect(screen.getByText('Syncing account progress')).not.toBeNull()
 
@@ -1867,6 +2132,16 @@ describe('AccountProgressSyncProvider', () => {
     let rejectSnapshot: (error: Error) => void = () => {}
     vi.mocked(fetch)
       .mockReset()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 3,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
       .mockImplementationOnce(
         () =>
           new Promise<Response>((resolve) => {
@@ -1881,7 +2156,7 @@ describe('AccountProgressSyncProvider', () => {
       )
 
     renderGateWithProgressScope()
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
 
     usePrefsStore.setState({ currentCert: 'CLF-C02' })
     await act(async () => {
@@ -1900,7 +2175,7 @@ describe('AccountProgressSyncProvider', () => {
       await Promise.resolve()
     })
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3))
     await act(async () => {
       rejectSnapshot(new Error('offline'))
       await Promise.resolve()
@@ -2066,6 +2341,16 @@ describe('AccountProgressSyncProvider', () => {
     LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
     vi.mocked(fetch)
       .mockReset()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 3,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockImplementationOnce(
         () =>
@@ -2511,6 +2796,8 @@ describe('AccountProgressSyncProvider', () => {
       </>,
     )
     await waitFor(() => expect(screen.getByRole('button', { name: 'Sync now' })).not.toBeNull())
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    vi.mocked(fetch).mockClear()
     fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3))
@@ -2577,12 +2864,16 @@ describe('AccountProgressSyncProvider', () => {
     let resolveSnapshot: (response: Response) => void = () => {}
     vi.mocked(fetch)
       .mockReset()
-      .mockImplementationOnce(
-        () =>
-          new Promise<Response>((resolve) => {
-            resolveSnapshot = resolve
-          }),
-      )
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 3,
+          accepted: [],
+          rejected: [],
+          snapshotRequired: false,
+        }),
+      } as Response)
     function ManualSyncButton() {
       const { syncNow } = useAccountProgressSync()
       return (
@@ -2594,6 +2885,14 @@ describe('AccountProgressSyncProvider', () => {
 
     renderGateWithProgressScope(undefined, <ManualSyncButton />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Sync now' })).not.toBeNull())
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    vi.mocked(fetch).mockClear()
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveSnapshot = resolve
+        }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith('/api/progress/dva-c02/snapshot', expect.any(Object)),

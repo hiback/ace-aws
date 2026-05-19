@@ -106,6 +106,7 @@ export function AccountProgressSyncProvider({ children }: { children: React.Reac
   const dirtyFailureCountsRef = useRef(new Map<CertCode, number>())
   const dirtyRetryTimersRef = useRef(new Map<CertCode, number>())
   const flushDirtyQueueRef = useRef<(priorityCert?: CertCode) => void>(() => {})
+  const revisionCheckedCertsRef = useRef(new Set<string>())
   const recoveryOwnerRef = useRef<string | null>(userId)
   currentUserIdRef.current = userId
   currentCertRef.current = currentCert
@@ -323,6 +324,114 @@ export function AccountProgressSyncProvider({ children }: { children: React.Reac
   )
 
   flushDirtyQueueRef.current = flushDirtyQueue
+
+  const enqueueRevisionCheck = useCallback(
+    (cert: CertCode) => {
+      if (status !== 'authenticated' || userId === null || gateState !== 'ready') return
+      if (fatalCertsRef.current.has(cert)) return
+      const accountUserId = userId
+      const checkedKey = `${accountUserId}:${cert}`
+      if (revisionCheckedCertsRef.current.has(checkedKey)) return
+      if (!LocalProgressRepository.getAccountSyncBaseline(accountUserId, cert)) return
+
+      queueRef.current = queueRef.current
+        .catch(() => {})
+        .then(async () => {
+          if (revisionCheckedCertsRef.current.has(checkedKey)) return
+          const isCurrentAccount = () =>
+            currentUserIdRef.current === accountUserId &&
+            LocalProgressRepository.isAccountOwner(accountUserId)
+          if (!isCurrentAccount()) return
+          const baseline = LocalProgressRepository.getAccountSyncBaseline(accountUserId, cert)
+          if (baseline === null) return
+
+          const dirty = LocalProgressRepository.listDirtyAccountProgress(cert)
+          if (dirty.length > 0) {
+            const result = await flushCert(accountUserId, cert)
+            if (
+              result === 'synced' ||
+              (result === 'clean' &&
+                LocalProgressRepository.listDirtyAccountProgress(cert).length === 0)
+            ) {
+              revisionCheckedCertsRef.current.add(checkedKey)
+            }
+            if (result === 'synced' || result === 'clean') {
+              for (const queuedCert of READY_CERTS.filter((entry) => entry !== cert)) {
+                if (!isCurrentAccount()) break
+                await flushCert(accountUserId, queuedCert)
+              }
+            }
+            return
+          }
+
+          setInFlightCount((value) => value + 1)
+          try {
+            const result = await postProgressSync(cert, baseline.revision, [])
+            if (!isCurrentAccount()) return
+            if (
+              result.errorCode === 'revision_conflict' ||
+              result.snapshotRequired ||
+              result.rejected.length > 0
+            ) {
+              const snapshot = await fetchProgressSnapshot(cert)
+              if (!isCurrentAccount()) return
+              LocalProgressRepository.replaceAccountCertFromSnapshotPreservingDirty(
+                accountUserId,
+                snapshot.cert,
+                snapshot.revision,
+                snapshot.progress,
+                [],
+                true,
+              )
+            } else {
+              LocalProgressRepository.markAccountSyncBaselineChecked(
+                accountUserId,
+                cert,
+                baseline.revision,
+              )
+            }
+            revisionCheckedCertsRef.current.add(checkedKey)
+            await queryClient.invalidateQueries({ queryKey: ['progress', 'account'] })
+            setManualFailed(false)
+            setSyncFailed(false)
+            setSyncVersion((value) => value + 1)
+            for (const queuedCert of READY_CERTS.filter((entry) => entry !== cert)) {
+              if (!isCurrentAccount()) break
+              await flushCert(accountUserId, queuedCert)
+            }
+          } catch (error) {
+            if (!isCurrentAccount()) return
+            if (error instanceof ProgressSyncClientError && error.kind === 'auth') {
+              storeSyncExpiredLoginMessage()
+              LocalProgressRepository.clearScope('account')
+              queryClient.removeQueries({ queryKey: ['progress', 'account'] })
+              setEscapingSignOut(true)
+              void signOut({ callbackUrl: '/login' })
+              return
+            }
+            if (
+              error instanceof ProgressSyncClientError &&
+              (error.kind === 'payload' || error.kind === 'unknown-cert')
+            ) {
+              fatalCertsRef.current.add(cert)
+              toast(
+                error.kind === 'unknown-cert'
+                  ? t('accountProgressSyncUnknownCertToast')
+                  : t('accountProgressSyncPayloadToast'),
+              )
+              setSyncFailed(true)
+              setSyncVersion((value) => value + 1)
+              return
+            }
+            setSyncFailed(true)
+            setSyncVersion((value) => value + 1)
+          } finally {
+            setInFlightCount((value) => Math.max(0, value - 1))
+          }
+        })
+    },
+    [flushCert, gateState, queryClient, status, t, toast, userId],
+  )
 
   const enqueueDirtySync = useCallback(
     (cert: CertCode) => {
@@ -737,10 +846,15 @@ export function AccountProgressSyncProvider({ children }: { children: React.Reac
 
   useEffect(() => {
     if (status !== 'authenticated' || userId === null) return
-    const handleOnline = () => flushDirtyQueue(currentCert ?? undefined)
+    const handleOnline = () => {
+      if (currentCert !== null && !fatalCertsRef.current.has(currentCert)) {
+        enqueueRevisionCheck(currentCert)
+      }
+      flushDirtyQueue(currentCert ?? undefined)
+    }
     window.addEventListener('online', handleOnline)
     return () => window.removeEventListener('online', handleOnline)
-  }, [currentCert, flushDirtyQueue, status, userId])
+  }, [currentCert, enqueueRevisionCheck, flushDirtyQueue, status, userId])
 
   useEffect(() => {
     if (
@@ -750,9 +864,9 @@ export function AccountProgressSyncProvider({ children }: { children: React.Reac
       currentCert !== null &&
       !needsBaselineSync
     ) {
-      flushDirtyQueue(currentCert)
+      enqueueRevisionCheck(currentCert)
     }
-  }, [currentCert, flushDirtyQueue, gateState, needsBaselineSync, status, userId])
+  }, [currentCert, enqueueRevisionCheck, gateState, needsBaselineSync, status, userId])
 
   useEffect(() => {
     return () => {

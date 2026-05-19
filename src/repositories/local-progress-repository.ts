@@ -293,6 +293,15 @@ export class LocalProgressRepository implements ProgressRepository {
     }
   }
 
+  static markAccountSyncBaselineChecked(userId: string, cert: CertCode, revision: number): void {
+    const syncData = readAccountSyncData()
+    syncData.byUser[userId] = {
+      ...syncData.byUser[userId],
+      [cert]: { revision, lastSyncedAt: Date.now() },
+    }
+    writeAccountSyncData(syncData)
+  }
+
   static listDirtyAccountProgress(cert: CertCode): QuestionProgress[] {
     return new LocalProgressRepository('account')
       .listProgress(cert)

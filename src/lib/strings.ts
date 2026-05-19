@@ -11,9 +11,7 @@ export const STRINGS = {
     selectCertSaveFailed: '无法保存选择，请重试。',
     questionListTitle: '题目列表',
 
-    certDvaEyebrow: 'DVA-C02 · 助理级',
     certDvaTitle: '开发人员',
-    certDvaQCount: '557 题 · 热门',
     certDvaSelectTitle: '开发人员',
     certClfTitle: '云从业者',
     certAifTitle: 'AI 从业者',
@@ -38,8 +36,7 @@ export const STRINGS = {
     certSwitchTitle: '切换认证',
     certSwitchSubtitle: '进度按认证分别保存',
     certSwitchCurrent: '当前认证',
-    certSwitchAvailable: '可切换',
-    certSwitchComingSoon: '即将开放',
+    certSwitchOther: '其他认证',
     certSwitchBrowseAll: '查看全部认证',
     selectCertBrowseTitle: '全部认证',
     selectCertBrowseSubtitle: '查看全部 AWS 认证。CLF-C02 与 DVA-C02 题库已就绪。',
@@ -79,7 +76,6 @@ export const STRINGS = {
     submit: '提交',
     skip: '跳过',
     next: '下一题',
-    retryAnswer: '重新作答',
 
     bannerCorrect: '回答正确',
     bannerWrong: '回答错误',
@@ -104,7 +100,6 @@ export const STRINGS = {
 
     settingsAppearance: '外观',
     settingsAccount: '账号',
-    accountSignedOutTitle: '使用 GitHub 登录',
     accountSignedOutDescription: '登录后可跨设备同步进度，并导入此浏览器的匿名进度。',
     signInWithGitHub: '使用 GitHub 登录',
     accountGitHubUser: 'GitHub 账号',
@@ -167,7 +162,6 @@ export const STRINGS = {
     wrongCountBadge: '错 {count} 次',
     emptyBookmarks: '还没收藏任何题目，去练习中标记吧',
     emptyAllAnswered: '已全部答完 ✨',
-    emptyAllAnsweredCta: '去看错题',
     questionNotFound: '题目不存在',
 
     backToHome: '返回首页',
@@ -180,7 +174,6 @@ export const STRINGS = {
     bookmarksReviewCompleteDescription: '本轮收藏题目已全部复习完成。',
     backToWrongList: '返回错题列表',
     backToBookmarks: '返回收藏',
-    loadFailed: '加载失败',
     retry: '重试',
   },
   en: {
@@ -195,9 +188,7 @@ export const STRINGS = {
     selectCertSaveFailed: 'Could not save your selection. Try again.',
     questionListTitle: 'Question list',
 
-    certDvaEyebrow: 'DVA-C02 · Associate',
     certDvaTitle: 'Developer Associate',
-    certDvaQCount: '557 Q · HOT',
     certDvaSelectTitle: 'Developer',
     certClfTitle: 'Cloud Practitioner',
     certAifTitle: 'AI Practitioner',
@@ -222,8 +213,7 @@ export const STRINGS = {
     certSwitchTitle: 'Switch certification',
     certSwitchSubtitle: 'Progress is tracked per certification',
     certSwitchCurrent: 'Current',
-    certSwitchAvailable: 'Available',
-    certSwitchComingSoon: 'Coming soon',
+    certSwitchOther: 'Other certifications',
     certSwitchBrowseAll: 'Browse all certifications',
     selectCertBrowseTitle: 'All certifications',
     selectCertBrowseSubtitle:
@@ -264,7 +254,6 @@ export const STRINGS = {
     submit: 'Submit',
     skip: 'Skip',
     next: 'Next',
-    retryAnswer: 'Retry',
 
     bannerCorrect: 'Correct',
     bannerWrong: 'Wrong',
@@ -289,7 +278,6 @@ export const STRINGS = {
 
     settingsAppearance: 'Appearance',
     settingsAccount: 'Account',
-    accountSignedOutTitle: 'Sign in with GitHub',
     accountSignedOutDescription:
       "Sign in to sync progress across devices and import this browser's Anonymous Progress.",
     signInWithGitHub: 'Sign in with GitHub',
@@ -359,7 +347,6 @@ export const STRINGS = {
     wrongCountBadge: 'Wrong {count}x',
     emptyBookmarks: 'No bookmarks yet. Mark questions while practicing.',
     emptyAllAnswered: "You've answered everything ✨",
-    emptyAllAnsweredCta: 'Review wrong answers',
     questionNotFound: 'Question not found',
 
     backToHome: 'Back to home',
@@ -373,7 +360,6 @@ export const STRINGS = {
       'You have reviewed every question in this bookmark session.',
     backToWrongList: 'Back to wrong list',
     backToBookmarks: 'Back to bookmarks',
-    loadFailed: 'Failed to load',
     retry: 'Retry',
   },
 } as const

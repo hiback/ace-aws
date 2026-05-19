@@ -72,6 +72,7 @@ beforeEach(() => {
   accountPreferenceMocks.saveCurrentCert.mockImplementation(
     async (cert: 'DVA-C02' | 'CLF-C02') => cert,
   )
+  progressScopeMocks.repository.getStats.mockReturnValue({ answered: 0, correct: 0, total: 0 })
   vi.mocked(findNextUnansweredQid).mockReset()
   vi.mocked(findNextUnansweredQid).mockResolvedValue(3)
   usePrefsStore.setState({ locale: 'en', theme: 'light', currentCert: 'DVA-C02' })

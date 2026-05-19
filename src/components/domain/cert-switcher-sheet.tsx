@@ -2,6 +2,7 @@
 import { ArrowRight, Check, ChevronRight, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
+import { useProgressRepository } from '@/components/providers/progress-scope-provider'
 import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import {
@@ -30,6 +31,8 @@ interface UpcomingCert extends CertOption {
   groupLabelKey: StringKey
 }
 
+const OTHER_CERT_PREVIEW_COUNT = 2
+
 export function CertSwitcherSheet({
   open,
   onClose,
@@ -43,6 +46,7 @@ export function CertSwitcherSheet({
   errorMessage = null,
 }: CertSwitcherSheetProps) {
   const t = useT()
+  const progressRepository = useProgressRepository()
 
   useEffect(() => {
     if (!open) return
@@ -66,8 +70,24 @@ export function CertSwitcherSheet({
   const allOther = CERT_GROUPS.flatMap((group) =>
     group.certs.map((cert) => ({ ...cert, groupLabelKey: group.labelKey })),
   ).filter((cert) => cert.code !== currentCert)
-  const switchable = allOther.filter((cert) => isReadyCertCode(cert.code))
-  const upcoming = allOther.filter((cert) => !isReadyCertCode(cert.code))
+  const otherCerts = allOther
+    .map((cert, index) => {
+      const code = cert.code
+      const ready = isReadyCertCode(code)
+      return {
+        cert,
+        index,
+        ready,
+        answered: ready ? progressRepository.getStats(code).answered : 0,
+      }
+    })
+    .sort((a, b) => {
+      if (a.ready !== b.ready) return a.ready ? -1 : 1
+      if (a.ready && b.ready && a.answered !== b.answered) return b.answered - a.answered
+      return a.index - b.index
+    })
+    .slice(0, OTHER_CERT_PREVIEW_COUNT)
+    .map((entry) => entry.cert)
 
   return (
     <div
@@ -82,7 +102,7 @@ export function CertSwitcherSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/40 backdrop-blur-[1.5px]"
       />
-      <div className="relative flex h-[min(600px,88dvh)] w-full max-w-md flex-col overflow-hidden rounded-t-[20px] bg-bg shadow-[0_-12px_36px_rgba(0,0,0,0.22)]">
+      <div className="relative flex max-h-[88dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[20px] bg-bg shadow-[0_-12px_36px_rgba(0,0,0,0.22)]">
         <div className="flex shrink-0 justify-center pt-2 pb-1">
           <div className="h-1 w-9 rounded-full bg-border-strong" />
         </div>
@@ -136,32 +156,25 @@ export function CertSwitcherSheet({
             </div>
           </div>
 
-          {switchable.length > 0 ? (
+          {otherCerts.length > 0 ? (
             <>
-              <SectionLabel className="mt-[18px]">{t('certSwitchAvailable')}</SectionLabel>
+              <SectionLabel className="mt-[18px]">{t('certSwitchOther')}</SectionLabel>
               <div className="flex flex-col gap-1.5">
-                {switchable.map((cert) => {
+                {otherCerts.map((cert) => {
                   const code = cert.code
-                  if (!isReadyCertCode(code)) return null
+                  const ready = isReadyCertCode(code)
                   return (
                     <CertSwitchRow
                       key={code}
                       cert={cert}
                       disabled={busy}
-                      onSelect={() => onSelectCert(code)}
+                      onSelect={ready ? () => onSelectCert(code) : undefined}
                     />
                   )
                 })}
               </div>
             </>
           ) : null}
-
-          <SectionLabel className="mt-[18px]">{t('certSwitchComingSoon')}</SectionLabel>
-          <div className="flex flex-col gap-1.5">
-            {upcoming.map((cert) => (
-              <CertSwitchRow key={cert.code} cert={cert} />
-            ))}
-          </div>
         </div>
 
         {errorMessage ? (

@@ -78,10 +78,19 @@ beforeEach(() => {
   usePrefsStore.setState({ locale: 'en', theme: 'light', currentCert: 'DVA-C02' })
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+function setLocalHour(hour: number) {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 0, 1, hour))
+}
 
 describe('HomePage greeting', () => {
   it('greets signed-in users by name', () => {
+    setLocalHour(6)
     authMocks.status = 'authenticated'
     authMocks.session = {
       user: { id: 'user-1', name: 'Ada Lovelace', email: 'ada@example.com' },
@@ -94,6 +103,7 @@ describe('HomePage greeting', () => {
   })
 
   it('falls back to email for signed-in users without a name', () => {
+    setLocalHour(14)
     authMocks.status = 'authenticated'
     authMocks.session = {
       user: { id: 'user-1', email: 'ada@example.com' },
@@ -102,10 +112,11 @@ describe('HomePage greeting', () => {
 
     render(<HomePage />)
 
-    expect(screen.getByText('Good morning, ada@example.com')).toBeTruthy()
+    expect(screen.getByText('Good afternoon, ada@example.com')).toBeTruthy()
   })
 
   it('falls back to email when the signed-in user name is blank', () => {
+    setLocalHour(19)
     authMocks.status = 'authenticated'
     authMocks.session = {
       user: { id: 'user-1', name: '   ', email: 'ada@example.com' },
@@ -114,22 +125,24 @@ describe('HomePage greeting', () => {
 
     render(<HomePage />)
 
-    expect(screen.getByText('Good morning, ada@example.com')).toBeTruthy()
+    expect(screen.getByText('Good evening, ada@example.com')).toBeTruthy()
   })
 
-  it('keeps the fixed greeting when no signed-in display name is available', () => {
+  it('uses the local night greeting when no signed-in display name is available', () => {
+    setLocalHour(23)
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
 
     render(<HomePage />)
 
-    expect(screen.getByText('Good morning, CloudLearner')).toBeTruthy()
+    expect(screen.getByText('Good night, CloudLearner')).toBeTruthy()
   })
 
-  it('keeps the fixed greeting for guests', () => {
+  it('uses the local greeting for guests', () => {
+    setLocalHour(0)
     render(<HomePage />)
 
-    expect(screen.getByText('Good morning, CloudLearner')).toBeTruthy()
+    expect(screen.getByText('Good night, CloudLearner')).toBeTruthy()
   })
 })
 

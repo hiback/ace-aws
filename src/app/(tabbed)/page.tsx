@@ -18,6 +18,26 @@ import { useT } from '@/hooks/use-t'
 import { certPath, getCertGroupLabelKey, getCertOption } from '@/lib/cert-catalog'
 import { usePrefsStore } from '@/stores/prefs-store'
 
+type GreetingPeriod = 'morning' | 'afternoon' | 'evening' | 'night'
+
+const GREETING_KEYS = {
+  morning: 'greetingMorning',
+  afternoon: 'greetingAfternoon',
+  evening: 'greetingEvening',
+  night: 'greetingNight',
+} as const
+
+const DEFAULT_GREETING_PERIOD: GreetingPeriod = 'morning'
+
+function getLocalGreetingPeriod(): GreetingPeriod {
+  const hour = new Date().getHours()
+
+  if (hour >= 5 && hour < 12) return 'morning'
+  if (hour >= 12 && hour < 18) return 'afternoon'
+  if (hour >= 18 && hour < 22) return 'evening'
+  return 'night'
+}
+
 export default function HomePage() {
   const router = useRouter()
   const currentCert = usePrefsStore((s) => s.currentCert)
@@ -46,6 +66,11 @@ function HomeContent({ cert }: { cert: CertCode }) {
   const [certSwitchPending, startCertSwitchTransition] = useTransition()
   const [certSheetOpen, setCertSheetOpen] = useState(false)
   const [certSwitchError, setCertSwitchError] = useState(false)
+  const [greetingPeriod, setGreetingPeriod] = useState<GreetingPeriod>(DEFAULT_GREETING_PERIOD)
+
+  useEffect(() => {
+    setGreetingPeriod(getLocalGreetingPeriod())
+  }, [])
 
   const handleContinue = () => {
     startTransition(async () => {
@@ -86,7 +111,8 @@ function HomeContent({ cert }: { cert: CertCode }) {
     status === 'authenticated'
       ? session?.user?.name?.trim() || session?.user?.email?.trim() || null
       : null
-  const greeting = displayName ? t('greetingWithName', { name: displayName }) : t('greeting')
+  const greetingName = displayName ?? t('greetingGuestName')
+  const greeting = t(GREETING_KEYS[greetingPeriod], { name: greetingName })
 
   const accuracy =
     stats.data && stats.data.answered > 0

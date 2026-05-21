@@ -4,8 +4,10 @@ import { usePathname } from 'next/navigation'
 import { useT } from '@/hooks/use-t'
 
 const tabs = [
+  { href: '/list', label: 'tabAll' as const },
   { href: '/list/wrong', label: 'tabWrong' as const },
   { href: '/list/bookmarks', label: 'tabBookmarks' as const },
+  { href: '/list/unanswered', label: 'tabUnanswered' as const },
 ]
 
 export function TabsBar() {

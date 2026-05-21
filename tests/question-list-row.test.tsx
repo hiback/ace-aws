@@ -24,15 +24,17 @@ describe('QuestionListRow', () => {
     expect(screen.getByText('Wrong 3x')).not.toBeNull()
   })
 
-  it('does not render the wrong-count badge for correct rows', () => {
+  it('renders the wrong-count badge for correct rows with historical wrong attempts', () => {
     render(<QuestionListRow {...baseProps} status="correct" wrongCount={3} />)
 
-    expect(screen.queryByText('Wrong 3x')).toBeNull()
+    expect(screen.getByText('Correct')).not.toBeNull()
+    expect(screen.getByText('Wrong 3x')).not.toBeNull()
   })
 
   it('does not render the wrong-count badge for unanswered rows', () => {
     render(<QuestionListRow {...baseProps} status="unanswered" wrongCount={3} />)
 
+    expect(screen.getByText('Unanswered')).not.toBeNull()
     expect(screen.queryByText('Wrong 3x')).toBeNull()
   })
 

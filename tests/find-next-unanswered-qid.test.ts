@@ -88,4 +88,18 @@ describe('findNextUnansweredQid', () => {
 
     expect(await findNextListReviewQid(1, CERT, '/list/bookmarks', null)).toBe(3)
   })
+
+  it('falls back to the all-question order when an all-list set is missing', async () => {
+    const { findNextListReviewQid } = await import('../src/hooks/use-answer')
+
+    expect(await findNextListReviewQid(2, CERT, '/list', null)).toBe(3)
+  })
+
+  it('falls back to live unanswered order while keeping bookmark-only questions', async () => {
+    const { findNextListReviewQid } = await import('../src/hooks/use-answer')
+    browserProgress.recordAnswer(2, ['A'], true, CERT)
+    browserProgress.toggleBookmark(3, CERT)
+
+    expect(await findNextListReviewQid(1, CERT, '/list/unanswered', null)).toBe(3)
+  })
 })

@@ -507,7 +507,7 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
   }
 
   listWrong(cert: CertCode): QuestionProgress[] {
-    return this.listProgress(cert).filter((progress) => progress.lastCorrect === false)
+    return this.listProgress(cert).filter((progress) => progress.wrongCount > 0)
   }
 
   toggleBookmark(qid: number, cert: CertCode): void {

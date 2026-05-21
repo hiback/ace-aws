@@ -7,6 +7,7 @@ import {
   useProgressScope,
 } from '../src/components/providers/progress-scope-provider'
 import { useQuestionProgress } from '../src/hooks/use-answer'
+import { useWrongList, useWrongRedoCount } from '../src/hooks/use-progress-stats'
 import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 
 const authMocks = vi.hoisted(() => ({
@@ -96,5 +97,27 @@ describe('progress hooks scope', () => {
     await waitFor(() => expect(result.current.progress.data).toBeNull())
 
     expect(seenAccountPicks).not.toContainEqual(['A'])
+  })
+
+  it('counts only current-bank wrong redo questions', async () => {
+    const progress = new BrowserProgressModule('anonymous')
+    progress.recordAnswer(1, ['A'], false, 'DVA-C02')
+    progress.recordAnswer(999_999, ['A'], false, 'DVA-C02')
+
+    const { result } = renderHook(() => useWrongRedoCount('DVA-C02'), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toBe(1), { timeout: 3000 })
+  })
+
+  it('lists only current-bank wrong questions', async () => {
+    const progress = new BrowserProgressModule('anonymous')
+    progress.recordAnswer(1, ['A'], false, 'DVA-C02')
+    progress.recordAnswer(999_999, ['A'], false, 'DVA-C02')
+
+    const { result } = renderHook(() => useWrongList('DVA-C02'), { wrapper })
+
+    await waitFor(() => expect(result.current.data?.map((entry) => entry.qid)).toEqual([1]), {
+      timeout: 3000,
+    })
   })
 })

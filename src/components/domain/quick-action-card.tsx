@@ -4,8 +4,9 @@ import Link from 'next/link'
 interface QuickActionCardProps {
   icon: LucideIcon
   label: string
-  count: number
-  href: string
+  count?: number
+  href?: string
+  disabled?: boolean
   /** Tailwind classes for the icon tile background + icon color. */
   iconBgClass?: string
   iconColorClass?: string
@@ -18,15 +19,17 @@ export function QuickActionCard({
   label,
   count,
   href,
+  disabled = false,
   iconBgClass = 'bg-accent-soft',
   iconColorClass = 'text-accent',
   iconFilled = false,
 }: QuickActionCardProps) {
-  return (
-    <Link
-      href={href}
-      className="block p-4 rounded-card bg-surface border border-border hover:border-border-strong transition-colors"
-    >
+  const className = [
+    'block p-4 rounded-card bg-surface border border-border transition-colors',
+    disabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-border-strong',
+  ].join(' ')
+  const content = (
+    <>
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${iconBgClass}`}>
         <Icon
           className={`w-[18px] h-[18px] ${iconColorClass}`}
@@ -35,7 +38,28 @@ export function QuickActionCard({
         />
       </div>
       <p className="text-body font-semibold text-ink">{label}</p>
-      <p className="font-mono text-page font-bold text-ink leading-tight">{count}</p>
+      {typeof count === 'number' ? (
+        <p className="font-mono text-page font-bold text-ink leading-tight">{count}</p>
+      ) : null}
+    </>
+  )
+
+  if (disabled || !href) {
+    return (
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        className={`w-full text-left ${className}`}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <Link href={href} className={className}>
+      {content}
     </Link>
   )
 }

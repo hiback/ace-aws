@@ -11,6 +11,7 @@ const wrongMocks = vi.hoisted(() => ({
   progress: [] as Array<{
     qid: number
     wrongCount: number
+    lastCorrect?: boolean | null
     lastAnsweredAt: number | null
   }>,
 }))
@@ -61,6 +62,17 @@ describe('WrongPage', () => {
     render(<WrongPage />)
 
     expect(screen.getByText('Wrong 3x')).not.toBeNull()
+  })
+
+  it('shows the latest answer state and historical wrong count for recovered wrong questions', () => {
+    wrongMocks.progress = [
+      { qid: 1, wrongCount: 1, lastCorrect: true, lastAnsweredAt: 1_700_000_000_000 },
+    ]
+
+    render(<WrongPage />)
+
+    expect(screen.getByText('Correct')).not.toBeNull()
+    expect(screen.getByText('Wrong 1x')).not.toBeNull()
   })
 
   it('links wrong rows with the sorted wrong-list snapshot', () => {

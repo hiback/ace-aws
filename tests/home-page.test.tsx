@@ -54,7 +54,7 @@ vi.mock('@/hooks/use-answer', () => ({
 
 vi.mock('@/hooks/use-progress-stats', () => ({
   useProgressStats: () => ({ data: { answered: 0, total: 557, correct: 0 } }),
-  useWrongList: () => ({ data: [] }),
+  useWrongRedoCount: () => ({ data: 2 }),
   useBookmarksList: () => ({ data: [] }),
 }))
 
@@ -219,5 +219,27 @@ describe('HomePage continue practice', () => {
       expect(findNextUnansweredQid).toHaveBeenCalledWith(0, 'DVA-C02', progressScopeMocks.progress)
       expect(routerMocks.push).toHaveBeenCalledWith('/list/wrong')
     })
+  })
+})
+
+describe('HomePage quick actions', () => {
+  it('orders wrong redo, list, and bookmarks while keeping wrong redo disabled', () => {
+    render(<HomePage />)
+
+    const quickStart = screen.getByText('Quick start')
+    const cards = Array.from(quickStart.nextElementSibling?.children ?? [])
+
+    expect(quickStart.nextElementSibling?.className).toContain('grid-cols-2')
+    expect(cards.map((card) => card.textContent)).toEqual([
+      'Wrong redo2',
+      'Question list',
+      'Bookmarks0',
+    ])
+    expect(screen.getByText('Wrong redo').closest('a')).toBeNull()
+    expect(screen.getByText('Wrong redo').closest('[aria-disabled="true"]')?.textContent).toContain(
+      '2',
+    )
+    expect(screen.getByText('Question list').closest('a')?.getAttribute('href')).toBe('/list')
+    expect(screen.getByText('Bookmarks').closest('a')?.getAttribute('href')).toBe('/list/bookmarks')
   })
 })

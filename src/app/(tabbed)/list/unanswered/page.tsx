@@ -1,25 +1,17 @@
 'use client'
-import { List } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { QuestionListRow } from '@/components/domain/question-list-row'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { Spinner } from '@/components/primitives/spinner'
-import type { CertCode, QuestionProgress } from '@/data/types'
+import type { CertCode } from '@/data/types'
 import { useProgressList } from '@/hooks/use-progress-stats'
 import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
 import { usePrefsStore } from '@/stores/prefs-store'
 
-function statusFromProgress(
-  progress: QuestionProgress | undefined,
-): 'correct' | 'wrong' | 'unanswered' {
-  if (progress?.lastCorrect === true) return 'correct'
-  if (progress?.lastCorrect === false) return 'wrong'
-  return 'unanswered'
-}
-
-export default function ListPage() {
+export default function UnansweredPage() {
   const router = useRouter()
   const currentCert = usePrefsStore((s) => s.currentCert)
 
@@ -29,10 +21,10 @@ export default function ListPage() {
 
   if (currentCert === null) return null
 
-  return <AllQuestionsContent cert={currentCert} />
+  return <UnansweredContent cert={currentCert} />
 }
 
-function AllQuestionsContent({ cert }: { cert: CertCode }) {
+function UnansweredContent({ cert }: { cert: CertCode }) {
   const bank = useQuestionBank(cert)
   const progress = useProgressList(cert)
   const t = useT()
@@ -46,18 +38,20 @@ function AllQuestionsContent({ cert }: { cert: CertCode }) {
     )
   }
 
-  const questions = [...(bank.data ?? [])].sort((a, b) => a.id - b.id)
   const progressByQid = new Map((progress.data ?? []).map((entry) => [entry.qid, entry]))
-  const snapshot = questions.map((question) => question.id)
+  const questions = [...(bank.data ?? [])]
+    .sort((a, b) => a.id - b.id)
+    .filter((question) => progressByQid.get(question.id)?.lastAnsweredAt == null)
 
   if (questions.length === 0) {
-    return <EmptyState icon={List} title={t('emptyQuestionList')} />
+    return <EmptyState icon={CheckCircle} title={t('emptyAllAnswered')} />
   }
+
+  const snapshot = questions.map((question) => question.id)
 
   return (
     <ul>
       {questions.map((question) => {
-        const itemProgress = progressByQid.get(question.id)
         const text = locale === 'zh' ? question.zh.question : question.en.question
         return (
           <li key={question.id}>
@@ -66,9 +60,8 @@ function AllQuestionsContent({ cert }: { cert: CertCode }) {
               qid={question.id}
               topic={question.topic}
               questionPreview={text}
-              status={statusFromProgress(itemProgress)}
-              wrongCount={itemProgress?.wrongCount}
-              from="/list"
+              status="unanswered"
+              from="/list/unanswered"
               set={snapshot}
             />
           </li>

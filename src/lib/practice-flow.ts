@@ -1,10 +1,19 @@
 import type { CertCode } from '@/data/types'
 import { certPath } from '@/lib/cert-catalog'
 
-export const PRACTICE_SOURCES = ['/', '/list/wrong', '/list/bookmarks'] as const
+export const PRACTICE_SOURCES = [
+  '/',
+  '/list',
+  '/list/wrong',
+  '/list/bookmarks',
+  '/list/unanswered',
+] as const
 
 export type PracticeSource = (typeof PRACTICE_SOURCES)[number]
-export type ListPracticeSource = Extract<PracticeSource, '/list/wrong' | '/list/bookmarks'>
+export type ListPracticeSource = Extract<
+  PracticeSource,
+  '/list' | '/list/wrong' | '/list/bookmarks' | '/list/unanswered'
+>
 
 const SOURCE_SET = new Set<string>(PRACTICE_SOURCES)
 const MAX_SET_LENGTH = 4096
@@ -14,7 +23,12 @@ export function normalizePracticeSource(value: string | null | undefined): Pract
 }
 
 export function isListPracticeSource(source: PracticeSource): source is ListPracticeSource {
-  return source === '/list/wrong' || source === '/list/bookmarks'
+  return (
+    source === '/list' ||
+    source === '/list/wrong' ||
+    source === '/list/bookmarks' ||
+    source === '/list/unanswered'
+  )
 }
 
 export function encodePracticeSet(qids: readonly number[]): string {

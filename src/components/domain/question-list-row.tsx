@@ -37,7 +37,13 @@ export function QuestionListRow({
         ? 'bg-danger-soft text-danger'
         : 'bg-bg-alt text-ink-mute'
   const Icon = status === 'correct' ? Check : status === 'wrong' ? X : null
-  const showWrongCount = status === 'wrong' && typeof wrongCount === 'number' && wrongCount > 0
+  const showWrongCount = status !== 'unanswered' && typeof wrongCount === 'number' && wrongCount > 0
+  const statusLabel =
+    status === 'correct'
+      ? t('questionStatusCorrect')
+      : status === 'wrong'
+        ? t('questionStatusWrong')
+        : t('questionStatusUnanswered')
   return (
     <Link
       href={buildPracticeHref(cert, qid, from, set ?? null)}
@@ -49,6 +55,7 @@ export function QuestionListRow({
           tile,
         ].join(' ')}
       >
+        {statusLabel ? <span className="sr-only">{statusLabel}</span> : null}
         {Icon ? <Icon className="w-3.5 h-3.5" strokeWidth={2.5} /> : null}
       </div>
       <div className="flex-1 min-w-0">

@@ -318,6 +318,16 @@ describe('progress page compatibility', () => {
     expect(mocks.router.push).toHaveBeenCalledWith('/')
   })
 
+  it('renders all-question list completion from the all-list source', () => {
+    mocks.searchParams = new URLSearchParams('from=/list')
+
+    render(<PracticeCompletePage />)
+
+    expect(screen.getByText('All-question review complete')).not.toBeNull()
+    fireEvent.click(screen.getByText('Back to list'))
+    expect(mocks.router.push).toHaveBeenCalledWith('/list')
+  })
+
   it('renders bookmark completion from the bookmark source', () => {
     mocks.searchParams = new URLSearchParams('from=/list/bookmarks')
 
@@ -326,6 +336,16 @@ describe('progress page compatibility', () => {
     expect(screen.getByText('Bookmark review complete')).not.toBeNull()
     fireEvent.click(screen.getByText('Back to bookmarks'))
     expect(mocks.router.push).toHaveBeenCalledWith('/list/bookmarks')
+  })
+
+  it('renders unanswered session completion from the unanswered source', () => {
+    mocks.searchParams = new URLSearchParams('from=/list/unanswered')
+
+    render(<PracticeCompletePage />)
+
+    expect(screen.getByText('Unanswered session complete')).not.toBeNull()
+    fireEvent.click(screen.getByText('Back to unanswered'))
+    expect(mocks.router.push).toHaveBeenCalledWith('/list/unanswered')
   })
 
   it('falls back to home completion for invalid sources', () => {

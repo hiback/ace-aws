@@ -72,15 +72,18 @@ describe('BrowserProgressModule', () => {
       ).toEqual([1, 2])
     })
 
-    it('lists wrong records by latest answer state', () => {
+    it('lists wrong records by historical wrong attempts', () => {
       progress.recordAnswer(1, ['A'], false, CERT)
       progress.recordAnswer(2, ['B'], false, CERT)
       progress.recordAnswer(2, ['C'], true, CERT)
 
       const wrong = progress.listWrong(CERT)
 
-      expect(wrong).toHaveLength(1)
-      expect(wrong[0]).toMatchObject({ qid: 1, lastCorrect: false, wrongCount: 1 })
+      expect(wrong.map((entry) => entry.qid).sort((a, b) => a - b)).toEqual([1, 2])
+      expect(wrong.find((entry) => entry.qid === 2)).toMatchObject({
+        lastCorrect: true,
+        wrongCount: 1,
+      })
     })
 
     it('isolates progress by cert', () => {

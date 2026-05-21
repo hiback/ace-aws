@@ -1,5 +1,5 @@
 'use client'
-import { ArrowRight, Bell, Bookmark, Flag, RefreshCw } from 'lucide-react'
+import { ArrowRight, Bell, Bookmark, Flag, List, RefreshCw } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -13,7 +13,7 @@ import { useAccountPreferences } from '@/components/providers/account-preference
 import { useProgressModule } from '@/components/providers/progress-scope-provider'
 import type { CertCode } from '@/data/types'
 import { findNextUnansweredQid } from '@/hooks/use-answer'
-import { useBookmarksList, useProgressStats, useWrongList } from '@/hooks/use-progress-stats'
+import { useBookmarksList, useProgressStats, useWrongRedoCount } from '@/hooks/use-progress-stats'
 import { useT } from '@/hooks/use-t'
 import { certPath, getCertGroupLabelKey, getCertOption } from '@/lib/cert-catalog'
 import { usePrefsStore } from '@/stores/prefs-store'
@@ -60,7 +60,7 @@ function HomeContent({ cert }: { cert: CertCode }) {
   const progress = useProgressModule()
   const setCurrentCert = usePrefsStore((s) => s.setCurrentCert)
   const stats = useProgressStats(cert)
-  const wrong = useWrongList(cert)
+  const wrongRedoCount = useWrongRedoCount(cert)
   const bookmarks = useBookmarksList(cert)
   const [pending, startTransition] = useTransition()
   const [certSwitchPending, startCertSwitchTransition] = useTransition()
@@ -201,11 +201,18 @@ function HomeContent({ cert }: { cert: CertCode }) {
       <div className="grid grid-cols-2 gap-2.5">
         <QuickActionCard
           icon={Flag}
-          label={t('homeWrong')}
-          count={wrong.data?.length ?? 0}
-          href="/list/wrong"
+          label={t('homeWrongRedo')}
+          count={wrongRedoCount.data ?? 0}
+          disabled
           iconBgClass="bg-danger-soft"
           iconColorClass="text-danger"
+        />
+        <QuickActionCard
+          icon={List}
+          label={t('homeList')}
+          href="/list"
+          iconBgClass="bg-bg-alt"
+          iconColorClass="text-ink-soft"
         />
         <QuickActionCard
           icon={Bookmark}

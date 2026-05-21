@@ -11,16 +11,20 @@ import {
 describe('practice-flow helpers', () => {
   it('normalizes allowed practice sources and falls back to home', () => {
     expect(normalizePracticeSource('/')).toBe('/')
+    expect(normalizePracticeSource('/list')).toBe('/list')
     expect(normalizePracticeSource('/list/wrong')).toBe('/list/wrong')
     expect(normalizePracticeSource('/list/bookmarks')).toBe('/list/bookmarks')
+    expect(normalizePracticeSource('/list/unanswered')).toBe('/list/unanswered')
     expect(normalizePracticeSource('/settings')).toBe('/')
     expect(normalizePracticeSource(null)).toBe('/')
   })
 
   it('detects list practice sources', () => {
     expect(isListPracticeSource('/')).toBe(false)
+    expect(isListPracticeSource('/list')).toBe(true)
     expect(isListPracticeSource('/list/wrong')).toBe(true)
     expect(isListPracticeSource('/list/bookmarks')).toBe(true)
+    expect(isListPracticeSource('/list/unanswered')).toBe(true)
   })
 
   it('builds encoded practice hrefs with optional set snapshots', () => {
@@ -37,6 +41,9 @@ describe('practice-flow helpers', () => {
     expect(buildCompletionHref('DVA-C02', '/')).toBe('/practice/dva-c02/complete?from=%2F')
     expect(buildCompletionHref('DVA-C02', '/list/bookmarks')).toBe(
       '/practice/dva-c02/complete?from=%2Flist%2Fbookmarks',
+    )
+    expect(buildCompletionHref('DVA-C02', '/list/unanswered')).toBe(
+      '/practice/dva-c02/complete?from=%2Flist%2Funanswered',
     )
   })
 

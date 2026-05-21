@@ -93,12 +93,23 @@ function bankQidSet(bank: Awaited<ReturnType<typeof loadBank>>): Set<number> {
   return new Set(bank.map((question) => question.id))
 }
 
+function sortedBankQids(bankIds: ReadonlySet<number>): number[] {
+  return Array.from(bankIds).sort((a, b) => a - b)
+}
+
 function liveListQids(
   source: ListPracticeSource,
   cert: CertCode,
   bankIds: ReadonlySet<number>,
   progress: BrowserQuestionProgressModule,
 ): number[] {
+  if (source === '/list') return sortedBankQids(bankIds)
+
+  if (source === '/list/unanswered') {
+    const answered = new Set(progress.listAnswered(cert).map((entry) => entry.qid))
+    return sortedBankQids(bankIds).filter((qid) => !answered.has(qid))
+  }
+
   if (source === '/list/wrong') {
     return progress
       .listWrong(cert)

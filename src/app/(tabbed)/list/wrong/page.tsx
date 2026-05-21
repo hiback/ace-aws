@@ -74,7 +74,7 @@ function WrongContent({ cert }: { cert: CertCode }) {
               qid={progress.qid}
               topic={question.topic}
               questionPreview={text}
-              status="wrong"
+              status={progress.lastCorrect === true ? 'correct' : 'wrong'}
               wrongCount={progress.wrongCount}
               from="/list/wrong"
               set={snapshot}

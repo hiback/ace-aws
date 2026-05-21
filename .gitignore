@@ -5,6 +5,7 @@ docs/superpowers/
 .scratch/
 .worktrees/
 .agents/
+.claude/
 .superpowers
 skills-lock.json
 

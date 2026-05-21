@@ -160,13 +160,23 @@ describe('HomePage cert switcher', () => {
   it('saves account preferences before switching local cert for signed-in users', async () => {
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
+    let resolveSave: (cert: 'DVA-C02' | 'CLF-C02') => void = () => {}
+    accountPreferenceMocks.saveCurrentCert.mockImplementationOnce(
+      () =>
+        new Promise<'DVA-C02' | 'CLF-C02'>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
     render(<HomePage />)
     openCertSwitcher()
 
     fireEvent.click(screen.getByRole('button', { name: /Cloud Practitioner/ }))
 
+    expect(accountPreferenceMocks.saveCurrentCert).toHaveBeenCalledWith('CLF-C02')
+    expect(usePrefsStore.getState().currentCert).toBe('DVA-C02')
+
+    resolveSave('CLF-C02')
     await waitFor(() => {
-      expect(accountPreferenceMocks.saveCurrentCert).toHaveBeenCalledWith('CLF-C02')
       expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
     })
   })

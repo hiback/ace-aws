@@ -432,13 +432,37 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
 
   private applyInput(input: ProgressSyncControllerInput, runEffects: boolean): void {
     if (this.disposed) return
+    const previousInput = this.input
+    const dirtyCertToFlush = this.dirtyCertToFlushOnSwitch(previousInput, input, runEffects)
     this.input = input
     if (this.recoveryOwner !== input.userId) {
       this.recoveryOwner = input.userId
       this.clearPendingDirtySyncWaits()
       this.clearPerCertSyncState()
     }
+    if (dirtyCertToFlush !== null && previousInput.userId !== null) {
+      this.clearDebounceTimer()
+      this.flushDirtyCertInBackground(previousInput.userId, dirtyCertToFlush)
+    }
     this.refreshGate(runEffects)
+  }
+
+  private dirtyCertToFlushOnSwitch(
+    previousInput: ProgressSyncControllerInput,
+    nextInput: ProgressSyncControllerInput,
+    runEffects: boolean,
+  ): CertCode | null {
+    if (!runEffects) return null
+    if (previousInput.authStatus !== 'authenticated' || nextInput.authStatus !== 'authenticated') {
+      return null
+    }
+    if (previousInput.userId === null || previousInput.userId !== nextInput.userId) return null
+    if (previousInput.currentCert === null || previousInput.currentCert === nextInput.currentCert) {
+      return null
+    }
+    return this.adapter.accountProgress.listDirty(previousInput.currentCert).length > 0
+      ? previousInput.currentCert
+      : null
   }
 
   private refreshGate(runEffects: boolean): void {
@@ -757,6 +781,23 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           } catch {
             if (cert === this.input.currentCert) this.markBaselineError()
           }
+        }
+      })
+  }
+
+  private flushDirtyCertInBackground(accountUserId: string, cert: CertCode): void {
+    this.queue = this.queue
+      .catch(() => {})
+      .then(async () => {
+        if (!this.isCurrentAccount(accountUserId)) return
+        try {
+          await this.flushCert(accountUserId, cert, {
+            scheduleRetry: false,
+            showTemporaryNotice: false,
+          })
+        } catch {
+          // If the learner already switched back, surface the failure for the visible cert.
+          if (cert === this.input.currentCert) this.markBaselineError()
         }
       })
   }

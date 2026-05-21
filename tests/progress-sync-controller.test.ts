@@ -531,6 +531,164 @@ describe('Progress Sync controller', () => {
     await syncPromise
   })
 
+  it('starts background dirty sync for the previous cert when switching certs', async () => {
+    const ctx = createAdapter()
+    const previousDirty = progress(22)
+    let resolveSync: (result: ProgressSyncResult) => void = () => {}
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('DVA-C02', [previousDirty])
+    ctx.syncResponses.push(
+      () =>
+        new Promise<ProgressSyncResult>((resolve) => {
+          resolveSync = resolve
+        }),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'CLF-C02',
+      scope: 'account',
+    })
+    await flushPromises()
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 3, progress: [previousDirty] }])
+    expect(controller.getState()).toMatchObject({
+      currentCert: 'CLF-C02',
+      gateState: 'ready',
+      hasDirtyProgress: false,
+      lastSyncedAt: 1_700_000_001_000,
+      status: 'synced',
+      view: 'ready',
+    })
+
+    resolveSync({
+      cert: 'DVA-C02',
+      revision: 4,
+      accepted: [previousDirty],
+      rejected: [],
+      snapshotRequired: false,
+    })
+    await flushPromises()
+
+    expect(ctx.dirty.get('DVA-C02')).toBeUndefined()
+    expect(ctx.baselines.get(ctx.baselineKey('user-1', 'DVA-C02'))?.revision).toBe(4)
+  })
+
+  it('keeps previous cert dirty progress when switch background sync fails', async () => {
+    vi.useFakeTimers()
+    const ctx = createAdapter()
+    const previousDirty = progress(23)
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('DVA-C02', [previousDirty])
+    ctx.syncResponses.push(new ProgressSyncControllerError('temporary'))
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'CLF-C02',
+      scope: 'account',
+    })
+    await flushPromises()
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 3, progress: [previousDirty] }])
+    expect(ctx.dirty.get('DVA-C02')).toEqual([previousDirty])
+    expect(controller.getState()).toMatchObject({
+      currentCert: 'CLF-C02',
+      gateState: 'ready',
+      hasDirtyProgress: false,
+      lastSyncedAt: 1_700_000_001_000,
+      status: 'synced',
+      view: 'ready',
+    })
+    expect(ctx.notices).toEqual([])
+  })
+
+  it('does not start previous cert background sync when the previous cert is clean', async () => {
+    const ctx = createAdapter()
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'CLF-C02',
+      scope: 'account',
+    })
+    await flushPromises()
+
+    expect(ctx.syncCalls.filter((call) => call.cert === 'DVA-C02')).toEqual([])
+  })
+
+  it('does not start previous cert background sync when the account user changes', async () => {
+    const ctx = createAdapter()
+    const previousDirty = progress(24)
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-2', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('DVA-C02', [previousDirty])
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-2',
+      currentCert: 'CLF-C02',
+      scope: 'account',
+    })
+    await flushPromises()
+
+    expect(ctx.syncCalls.filter((call) => call.cert === 'DVA-C02')).toEqual([])
+    expect(ctx.dirty.get('DVA-C02')).toEqual([previousDirty])
+  })
+
   it('recovers revision conflicts by replacing the cert from a fresh snapshot', async () => {
     const ctx = createAdapter()
     const dirtyProgress = progress(5)

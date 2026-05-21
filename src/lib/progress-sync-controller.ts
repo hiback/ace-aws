@@ -105,7 +105,6 @@ export interface ProgressSyncControllerAdapter {
     getBaseline(userId: string, cert: CertCode): AccountSyncBaseline | null
     clearBaseline(userId: string, cert: CertCode): void
     markChecked(userId: string, cert: CertCode, revision: number): void
-    getLastSyncedAt(userId: string): number | null
   }
   progressSync: {
     post(
@@ -196,15 +195,14 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
   private failureCount = 0
   private escapingSignOut = false
   private readonly conflictRecoveryCerts = new Set<CertCode>()
-  private manualSyncing = false
+  private manualSyncingCert: CertCode | null = null
   private isImporting = false
   private globalImportFailed = false
-  private manualFailed = false
-  private syncFailed = false
-  private inFlightCount = 0
+  private readonly failedSyncCerts = new Set<CertCode>()
   private debounceTimer: TimerId | null = null
   private queue: Promise<void> = Promise.resolve()
   private readonly inFlightCerts = new Set<CertCode>()
+  private readonly inFlightRevisionCerts = new Set<CertCode>()
   private readonly fatalCerts = new Set<CertCode>()
   private readonly dirtyFailureCounts = new Map<CertCode, number>()
   private readonly dirtyRetryTimers = new Map<CertCode, TimerId>()
@@ -243,8 +241,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       this.debounceTimer = null
       this.flushDirtyQueue(cert)
     }, DIRTY_SYNC_DEBOUNCE_MS)
-    this.manualFailed = false
-    this.syncFailed = false
+    this.failedSyncCerts.delete(cert)
     this.emitState()
   }
 
@@ -275,20 +272,25 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       return intent === 'before-sign-out' ? { ok: true } : { ok: false, reason: 'temporary' }
     }
     const accountUserId = this.input.userId
+    const syncCert = this.input.currentCert
+    if (intent === 'manual' && syncCert === null) return { ok: true }
     this.clearPendingDirtySyncWaits()
-    this.manualSyncing = true
-    this.manualFailed = false
+    this.manualSyncingCert = syncCert
+    if (syncCert !== null) this.failedSyncCerts.delete(syncCert)
     this.emitState()
     try {
-      const dirtyResult = await this.flushAllDirtyNow(accountUserId)
+      const dirtyResult =
+        intent === 'manual'
+          ? await this.flushCurrentDirtyNow(accountUserId, syncCert)
+          : await this.flushAllDirtyNow(accountUserId)
       if (!dirtyResult.ok) {
-        this.manualFailed = true
+        if (intent === 'manual' && syncCert !== null) this.failedSyncCerts.add(syncCert)
         if (intent === 'manual') this.adapter.notices.show('manual-failure')
         this.emitState()
         return dirtyResult
       }
-      if (intent === 'manual' && this.input.currentCert !== null) {
-        const snapshot = await this.adapter.progressSnapshot.fetch(this.input.currentCert)
+      if (intent === 'manual' && syncCert !== null) {
+        const snapshot = await this.adapter.progressSnapshot.fetch(syncCert)
         if (!this.adapter.accountProgress.isOwner(accountUserId)) {
           return { ok: false, reason: 'temporary' }
         }
@@ -300,7 +302,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
         )
         await this.adapter.questionProgress.invalidateAccountProgress()
       }
-      this.syncFailed = false
+      if (syncCert !== null) this.failedSyncCerts.delete(syncCert)
       this.emitState()
       if (intent === 'manual') this.adapter.notices.show('manual-success')
       return { ok: true }
@@ -309,7 +311,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
         this.handleAuthExpired()
         return { ok: false, reason: 'fatal' }
       }
-      this.manualFailed = true
+      if (syncCert !== null) this.failedSyncCerts.add(syncCert)
       this.emitState()
       if (intent === 'manual') this.adapter.notices.show('manual-failure')
       return {
@@ -320,7 +322,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             : 'temporary',
       }
     } finally {
-      this.manualSyncing = false
+      if (this.manualSyncingCert === syncCert) this.manualSyncingCert = null
       this.emitState()
     }
   }
@@ -415,6 +417,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
 
   discardAccountSyncState(): void {
     this.clearPendingDirtySyncWaits()
+    this.clearPerCertSyncState()
     this.adapter.accountProgress.clearScope()
     this.adapter.questionProgress.removeAccountProgressQueries()
     this.emitState()
@@ -432,11 +435,8 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     this.input = input
     if (this.recoveryOwner !== input.userId) {
       this.recoveryOwner = input.userId
-      this.fatalCerts.clear()
-      this.conflictRecoveryCerts.clear()
-      this.dirtyFailureCounts.clear()
-      for (const timer of this.dirtyRetryTimers.values()) clearTimeout(timer)
-      this.dirtyRetryTimers.clear()
+      this.clearPendingDirtySyncWaits()
+      this.clearPerCertSyncState()
     }
     this.refreshGate(runEffects)
   }
@@ -487,12 +487,11 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     const hasDirtyProgress =
       authStatus === 'authenticated' &&
       userId !== null &&
-      this.adapter.readyCerts.some(
-        (cert) => this.adapter.accountProgress.listDirty(cert).length > 0,
-      )
+      currentCert !== null &&
+      this.adapter.accountProgress.listDirty(currentCert).length > 0
     const lastSyncedAt =
-      authStatus === 'authenticated' && userId !== null
-        ? this.adapter.progressRevision.getLastSyncedAt(userId)
+      authStatus === 'authenticated' && userId !== null && currentCert !== null
+        ? (this.adapter.progressRevision.getBaseline(userId, currentCert)?.lastSyncedAt ?? null)
         : null
     const rawAnonymousImportSummary =
       authStatus === 'authenticated' && userId !== null
@@ -514,10 +513,15 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       !waitsForAccountScope &&
       !currentCertInConflictRecovery &&
       this.gateState === 'ready'
+    const currentCertSyncing =
+      currentCert !== null &&
+      (this.inFlightCerts.has(currentCert) || this.inFlightRevisionCerts.has(currentCert))
+    const currentCertManualSyncing = currentCert !== null && this.manualSyncingCert === currentCert
+    const currentCertFailed = currentCert !== null && this.failedSyncCerts.has(currentCert)
     const status: AccountProgressSyncStatus =
-      this.gateState === 'syncing' || this.manualSyncing || this.inFlightCount > 0
+      this.gateState === 'syncing' || currentCertManualSyncing || currentCertSyncing
         ? 'syncing'
-        : this.gateState === 'error' || this.manualFailed || this.syncFailed
+        : this.gateState === 'error' || currentCertFailed
           ? 'failed'
           : hasDirtyProgress
             ? 'dirty'
@@ -578,7 +582,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     ]
   }
 
-  private orderedReadyCertsForManualSync(): CertCode[] {
+  private orderedReadyCertsForDirtyFlush(): CertCode[] {
     const currentCert = this.input.currentCert
     return [
       ...(currentCert ? [currentCert] : []),
@@ -596,6 +600,16 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     this.clearDebounceTimer()
     for (const timer of this.dirtyRetryTimers.values()) clearTimeout(timer)
     this.dirtyRetryTimers.clear()
+  }
+
+  private clearPerCertSyncState(): void {
+    this.manualSyncingCert = null
+    this.conflictRecoveryCerts.clear()
+    this.failedSyncCerts.clear()
+    this.inFlightCerts.clear()
+    this.inFlightRevisionCerts.clear()
+    this.fatalCerts.clear()
+    this.dirtyFailureCounts.clear()
   }
 
   private clearBaselineRetryTimer(): void {
@@ -677,7 +691,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           )
         }
         await this.adapter.questionProgress.invalidateAccountProgress()
-        this.syncFailed = false
+        this.failedSyncCerts.delete(cert)
         this.setGateState('ready')
         this.baselineRunKey = null
         this.clearBaselineRetryTimer()
@@ -760,7 +774,6 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     const dirty = this.adapter.accountProgress.listDirty(cert)
     if (dirty.length === 0) return 'clean'
     this.inFlightCerts.add(cert)
-    this.inFlightCount += 1
     this.emitState()
     try {
       const baseline = this.adapter.progressRevision.getBaseline(accountUserId, cert)
@@ -779,7 +792,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           this.conflictRecoveryCerts.delete(cert)
           if (error instanceof ProgressSyncControllerError && error.kind === 'auth') throw error
           if (cert === this.input.currentCert) this.markBaselineError()
-          this.syncFailed = true
+          this.failedSyncCerts.add(cert)
           this.emitState()
           return 'temporary-failure'
         }
@@ -826,8 +839,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
         )
       }
       await this.adapter.questionProgress.invalidateAccountProgress()
-      this.manualFailed = false
-      this.syncFailed = false
+      this.failedSyncCerts.delete(cert)
       this.emitState()
       return 'synced'
     } catch (error) {
@@ -858,32 +870,47 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           ) {
             this.markBaselineError()
           }
-          this.syncFailed = true
+          this.failedSyncCerts.add(cert)
           this.emitState()
           return 'temporary-failure'
         }
         if (isFatalControllerError(error)) {
           this.fatalCerts.add(cert)
           if (showTemporaryNotice) this.adapter.notices.show(noticeForFatalError(error))
-          this.syncFailed = true
+          this.failedSyncCerts.add(cert)
           this.emitState()
           return 'fatal-failure'
         }
       }
       if (cert === this.input.currentCert) this.markBaselineError()
-      this.syncFailed = true
+      this.failedSyncCerts.add(cert)
       this.emitState()
       return 'temporary-failure'
     } finally {
       this.inFlightCerts.delete(cert)
-      this.inFlightCount = Math.max(0, this.inFlightCount - 1)
       this.emitState()
     }
   }
 
+  private async flushCurrentDirtyNow(
+    accountUserId: string,
+    cert: CertCode | null,
+  ): Promise<AccountProgressSyncResult> {
+    await this.queue.catch(() => {})
+    if (cert === null) return { ok: true }
+    const result = await this.flushCert(accountUserId, cert, {
+      scheduleRetry: false,
+      showTemporaryNotice: false,
+    })
+    if (result === 'temporary-failure') return { ok: false, reason: 'temporary' }
+    if (result === 'fatal-failure' || result === 'auth-signout')
+      return { ok: false, reason: 'fatal' }
+    return { ok: true }
+  }
+
   private async flushAllDirtyNow(accountUserId: string): Promise<AccountProgressSyncResult> {
     await this.queue.catch(() => {})
-    for (const cert of this.orderedReadyCertsForManualSync()) {
+    for (const cert of this.orderedReadyCertsForDirtyFlush()) {
       const result = await this.flushCert(accountUserId, cert, {
         scheduleRetry: false,
         showTemporaryNotice: false,
@@ -937,7 +964,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             return
           }
 
-          this.inFlightCount += 1
+          this.inFlightRevisionCerts.add(cert)
           this.emitState()
           try {
             const result = await this.adapter.progressSync.post(cert, currentBaseline.revision, [])
@@ -960,8 +987,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             }
             this.revisionCheckedCerts.add(checkedKey)
             await this.adapter.questionProgress.invalidateAccountProgress()
-            this.manualFailed = false
-            this.syncFailed = false
+            this.failedSyncCerts.delete(cert)
             this.emitState()
             await this.flushOtherReadyCerts(userId, cert)
           } catch (error) {
@@ -973,14 +999,14 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             if (error instanceof ProgressSyncControllerError && isFatalControllerError(error)) {
               this.fatalCerts.add(cert)
               this.adapter.notices.show(noticeForFatalError(error))
-              this.syncFailed = true
+              this.failedSyncCerts.add(cert)
               this.emitState()
               return
             }
-            this.syncFailed = true
+            this.failedSyncCerts.add(cert)
             this.emitState()
           } finally {
-            this.inFlightCount = Math.max(0, this.inFlightCount - 1)
+            this.inFlightRevisionCerts.delete(cert)
             this.emitState()
           }
         } finally {

@@ -31,8 +31,13 @@ function createAdapter() {
   const owner = { userId: 'user-1' }
   const syncResponses: Array<
     | ProgressSyncResult
+    | Promise<ProgressSyncResult>
     | Error
-    | ((cert: CertCode, baseRevision: number, records: QuestionProgress[]) => ProgressSyncResult)
+    | ((
+        cert: CertCode,
+        baseRevision: number,
+        records: QuestionProgress[],
+      ) => ProgressSyncResult | Promise<ProgressSyncResult>)
   > = []
   const snapshotErrors: Error[] = []
   const snapshotResponses = new Map<CertCode, QuestionProgress[]>()
@@ -107,12 +112,6 @@ function createAdapter() {
       clearBaseline: (userId, cert) => baselines.delete(baselineKey(userId, cert)),
       markChecked: (userId, cert, revision) => {
         baselines.set(baselineKey(userId, cert), { revision, lastSyncedAt: Date.now() })
-      },
-      getLastSyncedAt: (userId) => {
-        const values = Array.from(baselines.entries())
-          .filter(([key]) => key.startsWith(`${userId}:`))
-          .map(([, baseline]) => baseline.lastSyncedAt)
-        return values.length === 0 ? null : Math.max(...values)
       },
     },
     progressSync: {
@@ -230,6 +229,79 @@ describe('Progress Sync controller', () => {
     expect(controller.getState().status).toBe('synced')
   })
 
+  it('derives visible sync state from the current cert only', () => {
+    const ctx = createAdapter()
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 9,
+      lastSyncedAt: 1_800_000_000_000,
+    })
+    ctx.dirty.set('CLF-C02', [progress(13)])
+
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    expect(controller.getState()).toMatchObject({
+      hasDirtyProgress: false,
+      lastSyncedAt: 1_700_000_000_000,
+      status: 'synced',
+    })
+  })
+
+  it('manual sync uploads dirty progress for the current cert only', async () => {
+    const ctx = createAdapter()
+    const currentDirty = progress(14)
+    const otherDirty = progress(15)
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('DVA-C02', [currentDirty])
+    ctx.dirty.set('CLF-C02', [otherDirty])
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 3, progress: [currentDirty] }])
+    expect(ctx.dirty.get('DVA-C02')).toBeUndefined()
+    expect(ctx.dirty.get('CLF-C02')).toEqual([otherDirty])
+    expect(ctx.snapshotCalls).toEqual(['DVA-C02'])
+    expect(ctx.notices).toEqual(['manual-success'])
+  })
+
+  it('manual sync without a current cert is a silent no-op', async () => {
+    const ctx = createAdapter()
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: null,
+      scope: 'account',
+    })
+
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(ctx.syncCalls).toEqual([])
+    expect(ctx.snapshotCalls).toEqual([])
+    expect(ctx.notices).toEqual([])
+    expect(controller.getState().status).toBe('synced')
+  })
+
   it('before-sign-out sync flushes dirty progress without refreshing the current snapshot or emitting success', async () => {
     const ctx = createAdapter()
     const dirtyProgress = progress(2)
@@ -250,6 +322,35 @@ describe('Progress Sync controller', () => {
     expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 4, progress: [dirtyProgress] }])
     expect(ctx.snapshotCalls).toEqual([])
     expect(ctx.notices).toEqual([])
+  })
+
+  it('does not attribute before-sign-out failures from non-current certs to the current cert', async () => {
+    const ctx = createAdapter()
+    const otherDirty = progress(19)
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('CLF-C02', [otherDirty])
+    ctx.syncResponses.push(new ProgressSyncControllerError('temporary'))
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('before-sign-out')).resolves.toEqual({
+      ok: false,
+      reason: 'temporary',
+    })
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'CLF-C02', baseRevision: 4, progress: [otherDirty] }])
+    expect(controller.getState().status).toBe('synced')
   })
 
   it('blocks on missing baseline until the current progress snapshot is installed', async () => {
@@ -304,6 +405,130 @@ describe('Progress Sync controller', () => {
     expect(ctx.syncCalls).toHaveLength(2)
     expect(ctx.dirty.get('DVA-C02')).toBeUndefined()
     expect(controller.getState().status).toBe('synced')
+  })
+
+  it('keeps visible state stable while a non-current cert sync is in flight', async () => {
+    vi.useFakeTimers()
+    const ctx = createAdapter()
+    const otherDirty = progress(16)
+    let resolveSync: (result: ProgressSyncResult) => void = () => {}
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('CLF-C02', [otherDirty])
+    ctx.syncResponses.push(
+      () =>
+        new Promise<ProgressSyncResult>((resolve) => {
+          resolveSync = resolve
+        }),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.enqueueDirtySync('CLF-C02')
+    await vi.advanceTimersByTimeAsync(750)
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'CLF-C02', baseRevision: 4, progress: [otherDirty] }])
+    expect(controller.getState().status).toBe('synced')
+
+    resolveSync({
+      cert: 'CLF-C02',
+      revision: 5,
+      accepted: [otherDirty],
+      rejected: [],
+      snapshotRequired: false,
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(controller.getState().status).toBe('synced')
+  })
+
+  it('does not surface non-current dirty sync failures as current cert failures', async () => {
+    vi.useFakeTimers()
+    const ctx = createAdapter()
+    const otherDirty = progress(17)
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('CLF-C02', [otherDirty])
+    ctx.syncResponses.push(new ProgressSyncControllerError('temporary'))
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.enqueueDirtySync('CLF-C02')
+    await vi.advanceTimersByTimeAsync(750)
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'CLF-C02', baseRevision: 4, progress: [otherDirty] }])
+    expect(controller.getState().status).toBe('synced')
+    expect(ctx.dirty.get('CLF-C02')).toEqual([otherDirty])
+  })
+
+  it('does not keep showing manual syncing after switching away from the syncing cert', async () => {
+    const ctx = createAdapter()
+    const currentDirty = progress(18)
+    let resolveSync: (result: ProgressSyncResult) => void = () => {}
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirty.set('DVA-C02', [currentDirty])
+    ctx.syncResponses.push(
+      () =>
+        new Promise<ProgressSyncResult>((resolve) => {
+          resolveSync = resolve
+        }),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    const syncPromise = controller.sync('manual')
+    await flushPromises()
+    expect(controller.getState().status).toBe('syncing')
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'CLF-C02',
+      scope: 'account',
+    })
+
+    expect(controller.getState().status).toBe('synced')
+
+    resolveSync({
+      cert: 'DVA-C02',
+      revision: 5,
+      accepted: [currentDirty],
+      rejected: [],
+      snapshotRequired: false,
+    })
+    await syncPromise
   })
 
   it('recovers revision conflicts by replacing the cert from a fresh snapshot', async () => {
@@ -505,6 +730,92 @@ describe('Progress Sync controller', () => {
     expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 5, progress: [] }])
   })
 
+  it('shows syncing while the current cert revision check is in flight', async () => {
+    const ctx = createAdapter()
+    let resolveSync: (result: ProgressSyncResult) => void = () => {}
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 5,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.syncResponses.push(
+      () =>
+        new Promise<ProgressSyncResult>((resolve) => {
+          resolveSync = resolve
+        }),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.handleOnline()
+    await flushPromises()
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 5, progress: [] }])
+    expect(controller.getState().status).toBe('syncing')
+
+    resolveSync({
+      cert: 'DVA-C02',
+      revision: 5,
+      accepted: [],
+      rejected: [],
+      snapshotRequired: false,
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(controller.getState().status).toBe('synced')
+  })
+
+  it('clears in-flight revision state when the account user changes', async () => {
+    const ctx = createAdapter()
+    let resolveSync: (result: ProgressSyncResult) => void = () => {}
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 5,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-2', 'DVA-C02'), {
+      revision: 7,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.syncResponses.push(
+      () =>
+        new Promise<ProgressSyncResult>((resolve) => {
+          resolveSync = resolve
+        }),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.handleOnline()
+    await flushPromises()
+    expect(controller.getState().status).toBe('syncing')
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-2',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    expect(controller.getState().status).toBe('synced')
+
+    resolveSync({
+      cert: 'DVA-C02',
+      revision: 5,
+      accepted: [],
+      rejected: [],
+      snapshotRequired: false,
+    })
+    await flushPromises()
+  })
+
   it('dismissAnonymousImport hides the prompt for the current account', () => {
     const ctx = createAdapter()
     ctx.anonymous.set('DVA-C02', [progress(11)])
@@ -536,6 +847,78 @@ describe('Progress Sync controller', () => {
 
     expect(ctx.adapter.accountProgress.clearScope).toHaveBeenCalledOnce()
     expect(ctx.adapter.questionProgress.removeAccountProgressQueries).toHaveBeenCalledOnce()
+  })
+
+  it('discardAccountSyncState clears failed sync state', async () => {
+    vi.useFakeTimers()
+    const ctx = createAdapter()
+    const dirtyProgress = progress(20)
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.dirty.set('DVA-C02', [dirtyProgress])
+    ctx.syncResponses.push(new ProgressSyncControllerError('temporary'))
+    vi.mocked(ctx.adapter.accountProgress.clearScope).mockImplementation(() => {
+      ctx.dirty.clear()
+    })
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.enqueueDirtySync('DVA-C02')
+    await vi.advanceTimersByTimeAsync(750)
+    expect(controller.getState().status).toBe('failed')
+
+    controller.discardAccountSyncState()
+
+    expect(controller.getState().status).toBe('synced')
+  })
+
+  it('discardAccountSyncState clears in-flight sync state', async () => {
+    const ctx = createAdapter()
+    const dirtyProgress = progress(21)
+    let resolveSync: (result: ProgressSyncResult) => void = () => {}
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.dirty.set('DVA-C02', [dirtyProgress])
+    ctx.syncResponses.push(
+      () =>
+        new Promise<ProgressSyncResult>((resolve) => {
+          resolveSync = resolve
+        }),
+    )
+    vi.mocked(ctx.adapter.accountProgress.clearScope).mockImplementation(() => {
+      ctx.dirty.clear()
+    })
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    const syncPromise = controller.sync('manual')
+    await flushPromises()
+    expect(controller.getState().status).toBe('syncing')
+
+    controller.discardAccountSyncState()
+
+    expect(controller.getState().status).toBe('synced')
+
+    resolveSync({
+      cert: 'DVA-C02',
+      revision: 3,
+      accepted: [dirtyProgress],
+      rejected: [],
+      snapshotRequired: false,
+    })
+    await syncPromise
   })
 
   it('dispose cancels scheduled dirty sync and makes commands inert', async () => {

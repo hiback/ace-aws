@@ -54,7 +54,9 @@ function renderStrictGate(children = <div>App content</div>, client = createQuer
     ...render(
       <StrictMode>
         <QueryClientProvider client={client}>
-          <AccountProgressSyncProvider>{children}</AccountProgressSyncProvider>
+          <ProgressScopeProvider>
+            <AccountProgressSyncProvider>{children}</AccountProgressSyncProvider>
+          </ProgressScopeProvider>
         </QueryClientProvider>
       </StrictMode>,
     ),
@@ -114,10 +116,11 @@ afterEach(() => {
 })
 
 describe('AccountProgressSyncProvider', () => {
-  it('keeps the controller usable through React StrictMode effect replay', async () => {
+  it('keeps syncNow usable through StrictMode replay after the current cert baseline is ready', async () => {
     authenticate('user-1')
+    usePrefsStore.setState({ currentCert: 'DVA-C02' })
     BrowserProgressModule.prepareAccountOwner('user-1')
-    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
+    BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 0, [])
     vi.mocked(fetch).mockReset().mockResolvedValue(syncResponse('DVA-C02', 1))
     function SyncButton() {
       const { syncNow } = useAccountProgressSync()
@@ -129,10 +132,17 @@ describe('AccountProgressSyncProvider', () => {
     }
 
     renderStrictGate(<SyncButton />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sync now' })).not.toBeNull())
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith('/api/progress/dva-c02/sync', expect.any(Object)),
+    )
+    vi.mocked(fetch).mockClear().mockResolvedValue(syncResponse('DVA-C02', 2))
+    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
-    expect(fetch).toHaveBeenCalledWith('/api/progress/dva-c02/sync', expect.any(Object))
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith('/api/progress/dva-c02/sync', expect.any(Object)),
+    )
   })
 
   it('renders the anonymous import prompt instead of children', async () => {

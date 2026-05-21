@@ -82,13 +82,6 @@ const AccountProgressSyncContext = createContext<AccountProgressSyncValue>({
   discardAccountSyncState: () => {},
 })
 
-function getLastSyncedAt(userId: string): number | null {
-  const values = READY_CERTS.map(
-    (cert) => BrowserProgressModule.getAccountSyncBaseline(userId, cert)?.lastSyncedAt ?? null,
-  ).filter((value): value is number => value !== null)
-  return values.length === 0 ? null : Math.max(...values)
-}
-
 function userIdFromSession(session: unknown): string | null {
   const user = (session as { user?: { id?: unknown } } | null)?.user
   return typeof user?.id === 'string' && user.id.length > 0 ? user.id : null
@@ -172,7 +165,6 @@ function createProviderAdapter(
       clearBaseline: (userId, cert) => BrowserProgressModule.clearAccountSyncBaseline(userId, cert),
       markChecked: (userId, cert, revision) =>
         BrowserProgressModule.markAccountSyncBaselineChecked(userId, cert, revision),
-      getLastSyncedAt,
     },
     progressSync: {
       post: async (cert, baseRevision, progress) => {

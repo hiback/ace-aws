@@ -6,10 +6,7 @@ import {
   ProgressScopeProvider,
   useProgressScope,
 } from '../src/components/providers/progress-scope-provider'
-import {
-  ACCOUNT_PROGRESS_OWNER_KEY,
-  LocalProgressRepository,
-} from '../src/repositories/local-progress-repository'
+import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 
 const authMocks = vi.hoisted(() => ({
   status: 'unauthenticated' as 'authenticated' | 'unauthenticated' | 'loading',
@@ -50,18 +47,16 @@ describe('ProgressScopeProvider', () => {
 
     await waitFor(() => expect(result.current.scope).toBe('account'))
 
-    result.current.repository.recordAnswer(1, ['B'], false, 'DVA-C02')
+    result.current.progress.recordAnswer(1, ['B'], false, 'DVA-C02')
 
     expect(result.current.scope).toBe('account')
-    expect(new LocalProgressRepository('account').getProgress(1, 'DVA-C02')?.lastPicks).toEqual([
-      'B',
-    ])
-    expect(new LocalProgressRepository('anonymous').getProgress(1, 'DVA-C02')).toBeNull()
+    expect(new BrowserProgressModule('account').getProgress(1, 'DVA-C02')?.lastPicks).toEqual(['B'])
+    expect(new BrowserProgressModule('anonymous').getProgress(1, 'DVA-C02')).toBeNull()
   })
 
   it('clears an existing account mirror owned by another user before exposing account scope', async () => {
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-2' }, expires: '2099-01-01T00:00:00.000Z' }
     const seenScopes: string[] = []
@@ -77,19 +72,17 @@ describe('ProgressScopeProvider', () => {
 
     expect(seenScopes[0]).toBe('anonymous')
     await waitFor(() => expect(result.current.scope).toBe('account'))
-    expect(new LocalProgressRepository('account').getProgress(1, 'DVA-C02')).toBeNull()
+    expect(new BrowserProgressModule('account').getProgress(1, 'DVA-C02')).toBeNull()
 
-    result.current.repository.recordAnswer(2, ['C'], false, 'DVA-C02')
+    result.current.progress.recordAnswer(2, ['C'], false, 'DVA-C02')
 
-    expect(new LocalProgressRepository('account').getProgress(2, 'DVA-C02')?.lastPicks).toEqual([
-      'C',
-    ])
-    expect(localStorage.getItem(ACCOUNT_PROGRESS_OWNER_KEY)).toBe('user-2')
+    expect(new BrowserProgressModule('account').getProgress(2, 'DVA-C02')?.lastPicks).toEqual(['C'])
+    expect(BrowserProgressModule.isAccountOwner('user-2')).toBe(true)
   })
 
   it('preserves account mirror progress when the owner matches the authenticated user', async () => {
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    new LocalProgressRepository('account').recordAnswer(1, ['D'], true, 'DVA-C02')
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    new BrowserProgressModule('account').recordAnswer(1, ['D'], true, 'DVA-C02')
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
 
@@ -97,7 +90,7 @@ describe('ProgressScopeProvider', () => {
 
     await waitFor(() => expect(result.current.scope).toBe('account'))
 
-    expect(result.current.repository.getProgress(1, 'DVA-C02')?.lastPicks).toEqual(['D'])
-    expect(localStorage.getItem(ACCOUNT_PROGRESS_OWNER_KEY)).toBe('user-1')
+    expect(result.current.progress.getProgress(1, 'DVA-C02')?.lastPicks).toEqual(['D'])
+    expect(BrowserProgressModule.isAccountOwner('user-1')).toBe(true)
   })
 })

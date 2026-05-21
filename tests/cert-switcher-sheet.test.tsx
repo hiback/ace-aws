@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CertSwitcherSheet } from '../src/components/domain/cert-switcher-sheet'
 import type { CertCode } from '../src/data/types'
+import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 import { READY_CERTS } from '../src/lib/cert-catalog'
-import { LocalProgressRepository } from '../src/repositories/local-progress-repository'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const defaultReadyCerts = [...READY_CERTS]
@@ -108,10 +108,10 @@ describe('CertSwitcherSheet', () => {
   it('sorts ready preview certs by answered count before upcoming certs', () => {
     const readyCerts = READY_CERTS as unknown as string[]
     readyCerts.splice(0, READY_CERTS.length, 'CLF-C02', 'DVA-C02', 'SAA-C03')
-    const repository = new LocalProgressRepository('anonymous')
-    repository.recordAnswer(1, ['A'], true, 'CLF-C02')
-    repository.recordAnswer(1, ['A'], true, 'SAA-C03' as CertCode)
-    repository.recordAnswer(2, ['A'], true, 'SAA-C03' as CertCode)
+    const progress = new BrowserProgressModule('anonymous')
+    progress.recordAnswer(1, ['A'], true, 'CLF-C02')
+    progress.recordAnswer(1, ['A'], true, 'SAA-C03' as CertCode)
+    progress.recordAnswer(2, ['A'], true, 'SAA-C03' as CertCode)
 
     render(
       <CertSwitcherSheet

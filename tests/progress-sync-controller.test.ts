@@ -208,7 +208,7 @@ afterEach(() => {
 describe('Progress Sync controller', () => {
   it('manual sync flushes dirty account progress, refreshes the current snapshot, and emits success', async () => {
     const ctx = createAdapter()
-    const dirtyProgress = progress(1, { dirtySince: 1_700_000_000_100 })
+    const dirtyProgress = progress(1)
     ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
       revision: 3,
       lastSyncedAt: 1_700_000_000_000,
@@ -232,7 +232,7 @@ describe('Progress Sync controller', () => {
 
   it('before-sign-out sync flushes dirty progress without refreshing the current snapshot or emitting success', async () => {
     const ctx = createAdapter()
-    const dirtyProgress = progress(2, { dirtySince: 1_700_000_000_200 })
+    const dirtyProgress = progress(2)
     ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
       revision: 4,
       lastSyncedAt: 1_700_000_000_000,
@@ -277,7 +277,7 @@ describe('Progress Sync controller', () => {
   it('keeps dirty progress and retries temporary dirty sync failures with backoff', async () => {
     vi.useFakeTimers()
     const ctx = createAdapter()
-    const dirtyProgress = progress(4, { dirtySince: 1_700_000_000_400 })
+    const dirtyProgress = progress(4)
     ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
       revision: 2,
       lastSyncedAt: 1_700_000_000_000,
@@ -308,7 +308,7 @@ describe('Progress Sync controller', () => {
 
   it('recovers revision conflicts by replacing the cert from a fresh snapshot', async () => {
     const ctx = createAdapter()
-    const dirtyProgress = progress(5, { dirtySince: 1_700_000_000_500 })
+    const dirtyProgress = progress(5)
     const snapshotProgress = progress(55)
     ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
       revision: 7,
@@ -340,7 +340,7 @@ describe('Progress Sync controller', () => {
 
   it('does not apply a sync response after the account owner changes', async () => {
     const ctx = createAdapter()
-    const dirtyProgress = progress(6, { dirtySince: 1_700_000_000_600 })
+    const dirtyProgress = progress(6)
     ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
       revision: 3,
       lastSyncedAt: 1_700_000_000_000,
@@ -371,7 +371,7 @@ describe('Progress Sync controller', () => {
 
   it('flushes account dirty progress before importing anonymous progress for that cert', async () => {
     const ctx = createAdapter()
-    const dirtyProgress = progress(7, { dirtySince: 1_700_000_000_700 })
+    const dirtyProgress = progress(7)
     const anonymousProgress = progress(8)
     ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
       revision: 2,
@@ -397,7 +397,7 @@ describe('Progress Sync controller', () => {
 
   it('clears account progress and hides UI when sync auth expires', async () => {
     const ctx = createAdapter()
-    const dirtyProgress = progress(9, { dirtySince: 1_700_000_000_900 })
+    const dirtyProgress = progress(9)
     ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
       revision: 5,
       lastSyncedAt: 1_700_000_000_000,
@@ -429,7 +429,6 @@ describe('Progress Sync controller', () => {
       lastAnsweredAt: null,
       bookmarked: false,
       bookmarkUpdatedAt: 1_700_000_001_000,
-      dirtySince: 1_700_000_001_100,
     })
     ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
       revision: 1,
@@ -546,7 +545,7 @@ describe('Progress Sync controller', () => {
       revision: 2,
       lastSyncedAt: 1_700_000_000_000,
     })
-    ctx.dirty.set('DVA-C02', [progress(12, { dirtySince: 1_700_000_001_200 })])
+    ctx.dirty.set('DVA-C02', [progress(12)])
     const controller = createProgressSyncController(ctx.adapter, {
       authStatus: 'authenticated',
       userId: 'user-1',

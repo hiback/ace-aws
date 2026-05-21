@@ -41,5 +41,4 @@ export interface QuestionProgress {
   lastAnsweredAt: number | null
   bookmarked: boolean
   bookmarkUpdatedAt: number | null
-  dirtySince?: number
 }

@@ -4,7 +4,7 @@ import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingsPage from '../src/app/(tabbed)/settings/page'
 import { ToastHost } from '../src/hooks/use-toast'
-import { LocalProgressRepository } from '../src/repositories/local-progress-repository'
+import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const authMocks = vi.hoisted(() => ({
@@ -257,9 +257,9 @@ describe('SettingsPage account UI', () => {
       user: { id: 'user-1', name: 'Alice', email: null, image: null },
       expires: '2099-01-01T00:00:00.000Z',
     }
-    new LocalProgressRepository('account').recordAnswer(1, ['B'], false, 'DVA-C02')
+    new BrowserProgressModule('account').recordAnswer(1, ['B'], false, 'DVA-C02')
     authMocks.signOut.mockImplementationOnce(() => {
-      expect(new LocalProgressRepository('account').getProgress(1, 'DVA-C02')).toBeNull()
+      expect(new BrowserProgressModule('account').getProgress(1, 'DVA-C02')).toBeNull()
     })
 
     renderSettings()
@@ -268,7 +268,7 @@ describe('SettingsPage account UI', () => {
     await waitFor(() => {
       expect(authMocks.signOut).toHaveBeenCalledWith({ callbackUrl: '/login' })
     })
-    expect(new LocalProgressRepository('account').getProgress(1, 'DVA-C02')).toBeNull()
+    expect(new BrowserProgressModule('account').getProgress(1, 'DVA-C02')).toBeNull()
   })
 
   it('flushes dirty progress before signing out', async () => {

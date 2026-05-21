@@ -7,10 +7,7 @@ import {
   useProgressScope,
 } from '../src/components/providers/progress-scope-provider'
 import { useQuestionProgress } from '../src/hooks/use-answer'
-import {
-  ACCOUNT_PROGRESS_OWNER_KEY,
-  LocalProgressRepository,
-} from '../src/repositories/local-progress-repository'
+import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 
 const authMocks = vi.hoisted(() => ({
   status: 'unauthenticated' as 'authenticated' | 'unauthenticated' | 'loading',
@@ -53,8 +50,8 @@ describe('progress hooks scope', () => {
   })
 
   it('reads anonymous progress when signed out', async () => {
-    new LocalProgressRepository('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
-    new LocalProgressRepository('account').recordAnswer(1, ['B'], false, 'DVA-C02')
+    new BrowserProgressModule('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
+    new BrowserProgressModule('account').recordAnswer(1, ['B'], false, 'DVA-C02')
 
     const { result } = renderHook(() => useQuestionProgress(1, 'DVA-C02'), { wrapper })
 
@@ -64,9 +61,9 @@ describe('progress hooks scope', () => {
   it('reads account progress when signed in', async () => {
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    new LocalProgressRepository('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
-    new LocalProgressRepository('account').recordAnswer(1, ['B'], false, 'DVA-C02')
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    new BrowserProgressModule('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
+    new BrowserProgressModule('account').recordAnswer(1, ['B'], false, 'DVA-C02')
 
     const { result } = renderHook(() => useQuestionProgress(1, 'DVA-C02'), { wrapper })
 
@@ -77,8 +74,8 @@ describe('progress hooks scope', () => {
     const client = createQueryClient()
     const queryKey = ['progress', 'account', 'question', 'DVA-C02', 1]
     client.setQueryData(queryKey, { qid: 1, lastPicks: ['A'] })
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-2' }, expires: '2099-01-01T00:00:00.000Z' }
     const seenAccountPicks: unknown[] = []

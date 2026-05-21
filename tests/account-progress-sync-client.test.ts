@@ -136,7 +136,7 @@ describe('postProgressSync', () => {
     }
   })
 
-  it('posts progress sync payload without client-only dirty metadata and parses canonical response', async () => {
+  it('posts progress sync payload and parses canonical response', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -169,7 +169,6 @@ describe('postProgressSync', () => {
         lastAnsweredAt: Date.parse('2026-01-01T00:00:00.000Z'),
         bookmarked: false,
         bookmarkUpdatedAt: null,
-        dirtySince: 1_700_000_000_000,
       },
     ])
 

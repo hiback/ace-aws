@@ -1,20 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { QuestionProgress } from '../src/data/types'
 import {
-  ACCOUNT_PROGRESS_OWNER_KEY,
-  ACCOUNT_PROGRESS_SYNC_KEY,
-  LocalProgressRepository,
-} from '../src/repositories/local-progress-repository'
+  dismissAnonymousImport,
+  hasDismissedAnonymousImport,
+} from '../src/lib/anonymous-import-dismissal'
+import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 
 const CERT = 'DVA-C02'
 const ANONYMOUS_PROGRESS_KEY = 'ace-aws/progress/v1'
+const ACCOUNT_PROGRESS_OWNER_KEY = 'ace-aws/account-owner/v1'
+const ACCOUNT_PROGRESS_SYNC_KEY = 'ace-aws/account-progress-sync/v1'
 
-describe('LocalProgressRepository', () => {
-  let repo: LocalProgressRepository
+describe('BrowserProgressModule', () => {
+  let progress: BrowserProgressModule
 
   beforeEach(() => {
     localStorage.clear()
-    repo = new LocalProgressRepository('anonymous')
+    progress = new BrowserProgressModule('anonymous')
     vi.useFakeTimers()
     vi.setSystemTime(1_700_000_000_000)
   })
@@ -25,13 +27,13 @@ describe('LocalProgressRepository', () => {
 
   describe('progress records', () => {
     it('returns null when no progress exists for a question', () => {
-      expect(repo.getProgress(1, CERT)).toBeNull()
+      expect(progress.getProgress(1, CERT)).toBeNull()
     })
 
     it('creates progress with sorted last picks and a correct count', () => {
-      repo.recordAnswer(1, ['D', 'B'], true, CERT)
+      progress.recordAnswer(1, ['D', 'B'], true, CERT)
 
-      expect(repo.getProgress(1, CERT)).toMatchObject({
+      expect(progress.getProgress(1, CERT)).toMatchObject({
         qid: 1,
         correctCount: 1,
         wrongCount: 0,
@@ -44,11 +46,11 @@ describe('LocalProgressRepository', () => {
     })
 
     it('increments counts across repeat attempts and keeps the latest answer state', () => {
-      repo.recordAnswer(1, ['A'], false, CERT)
+      progress.recordAnswer(1, ['A'], false, CERT)
       vi.setSystemTime(1_700_000_000_500)
-      repo.recordAnswer(1, ['C'], true, CERT)
+      progress.recordAnswer(1, ['C'], true, CERT)
 
-      expect(repo.getProgress(1, CERT)).toMatchObject({
+      expect(progress.getProgress(1, CERT)).toMatchObject({
         correctCount: 1,
         wrongCount: 1,
         lastPicks: ['C'],
@@ -58,12 +60,12 @@ describe('LocalProgressRepository', () => {
     })
 
     it('lists answered records and excludes bookmark-only records', () => {
-      repo.recordAnswer(1, ['A'], true, CERT)
-      repo.toggleBookmark(2, CERT)
+      progress.recordAnswer(1, ['A'], true, CERT)
+      progress.toggleBookmark(2, CERT)
 
-      expect(repo.listAnswered(CERT).map((p) => p.qid)).toEqual([1])
+      expect(progress.listAnswered(CERT).map((p) => p.qid)).toEqual([1])
       expect(
-        repo
+        progress
           .listProgress(CERT)
           .map((p) => p.qid)
           .sort((a, b) => a - b),
@@ -71,32 +73,32 @@ describe('LocalProgressRepository', () => {
     })
 
     it('lists wrong records by latest answer state', () => {
-      repo.recordAnswer(1, ['A'], false, CERT)
-      repo.recordAnswer(2, ['B'], false, CERT)
-      repo.recordAnswer(2, ['C'], true, CERT)
+      progress.recordAnswer(1, ['A'], false, CERT)
+      progress.recordAnswer(2, ['B'], false, CERT)
+      progress.recordAnswer(2, ['C'], true, CERT)
 
-      const wrong = repo.listWrong(CERT)
+      const wrong = progress.listWrong(CERT)
 
       expect(wrong).toHaveLength(1)
       expect(wrong[0]).toMatchObject({ qid: 1, lastCorrect: false, wrongCount: 1 })
     })
 
     it('isolates progress by cert', () => {
-      repo.recordAnswer(1, ['A'], true, 'DVA-C02')
-      repo.recordAnswer(1, ['B'], false, 'CLF-C02')
+      progress.recordAnswer(1, ['A'], true, 'DVA-C02')
+      progress.recordAnswer(1, ['B'], false, 'CLF-C02')
 
-      expect(repo.getProgress(1, 'DVA-C02')?.lastPicks).toEqual(['A'])
-      expect(repo.getProgress(1, 'CLF-C02')?.lastPicks).toEqual(['B'])
-      expect(repo.listWrong('DVA-C02')).toHaveLength(0)
-      expect(repo.listWrong('CLF-C02')).toHaveLength(1)
+      expect(progress.getProgress(1, 'DVA-C02')?.lastPicks).toEqual(['A'])
+      expect(progress.getProgress(1, 'CLF-C02')?.lastPicks).toEqual(['B'])
+      expect(progress.listWrong('DVA-C02')).toHaveLength(0)
+      expect(progress.listWrong('CLF-C02')).toHaveLength(1)
     })
   })
 
   describe('bookmarks', () => {
     it('creates a bookmark-only progress record', () => {
-      repo.toggleBookmark(5, CERT)
+      progress.toggleBookmark(5, CERT)
 
-      expect(repo.getProgress(5, CERT)).toMatchObject({
+      expect(progress.getProgress(5, CERT)).toMatchObject({
         qid: 5,
         correctCount: 0,
         wrongCount: 0,
@@ -109,13 +111,13 @@ describe('LocalProgressRepository', () => {
     })
 
     it('keeps a tombstone when an unanswered bookmark is removed', () => {
-      repo.toggleBookmark(5, CERT)
+      progress.toggleBookmark(5, CERT)
       vi.setSystemTime(1_700_000_001_000)
-      repo.toggleBookmark(5, CERT)
+      progress.toggleBookmark(5, CERT)
 
-      expect(repo.isBookmarked(5, CERT)).toBe(false)
-      expect(repo.listBookmarks(CERT)).toEqual([])
-      expect(repo.getProgress(5, CERT)).toMatchObject({
+      expect(progress.isBookmarked(5, CERT)).toBe(false)
+      expect(progress.listBookmarks(CERT)).toEqual([])
+      expect(progress.getProgress(5, CERT)).toMatchObject({
         qid: 5,
         bookmarked: false,
         bookmarkUpdatedAt: 1_700_000_001_000,
@@ -124,11 +126,11 @@ describe('LocalProgressRepository', () => {
     })
 
     it('preserves answer counts when toggling bookmarks', () => {
-      repo.recordAnswer(3, ['A'], false, CERT)
-      repo.toggleBookmark(3, CERT)
-      repo.toggleBookmark(3, CERT)
+      progress.recordAnswer(3, ['A'], false, CERT)
+      progress.toggleBookmark(3, CERT)
+      progress.toggleBookmark(3, CERT)
 
-      expect(repo.getProgress(3, CERT)).toMatchObject({
+      expect(progress.getProgress(3, CERT)).toMatchObject({
         wrongCount: 1,
         lastCorrect: false,
         bookmarked: false,
@@ -138,63 +140,65 @@ describe('LocalProgressRepository', () => {
 
   describe('stats', () => {
     it('returns zeros initially', () => {
-      expect(repo.getStats(CERT)).toEqual({ answered: 0, correct: 0, total: 0 })
+      expect(progress.getStats(CERT)).toEqual({ answered: 0, correct: 0, total: 0 })
     })
 
     it('counts answered questions and latest-correct questions', () => {
-      repo.recordAnswer(1, ['A'], true, CERT)
-      repo.recordAnswer(2, ['B'], false, CERT)
-      repo.recordAnswer(3, ['C'], false, CERT)
-      repo.recordAnswer(3, ['D'], true, CERT)
-      repo.toggleBookmark(4, CERT)
+      progress.recordAnswer(1, ['A'], true, CERT)
+      progress.recordAnswer(2, ['B'], false, CERT)
+      progress.recordAnswer(3, ['C'], false, CERT)
+      progress.recordAnswer(3, ['D'], true, CERT)
+      progress.toggleBookmark(4, CERT)
 
-      expect(repo.getStats(CERT)).toEqual({ answered: 3, correct: 2, total: 0 })
+      expect(progress.getStats(CERT)).toEqual({ answered: 3, correct: 2, total: 0 })
     })
   })
 
   describe('storage scopes', () => {
     it('isolates anonymous and account progress keys', () => {
-      repo.recordAnswer(1, ['A'], true, CERT)
+      progress.recordAnswer(1, ['A'], true, CERT)
 
-      const accountRepo = new LocalProgressRepository('account')
-      accountRepo.recordAnswer(1, ['B'], false, CERT)
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['B'], false, CERT)
 
-      expect(repo.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
-      expect(accountRepo.getProgress(1, CERT)?.lastPicks).toEqual(['B'])
+      expect(progress.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
+      expect(accountProgress.getProgress(1, CERT)?.lastPicks).toEqual(['B'])
     })
 
-    it('marks account writes dirty without adding sync metadata to anonymous writes', () => {
-      repo.recordAnswer(1, ['A'], true, CERT)
+    it('tracks account dirty writes without exposing sync metadata to question progress callers', () => {
+      progress.recordAnswer(1, ['A'], true, CERT)
 
-      const accountRepo = new LocalProgressRepository('account')
-      accountRepo.recordAnswer(1, ['B'], false, CERT)
-      accountRepo.toggleBookmark(2, CERT)
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['B'], false, CERT)
+      accountProgress.toggleBookmark(2, CERT)
 
-      expect(repo.getProgress(1, CERT)).not.toHaveProperty('dirtySince')
-      expect(accountRepo.getProgress(1, CERT)).toMatchObject({
+      expect(progress.getProgress(1, CERT)).not.toHaveProperty('dirtySince')
+      expect(accountProgress.getProgress(1, CERT)).toMatchObject({
         qid: 1,
         lastPicks: ['B'],
-        dirtySince: 1_700_000_000_000,
       })
-      expect(accountRepo.getProgress(2, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(1, CERT)).not.toHaveProperty('dirtySince')
+      expect(accountProgress.getProgress(2, CERT)).toMatchObject({
         qid: 2,
         bookmarked: true,
-        dirtySince: 1_700_000_000_000,
       })
+      expect(accountProgress.getProgress(2, CERT)).not.toHaveProperty('dirtySince')
+      expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([1, 2])
     })
 
-    it('preserves the first dirty time across repeated account writes', () => {
-      const accountRepo = new LocalProgressRepository('account')
-      accountRepo.recordAnswer(1, ['A'], false, CERT)
+    it('keeps account progress dirty across repeated account writes', () => {
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
       vi.setSystemTime(1_700_000_005_000)
-      accountRepo.recordAnswer(1, ['C'], true, CERT)
-      accountRepo.toggleBookmark(1, CERT)
+      accountProgress.recordAnswer(1, ['C'], true, CERT)
+      accountProgress.toggleBookmark(1, CERT)
 
-      expect(accountRepo.getProgress(1, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(1, CERT)).toMatchObject({
         lastPicks: ['C'],
         bookmarked: true,
-        dirtySince: 1_700_000_000_000,
       })
+      expect(accountProgress.getProgress(1, CERT)).not.toHaveProperty('dirtySince')
+      expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([1])
     })
 
     it('lists only dirty non-empty account progress for upload', () => {
@@ -254,19 +258,19 @@ describe('LocalProgressRepository', () => {
         }),
       )
 
-      expect(LocalProgressRepository.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([
+      expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([
         2, 3, 4,
       ])
     })
 
     it('applies accepted account sync records as canonical progress and clears their dirty state', () => {
-      const accountRepo = new LocalProgressRepository('account')
-      accountRepo.recordAnswer(1, ['A'], false, CERT)
-      accountRepo.recordAnswer(2, ['B'], false, CERT)
-      const uploaded = LocalProgressRepository.listDirtyAccountProgress(CERT)
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      accountProgress.recordAnswer(2, ['B'], false, CERT)
+      const uploaded = BrowserProgressModule.listDirtyAccountProgress(CERT)
       vi.setSystemTime(1_700_000_020_000)
 
-      LocalProgressRepository.applyAcceptedAccountSync(
+      BrowserProgressModule.applyAcceptedAccountSync(
         'user-1',
         CERT,
         9,
@@ -285,7 +289,7 @@ describe('LocalProgressRepository', () => {
         uploaded,
       )
 
-      expect(accountRepo.getProgress(1, CERT)).toEqual({
+      expect(accountProgress.getProgress(1, CERT)).toEqual({
         qid: 1,
         correctCount: 3,
         wrongCount: 1,
@@ -295,22 +299,23 @@ describe('LocalProgressRepository', () => {
         bookmarked: true,
         bookmarkUpdatedAt: 1_700_000_011_000,
       })
-      expect(accountRepo.getProgress(2, CERT)?.dirtySince).toBe(1_700_000_000_000)
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toEqual({
+      expect(accountProgress.getProgress(2, CERT)).not.toHaveProperty('dirtySince')
+      expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([2])
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toEqual({
         revision: 9,
         lastSyncedAt: 1_700_000_020_000,
       })
     })
 
     it('keeps newer local account changes dirty when an older accepted sync response returns', () => {
-      const accountRepo = new LocalProgressRepository('account')
-      accountRepo.recordAnswer(1, ['A'], false, CERT)
-      const uploaded = LocalProgressRepository.listDirtyAccountProgress(CERT)
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const uploaded = BrowserProgressModule.listDirtyAccountProgress(CERT)
       vi.setSystemTime(1_700_000_005_000)
-      accountRepo.recordAnswer(1, ['C'], true, CERT)
+      accountProgress.recordAnswer(1, ['C'], true, CERT)
       vi.setSystemTime(1_700_000_020_000)
 
-      LocalProgressRepository.applyAcceptedAccountSync(
+      BrowserProgressModule.applyAcceptedAccountSync(
         'user-1',
         CERT,
         9,
@@ -329,30 +334,31 @@ describe('LocalProgressRepository', () => {
         uploaded,
       )
 
-      expect(accountRepo.getProgress(1, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(1, CERT)).toMatchObject({
         correctCount: 1,
         wrongCount: 1,
         lastPicks: ['C'],
         lastCorrect: true,
         lastAnsweredAt: 1_700_000_005_000,
-        dirtySince: 1_700_000_000_000,
       })
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toEqual({
+      expect(accountProgress.getProgress(1, CERT)).not.toHaveProperty('dirtySince')
+      expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([1])
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toEqual({
         revision: 9,
         lastSyncedAt: 1_700_000_020_000,
       })
     })
 
     it('applies a required snapshot while preserving dirty changes made after the upload', () => {
-      const accountRepo = new LocalProgressRepository('account')
-      accountRepo.recordAnswer(1, ['A'], false, CERT)
-      const uploaded = LocalProgressRepository.listDirtyAccountProgress(CERT)
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const uploaded = BrowserProgressModule.listDirtyAccountProgress(CERT)
       vi.setSystemTime(1_700_000_005_000)
-      accountRepo.recordAnswer(1, ['C'], true, CERT)
-      accountRepo.recordAnswer(2, ['B'], true, CERT)
+      accountProgress.recordAnswer(1, ['C'], true, CERT)
+      accountProgress.recordAnswer(2, ['B'], true, CERT)
       vi.setSystemTime(1_700_000_020_000)
 
-      LocalProgressRepository.replaceAccountCertFromSnapshotPreservingDirty(
+      BrowserProgressModule.replaceAccountCertFromSnapshotPreservingDirty(
         'user-1',
         CERT,
         10,
@@ -381,36 +387,37 @@ describe('LocalProgressRepository', () => {
         uploaded,
       )
 
-      expect(accountRepo.getProgress(1, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(1, CERT)).toMatchObject({
         correctCount: 1,
         wrongCount: 1,
         lastPicks: ['C'],
         lastCorrect: true,
-        dirtySince: 1_700_000_000_000,
       })
-      expect(accountRepo.getProgress(2, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(2, CERT)).toMatchObject({
         correctCount: 1,
         lastPicks: ['B'],
-        dirtySince: 1_700_000_005_000,
       })
-      expect(accountRepo.getProgress(3, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(1, CERT)).not.toHaveProperty('dirtySince')
+      expect(accountProgress.getProgress(2, CERT)).not.toHaveProperty('dirtySince')
+      expect(accountProgress.getProgress(3, CERT)).toMatchObject({
         correctCount: 1,
         lastPicks: ['D'],
       })
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toEqual({
+      expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([1, 2])
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toEqual({
         revision: 10,
         lastSyncedAt: 1_700_000_020_000,
       })
     })
 
-    it('survives across new repository instances in the same scope', () => {
-      repo.recordAnswer(1, ['A'], true, CERT)
-      repo.toggleBookmark(2, CERT)
+    it('survives across new module instances in the same scope', () => {
+      progress.recordAnswer(1, ['A'], true, CERT)
+      progress.toggleBookmark(2, CERT)
 
-      const repo2 = new LocalProgressRepository('anonymous')
+      const freshProgress = new BrowserProgressModule('anonymous')
 
-      expect(repo2.getProgress(1, CERT)).not.toBeNull()
-      expect(repo2.isBookmarked(2, CERT)).toBe(true)
+      expect(freshProgress.getProgress(1, CERT)).not.toBeNull()
+      expect(freshProgress.isBookmarked(2, CERT)).toBe(true)
     })
 
     it('keeps anonymous progress on the original persisted storage key', () => {
@@ -436,43 +443,43 @@ describe('LocalProgressRepository', () => {
         }),
       )
 
-      expect(repo.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
+      expect(progress.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
     })
 
     it('clears only the requested progress scope', () => {
-      const accountRepo = new LocalProgressRepository('account')
-      repo.recordAnswer(1, ['A'], true, CERT)
-      accountRepo.recordAnswer(1, ['B'], false, CERT)
+      const accountProgress = new BrowserProgressModule('account')
+      progress.recordAnswer(1, ['A'], true, CERT)
+      accountProgress.recordAnswer(1, ['B'], false, CERT)
 
-      LocalProgressRepository.clearScope('account')
+      BrowserProgressModule.clearScope('account')
 
-      expect(repo.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
-      expect(accountRepo.getProgress(1, CERT)).toBeNull()
+      expect(progress.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
+      expect(accountProgress.getProgress(1, CERT)).toBeNull()
     })
 
     it('removes account owner metadata when clearing account scope', () => {
       localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
 
-      LocalProgressRepository.clearScope('account')
+      BrowserProgressModule.clearScope('account')
 
       expect(localStorage.getItem(ACCOUNT_PROGRESS_OWNER_KEY)).toBeNull()
     })
 
     it('does not treat account mirror progress without revision metadata as a sync baseline', () => {
       localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-      new LocalProgressRepository('account').recordAnswer(1, ['A'], true, CERT)
+      new BrowserProgressModule('account').recordAnswer(1, ['A'], true, CERT)
 
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toBeNull()
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toBeNull()
       expect(localStorage.getItem(ACCOUNT_PROGRESS_SYNC_KEY)).toBeNull()
     })
 
     it('replaces one account cert from a snapshot and stores its sync baseline', () => {
-      const accountRepo = new LocalProgressRepository('account')
-      accountRepo.recordAnswer(1, ['A'], true, CERT)
-      accountRepo.recordAnswer(9, ['B'], false, 'CLF-C02')
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], true, CERT)
+      accountProgress.recordAnswer(9, ['B'], false, 'CLF-C02')
       vi.setSystemTime(1_700_000_010_000)
 
-      LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', CERT, 7, [
+      BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', CERT, 7, [
         {
           qid: 2,
           correctCount: 2,
@@ -485,8 +492,8 @@ describe('LocalProgressRepository', () => {
         },
       ])
 
-      expect(accountRepo.getProgress(1, CERT)).toBeNull()
-      expect(accountRepo.getProgress(2, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(1, CERT)).toBeNull()
+      expect(accountProgress.getProgress(2, CERT)).toMatchObject({
         qid: 2,
         correctCount: 2,
         wrongCount: 1,
@@ -496,23 +503,23 @@ describe('LocalProgressRepository', () => {
         bookmarked: true,
         bookmarkUpdatedAt: 1_700_000_002_000,
       })
-      expect(accountRepo.getProgress(9, 'CLF-C02')?.lastPicks).toEqual(['B'])
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toEqual({
+      expect(accountProgress.getProgress(9, 'CLF-C02')?.lastPicks).toEqual(['B'])
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toEqual({
         revision: 7,
         lastSyncedAt: 1_700_000_010_000,
       })
     })
 
     it('clears account sync metadata with account mirror on owner change while preserving anonymous progress', () => {
-      repo.recordAnswer(1, ['A'], true, CERT)
-      LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', CERT, 3, [])
-      new LocalProgressRepository('account').recordAnswer(2, ['B'], false, CERT)
+      progress.recordAnswer(1, ['A'], true, CERT)
+      BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', CERT, 3, [])
+      new BrowserProgressModule('account').recordAnswer(2, ['B'], false, CERT)
 
-      expect(LocalProgressRepository.prepareAccountOwner('user-2')).toBe(true)
+      expect(BrowserProgressModule.prepareAccountOwner('user-2')).toBe(true)
 
-      expect(repo.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
-      expect(new LocalProgressRepository('account').getProgress(2, CERT)).toBeNull()
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toBeNull()
+      expect(progress.getProgress(1, CERT)?.lastPicks).toEqual(['A'])
+      expect(new BrowserProgressModule('account').getProgress(2, CERT)).toBeNull()
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toBeNull()
       expect(localStorage.getItem(ACCOUNT_PROGRESS_OWNER_KEY)).toBe('user-2')
     })
 
@@ -530,14 +537,12 @@ describe('LocalProgressRepository', () => {
         }),
       )
 
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', 'DVA-C02')).toEqual({
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'DVA-C02')).toEqual({
         revision: 2,
         lastSyncedAt: 1_700_000_000_000,
       })
-      expect(
-        LocalProgressRepository.getAccountSyncBaseline('user-1', 'SAA-C03' as never),
-      ).toBeNull()
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', 'CLF-C02')).toBeNull()
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'SAA-C03' as never)).toBeNull()
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'CLF-C02')).toBeNull()
     })
 
     it('treats invalid cert progress data as empty progress', () => {
@@ -546,8 +551,8 @@ describe('LocalProgressRepository', () => {
         JSON.stringify({ byCert: { 'DVA-C02': {}, 'CLF-C02': { progress: null } } }),
       )
 
-      expect(repo.getProgress(1, 'DVA-C02')).toBeNull()
-      expect(repo.listProgress('CLF-C02')).toEqual([])
+      expect(progress.getProgress(1, 'DVA-C02')).toBeNull()
+      expect(progress.listProgress('CLF-C02')).toEqual([])
     })
 
     it('normalizes malformed question progress entries', () => {
@@ -566,7 +571,7 @@ describe('LocalProgressRepository', () => {
         }),
       )
 
-      expect(repo.getProgress(1, CERT)).toMatchObject({
+      expect(progress.getProgress(1, CERT)).toMatchObject({
         qid: 1,
         correctCount: 0,
         wrongCount: 0,
@@ -576,10 +581,10 @@ describe('LocalProgressRepository', () => {
         bookmarked: false,
         bookmarkUpdatedAt: null,
       })
-      expect(repo.listProgress(CERT).map((p) => p.qid)).toEqual([1])
-      expect(repo.listAnswered(CERT)).toEqual([])
-      expect(repo.listWrong(CERT)).toEqual([])
-      expect(repo.listBookmarks(CERT)).toEqual([])
+      expect(progress.listProgress(CERT).map((p) => p.qid)).toEqual([1])
+      expect(progress.listAnswered(CERT)).toEqual([])
+      expect(progress.listWrong(CERT)).toEqual([])
+      expect(progress.listBookmarks(CERT)).toEqual([])
     })
 
     it('summarizes valid anonymous progress across ready certifications only', () => {
@@ -643,7 +648,7 @@ describe('LocalProgressRepository', () => {
         }),
       )
 
-      expect(LocalProgressRepository.summarizeAnonymousImport()).toEqual({
+      expect(BrowserProgressModule.summarizeAnonymousImport()).toEqual({
         certs: ['CLF-C02', 'DVA-C02'],
         certCount: 2,
         recordCount: 2,
@@ -687,27 +692,27 @@ describe('LocalProgressRepository', () => {
         }),
       )
 
-      expect(LocalProgressRepository.listAnonymousImportProgress('DVA-C02')).toHaveLength(1)
+      expect(BrowserProgressModule.listAnonymousImportProgress('DVA-C02')).toHaveLength(1)
 
-      LocalProgressRepository.clearAnonymousImportCert('DVA-C02')
+      BrowserProgressModule.clearAnonymousImportCert('DVA-C02')
 
-      expect(LocalProgressRepository.listAnonymousImportProgress('DVA-C02')).toEqual([])
+      expect(BrowserProgressModule.listAnonymousImportProgress('DVA-C02')).toEqual([])
       expect(
         JSON.parse(localStorage.getItem(ANONYMOUS_PROGRESS_KEY) ?? '{}').byCert,
       ).toHaveProperty('SAA-C03')
     })
 
-    it('stores anonymous import dismissal per signed-in account', () => {
-      expect(LocalProgressRepository.hasDismissedAnonymousImport('user-1')).toBe(false)
+    it('stores anonymous import dismissal outside the question progress module', () => {
+      expect(hasDismissedAnonymousImport('user-1')).toBe(false)
 
-      LocalProgressRepository.dismissAnonymousImport('user-1')
+      dismissAnonymousImport('user-1')
 
-      expect(LocalProgressRepository.hasDismissedAnonymousImport('user-1')).toBe(true)
-      expect(LocalProgressRepository.hasDismissedAnonymousImport('user-2')).toBe(false)
+      expect(hasDismissedAnonymousImport('user-1')).toBe(true)
+      expect(hasDismissedAnonymousImport('user-2')).toBe(false)
     })
 
     it('does not overwrite later dirty account progress when applying imported accepted records', () => {
-      const accountRepo = new LocalProgressRepository('account')
+      const accountProgress = new BrowserProgressModule('account')
       const uploaded: QuestionProgress[] = [
         {
           qid: 1,
@@ -720,28 +725,29 @@ describe('LocalProgressRepository', () => {
           bookmarkUpdatedAt: null,
         },
       ]
-      accountRepo.recordAnswer(1, ['B'], false, CERT)
+      accountProgress.recordAnswer(1, ['B'], false, CERT)
       vi.setSystemTime(1_700_000_020_000)
 
-      LocalProgressRepository.applyImportedAccountSync('user-1', CERT, 12, uploaded, uploaded)
+      BrowserProgressModule.applyImportedAccountSync('user-1', CERT, 12, uploaded, uploaded)
 
-      expect(accountRepo.getProgress(1, CERT)).toMatchObject({
+      expect(accountProgress.getProgress(1, CERT)).toMatchObject({
         qid: 1,
         correctCount: 0,
         wrongCount: 1,
         lastPicks: ['B'],
         lastCorrect: false,
-        dirtySince: 1_700_000_000_000,
       })
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toEqual({
+      expect(accountProgress.getProgress(1, CERT)).not.toHaveProperty('dirtySince')
+      expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([1])
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toEqual({
         revision: 12,
         lastSyncedAt: 1_700_000_020_000,
       })
     })
 
     it('applies imported accepted records over clean account baseline progress', () => {
-      const accountRepo = new LocalProgressRepository('account')
-      LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', CERT, 7, [
+      const accountProgress = new BrowserProgressModule('account')
+      BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', CERT, 7, [
         {
           qid: 1,
           correctCount: 0,
@@ -767,7 +773,7 @@ describe('LocalProgressRepository', () => {
       ]
       vi.setSystemTime(1_700_000_020_000)
 
-      LocalProgressRepository.applyImportedAccountSync(
+      BrowserProgressModule.applyImportedAccountSync(
         'user-1',
         CERT,
         13,
@@ -786,7 +792,7 @@ describe('LocalProgressRepository', () => {
         uploaded,
       )
 
-      expect(accountRepo.getProgress(1, CERT)).toEqual({
+      expect(accountProgress.getProgress(1, CERT)).toEqual({
         qid: 1,
         correctCount: 2,
         wrongCount: 1,
@@ -796,7 +802,7 @@ describe('LocalProgressRepository', () => {
         bookmarked: true,
         bookmarkUpdatedAt: 1_700_000_003_000,
       })
-      expect(LocalProgressRepository.getAccountSyncBaseline('user-1', CERT)).toEqual({
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toEqual({
         revision: 13,
         lastSyncedAt: 1_700_000_020_000,
       })

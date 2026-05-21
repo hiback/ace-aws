@@ -8,10 +8,8 @@ import {
 } from '../src/components/providers/account-progress-sync-provider'
 import { ProgressScopeProvider } from '../src/components/providers/progress-scope-provider'
 import type { CertCode } from '../src/data/types'
-import {
-  ACCOUNT_PROGRESS_OWNER_KEY,
-  LocalProgressRepository,
-} from '../src/repositories/local-progress-repository'
+import { hasDismissedAnonymousImport } from '../src/lib/anonymous-import-dismissal'
+import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const authMocks = vi.hoisted(() => ({
@@ -118,8 +116,8 @@ afterEach(() => {
 describe('AccountProgressSyncProvider', () => {
   it('keeps the controller usable through React StrictMode effect replay', async () => {
     authenticate('user-1')
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     vi.mocked(fetch).mockReset().mockResolvedValue(syncResponse('DVA-C02', 1))
     function SyncButton() {
       const { syncNow } = useAccountProgressSync()
@@ -139,7 +137,7 @@ describe('AccountProgressSyncProvider', () => {
 
   it('renders the anonymous import prompt instead of children', async () => {
     authenticate('user-1')
-    new LocalProgressRepository('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
+    new BrowserProgressModule('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
 
     renderGateWithProgressScope(<div>Choose certification</div>)
 
@@ -178,8 +176,8 @@ describe('AccountProgressSyncProvider', () => {
   it('maps syncNow to manual sync, including the current cert snapshot refresh', async () => {
     authenticate('user-1')
     usePrefsStore.setState({ currentCert: 'DVA-C02' })
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
     vi.mocked(fetch)
       .mockReset()
       .mockResolvedValueOnce(syncResponse('DVA-C02', 3))
@@ -210,9 +208,9 @@ describe('AccountProgressSyncProvider', () => {
 
   it('maps syncBeforeSignOut to a dirty flush without a snapshot refresh', async () => {
     authenticate('user-1')
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
-    new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
+    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     vi.mocked(fetch).mockReset().mockResolvedValue(syncResponse('DVA-C02', 4))
     function SignOutSyncButton() {
       const { syncBeforeSignOut } = useAccountProgressSync()
@@ -233,9 +231,9 @@ describe('AccountProgressSyncProvider', () => {
 
   it('wires browser online events to dirty account progress flushing', async () => {
     authenticate('user-1')
-    localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, 'user-1')
-    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'CLF-C02', 3, [])
-    new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'CLF-C02')
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', 'CLF-C02', 3, [])
+    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'CLF-C02')
     vi.mocked(fetch).mockReset().mockResolvedValue(syncResponse('CLF-C02', 4))
 
     renderGateWithProgressScope(<div>Ready content</div>)
@@ -248,8 +246,8 @@ describe('AccountProgressSyncProvider', () => {
   it('gate sign-out discards account sync state and signs out', async () => {
     authenticate('user-1')
     usePrefsStore.setState({ currentCert: 'DVA-C02' })
-    LocalProgressRepository.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
-    new LocalProgressRepository('account').recordAnswer(1, ['A'], true, 'DVA-C02')
+    BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
+    new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     localStorage.removeItem('ace-aws/account-progress-sync/v1')
     vi.mocked(fetch).mockReset().mockRejectedValueOnce(new Error('offline'))
 
@@ -259,21 +257,21 @@ describe('AccountProgressSyncProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
 
     expect(screen.queryByText('App content')).toBeNull()
-    expect(new LocalProgressRepository('account').getProgress(1, 'DVA-C02')).toBeNull()
-    expect(LocalProgressRepository.getAccountSyncBaseline('user-1', 'DVA-C02')).toBeNull()
+    expect(new BrowserProgressModule('account').getProgress(1, 'DVA-C02')).toBeNull()
+    expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'DVA-C02')).toBeNull()
     expect(authMocks.signOut).toHaveBeenCalledWith({ callbackUrl: '/login' })
   })
 
   it('dismisses the anonymous import prompt through the provider controls', async () => {
     authenticate('user-1')
-    new LocalProgressRepository('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
+    new BrowserProgressModule('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
 
     renderGateWithProgressScope(<div>Choose certification</div>)
 
     await waitFor(() => expect(screen.getByText('Import Anonymous Progress')).not.toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Skip import' }))
 
-    expect(LocalProgressRepository.hasDismissedAnonymousImport('user-1')).toBe(true)
+    expect(hasDismissedAnonymousImport('user-1')).toBe(true)
     await waitFor(() => expect(screen.getByText('Choose certification')).not.toBeNull())
   })
 })

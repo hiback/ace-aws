@@ -7,7 +7,7 @@ vi.mock('../src/data/loaders', () => ({
 
 import { loadBank } from '../src/data/loaders'
 import { findNextUnansweredQid } from '../src/hooks/use-answer'
-import { progressRepo } from '../src/repositories/local-progress-repository'
+import { browserProgress } from '../src/lib/browser-progress-module'
 
 const CERT = 'DVA-C02'
 
@@ -28,24 +28,24 @@ describe('findNextUnansweredQid', () => {
   })
 
   it('skips already answered questions', async () => {
-    progressRepo.recordAnswer(2, ['A'], true, CERT)
-    progressRepo.recordAnswer(3, ['A'], true, CERT)
+    browserProgress.recordAnswer(2, ['A'], true, CERT)
+    browserProgress.recordAnswer(3, ['A'], true, CERT)
     expect(await findNextUnansweredQid(1, CERT)).toBe(4)
   })
 
   it('only skips answers for the requested cert', async () => {
-    progressRepo.recordAnswer(1, ['A'], true, 'DVA-C02')
+    browserProgress.recordAnswer(1, ['A'], true, 'DVA-C02')
     expect(await findNextUnansweredQid(0, 'CLF-C02')).toBe(1)
   })
 
   it('wraps around to find earlier unanswered when at end', async () => {
-    progressRepo.recordAnswer(4, ['A'], true, CERT)
-    progressRepo.recordAnswer(5, ['A'], true, CERT)
+    browserProgress.recordAnswer(4, ['A'], true, CERT)
+    browserProgress.recordAnswer(5, ['A'], true, CERT)
     expect(await findNextUnansweredQid(3, CERT)).toBe(1)
   })
 
   it('returns null when all questions answered', async () => {
-    for (let i = 1; i <= 5; i++) progressRepo.recordAnswer(i, ['A'], true, CERT)
+    for (let i = 1; i <= 5; i++) browserProgress.recordAnswer(i, ['A'], true, CERT)
     expect(await findNextUnansweredQid(0, CERT)).toBeNull()
   })
 
@@ -72,8 +72,8 @@ describe('findNextUnansweredQid', () => {
     now.mockReturnValueOnce(1000).mockReturnValueOnce(2000)
 
     try {
-      progressRepo.recordAnswer(1, ['A'], false, CERT)
-      progressRepo.recordAnswer(2, ['A'], false, CERT)
+      browserProgress.recordAnswer(1, ['A'], false, CERT)
+      browserProgress.recordAnswer(2, ['A'], false, CERT)
     } finally {
       now.mockRestore()
     }
@@ -83,8 +83,8 @@ describe('findNextUnansweredQid', () => {
 
   it('falls back to the live bookmark-list order when set is missing', async () => {
     const { findNextListReviewQid } = await import('../src/hooks/use-answer')
-    progressRepo.toggleBookmark(1, CERT)
-    progressRepo.toggleBookmark(3, CERT)
+    browserProgress.toggleBookmark(1, CERT)
+    browserProgress.toggleBookmark(3, CERT)
 
     expect(await findNextListReviewQid(1, CERT, '/list/bookmarks', null)).toBe(3)
   })

@@ -15,7 +15,7 @@ import PracticeCompletePage from '../src/app/(immersive)/practice/[cert]/complet
 import BookmarksPage from '../src/app/(tabbed)/list/bookmarks/page'
 import type { CertCode, QuestionProgress } from '../src/data/types'
 import { findNextListReviewQid, findNextUnansweredQid } from '../src/hooks/use-answer'
-import { progressRepo } from '../src/repositories/local-progress-repository'
+import { browserProgress } from '../src/lib/browser-progress-module'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const mocks = vi.hoisted(() => ({
@@ -262,8 +262,8 @@ describe('progress page compatibility', () => {
     const { useRecordAnswer } =
       await vi.importActual<typeof import('../src/hooks/use-answer')>('../src/hooks/use-answer')
     const cert: CertCode = 'DVA-C02'
-    progressRepo.recordAnswer(1, ['A'], true, cert)
-    const oldProgress = progressRepo.getProgress(1, cert) as QuestionProgress
+    browserProgress.recordAnswer(1, ['A'], true, cert)
+    const oldProgress = browserProgress.getProgress(1, cert) as QuestionProgress
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     queryClient.setQueryData(['progress', 'question', cert, 1], oldProgress)
     const wrapper = ({ children }: { children: React.ReactNode }) => (

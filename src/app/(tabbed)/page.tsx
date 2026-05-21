@@ -10,7 +10,7 @@ import { QuickActionCard } from '@/components/domain/quick-action-card'
 import { Button } from '@/components/primitives/button'
 import { Spinner } from '@/components/primitives/spinner'
 import { useAccountPreferences } from '@/components/providers/account-preferences-provider'
-import { useProgressRepository } from '@/components/providers/progress-scope-provider'
+import { useProgressModule } from '@/components/providers/progress-scope-provider'
 import type { CertCode } from '@/data/types'
 import { findNextUnansweredQid } from '@/hooks/use-answer'
 import { useBookmarksList, useProgressStats, useWrongList } from '@/hooks/use-progress-stats'
@@ -57,7 +57,7 @@ function HomeContent({ cert }: { cert: CertCode }) {
   const t = useT()
   const { data: session, status } = useSession()
   const accountPreferences = useAccountPreferences()
-  const progressRepository = useProgressRepository()
+  const progress = useProgressModule()
   const setCurrentCert = usePrefsStore((s) => s.setCurrentCert)
   const stats = useProgressStats(cert)
   const wrong = useWrongList(cert)
@@ -74,7 +74,7 @@ function HomeContent({ cert }: { cert: CertCode }) {
 
   const handleContinue = () => {
     startTransition(async () => {
-      const next = await findNextUnansweredQid(0, cert, progressRepository)
+      const next = await findNextUnansweredQid(0, cert, progress)
       if (next === null) {
         router.push('/list/wrong') // empty wrong list will then show all-answered hint
       } else {

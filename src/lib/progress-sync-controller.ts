@@ -1,9 +1,6 @@
 import type { CertCode, ProgressScope, QuestionProgress } from '@/data/types'
 import type { ProgressSnapshot, ProgressSyncResult } from '@/lib/account-progress-sync-client'
-import type {
-  AccountSyncBaseline,
-  AnonymousImportSummary,
-} from '@/repositories/local-progress-repository'
+import type { AccountSyncBaseline, AnonymousImportSummary } from '@/lib/browser-progress-module'
 
 type GateState = 'syncing' | 'ready' | 'error'
 type FlushCertResult = 'clean' | 'synced' | 'temporary-failure' | 'fatal-failure' | 'auth-signout'

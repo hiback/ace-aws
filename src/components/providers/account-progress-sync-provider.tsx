@@ -21,6 +21,12 @@ import {
   ProgressSyncClientError,
   postProgressSync,
 } from '@/lib/account-progress-sync-client'
+import {
+  clearAnonymousImportDismissal,
+  dismissAnonymousImport,
+  hasDismissedAnonymousImport,
+} from '@/lib/anonymous-import-dismissal'
+import { BrowserProgressModule } from '@/lib/browser-progress-module'
 import { READY_CERTS } from '@/lib/cert-catalog'
 import {
   type AccountProgressSyncResult,
@@ -34,7 +40,6 @@ import {
   type ProgressSyncNotice,
 } from '@/lib/progress-sync-controller'
 import { storeSyncExpiredLoginMessage } from '@/lib/sync-login-message'
-import { LocalProgressRepository } from '@/repositories/local-progress-repository'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 export type {
@@ -79,7 +84,7 @@ const AccountProgressSyncContext = createContext<AccountProgressSyncValue>({
 
 function getLastSyncedAt(userId: string): number | null {
   const values = READY_CERTS.map(
-    (cert) => LocalProgressRepository.getAccountSyncBaseline(userId, cert)?.lastSyncedAt ?? null,
+    (cert) => BrowserProgressModule.getAccountSyncBaseline(userId, cert)?.lastSyncedAt ?? null,
   ).filter((value): value is number => value !== null)
   return values.length === 0 ? null : Math.max(...values)
 }
@@ -134,14 +139,14 @@ function createProviderAdapter(
   return {
     readyCerts: READY_CERTS,
     accountProgress: {
-      isOwner: (userId) => LocalProgressRepository.isAccountOwner(userId),
-      clearScope: () => LocalProgressRepository.clearScope('account'),
-      listDirty: (cert) => LocalProgressRepository.listDirtyAccountProgress(cert),
-      clearCert: (userId, cert) => LocalProgressRepository.clearAccountCert(userId, cert),
+      isOwner: (userId) => BrowserProgressModule.isAccountOwner(userId),
+      clearScope: () => BrowserProgressModule.clearScope('account'),
+      listDirty: (cert) => BrowserProgressModule.listDirtyAccountProgress(cert),
+      clearCert: (userId, cert) => BrowserProgressModule.clearAccountCert(userId, cert),
       replaceCertFromSnapshot: (userId, cert, revision, progress) =>
-        LocalProgressRepository.replaceAccountCertFromSnapshot(userId, cert, revision, progress),
+        BrowserProgressModule.replaceAccountCertFromSnapshot(userId, cert, revision, progress),
       refreshCertFromSnapshotKeepingDirty: (userId, cert, revision, progress) =>
-        LocalProgressRepository.replaceAccountCertFromSnapshotPreservingDirty(
+        BrowserProgressModule.replaceAccountCertFromSnapshotPreservingDirty(
           userId,
           cert,
           revision,
@@ -150,7 +155,7 @@ function createProviderAdapter(
           true,
         ),
       recoverCertFromSnapshotAfterSync: (userId, cert, revision, progress, uploaded) =>
-        LocalProgressRepository.replaceAccountCertFromSnapshotPreservingDirty(
+        BrowserProgressModule.replaceAccountCertFromSnapshotPreservingDirty(
           userId,
           cert,
           revision,
@@ -158,28 +163,15 @@ function createProviderAdapter(
           uploaded,
         ),
       applyAcceptedSync: (userId, cert, revision, accepted, uploaded) =>
-        LocalProgressRepository.applyAcceptedAccountSync(
-          userId,
-          cert,
-          revision,
-          accepted,
-          uploaded,
-        ),
+        BrowserProgressModule.applyAcceptedAccountSync(userId, cert, revision, accepted, uploaded),
       applyImportedSync: (userId, cert, revision, accepted, uploaded) =>
-        LocalProgressRepository.applyImportedAccountSync(
-          userId,
-          cert,
-          revision,
-          accepted,
-          uploaded,
-        ),
+        BrowserProgressModule.applyImportedAccountSync(userId, cert, revision, accepted, uploaded),
     },
     progressRevision: {
-      getBaseline: (userId, cert) => LocalProgressRepository.getAccountSyncBaseline(userId, cert),
-      clearBaseline: (userId, cert) =>
-        LocalProgressRepository.clearAccountSyncBaseline(userId, cert),
+      getBaseline: (userId, cert) => BrowserProgressModule.getAccountSyncBaseline(userId, cert),
+      clearBaseline: (userId, cert) => BrowserProgressModule.clearAccountSyncBaseline(userId, cert),
       markChecked: (userId, cert, revision) =>
-        LocalProgressRepository.markAccountSyncBaselineChecked(userId, cert, revision),
+        BrowserProgressModule.markAccountSyncBaselineChecked(userId, cert, revision),
       getLastSyncedAt,
     },
     progressSync: {
@@ -211,13 +203,12 @@ function createProviderAdapter(
       },
     },
     anonymousProgress: {
-      summarizeImport: () => LocalProgressRepository.summarizeAnonymousImport(),
-      listImportProgress: (cert) => LocalProgressRepository.listAnonymousImportProgress(cert),
-      clearImportCert: (cert) => LocalProgressRepository.clearAnonymousImportCert(cert),
-      hasDismissedImport: (userId) => LocalProgressRepository.hasDismissedAnonymousImport(userId),
-      dismissImport: (userId) => LocalProgressRepository.dismissAnonymousImport(userId),
-      clearImportDismissal: (userId) =>
-        LocalProgressRepository.clearAnonymousImportDismissal(userId),
+      summarizeImport: () => BrowserProgressModule.summarizeAnonymousImport(),
+      listImportProgress: (cert) => BrowserProgressModule.listAnonymousImportProgress(cert),
+      clearImportCert: (cert) => BrowserProgressModule.clearAnonymousImportCert(cert),
+      hasDismissedImport: hasDismissedAnonymousImport,
+      dismissImport: dismissAnonymousImport,
+      clearImportDismissal: clearAnonymousImportDismissal,
     },
     auth: {
       storeExpiredLoginMessage: storeSyncExpiredLoginMessage,

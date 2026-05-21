@@ -19,7 +19,7 @@ const accountPreferenceMocks = vi.hoisted(() => ({
 }))
 
 const progressScopeMocks = vi.hoisted(() => ({
-  repository: {
+  progress: {
     getProgress: vi.fn(),
     recordAnswer: vi.fn(),
     listProgress: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@/components/providers/account-preferences-provider', () => ({
 }))
 
 vi.mock('@/components/providers/progress-scope-provider', () => ({
-  useProgressRepository: () => progressScopeMocks.repository,
+  useProgressModule: () => progressScopeMocks.progress,
 }))
 
 vi.mock('@/hooks/use-answer', () => ({
@@ -72,7 +72,7 @@ beforeEach(() => {
   accountPreferenceMocks.saveCurrentCert.mockImplementation(
     async (cert: 'DVA-C02' | 'CLF-C02') => cert,
   )
-  progressScopeMocks.repository.getStats.mockReturnValue({ answered: 0, correct: 0, total: 0 })
+  progressScopeMocks.progress.getStats.mockReturnValue({ answered: 0, correct: 0, total: 0 })
   vi.mocked(findNextUnansweredQid).mockReset()
   vi.mocked(findNextUnansweredQid).mockResolvedValue(3)
   usePrefsStore.setState({ locale: 'en', theme: 'light', currentCert: 'DVA-C02' })
@@ -188,17 +188,13 @@ describe('HomePage cert switcher', () => {
 })
 
 describe('HomePage continue practice', () => {
-  it('finds the next unanswered question with the active progress repository', async () => {
+  it('finds the next unanswered question with the active progress module', async () => {
     render(<HomePage />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     await waitFor(() => {
-      expect(findNextUnansweredQid).toHaveBeenCalledWith(
-        0,
-        'DVA-C02',
-        progressScopeMocks.repository,
-      )
+      expect(findNextUnansweredQid).toHaveBeenCalledWith(0, 'DVA-C02', progressScopeMocks.progress)
       expect(routerMocks.push).toHaveBeenCalledWith('/practice/dva-c02/3?from=%2F')
     })
   })
@@ -210,11 +206,7 @@ describe('HomePage continue practice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     await waitFor(() => {
-      expect(findNextUnansweredQid).toHaveBeenCalledWith(
-        0,
-        'DVA-C02',
-        progressScopeMocks.repository,
-      )
+      expect(findNextUnansweredQid).toHaveBeenCalledWith(0, 'DVA-C02', progressScopeMocks.progress)
       expect(routerMocks.push).toHaveBeenCalledWith('/list/wrong')
     })
   })

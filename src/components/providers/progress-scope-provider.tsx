@@ -4,19 +4,21 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ProgressScope } from '@/data/types'
-import { LocalProgressRepository } from '@/repositories/local-progress-repository'
-import type { ProgressRepository } from '@/repositories/progress-repository'
+import {
+  BrowserProgressModule,
+  type BrowserQuestionProgressModule,
+} from '@/lib/browser-progress-module'
 
 interface ProgressScopeValue {
   scope: ProgressScope
-  repository: ProgressRepository
+  progress: BrowserQuestionProgressModule
 }
 
-const fallbackRepository = new LocalProgressRepository('anonymous')
+const fallbackProgress = new BrowserProgressModule('anonymous')
 
 const ProgressScopeContext = createContext<ProgressScopeValue>({
   scope: 'anonymous',
-  repository: fallbackRepository,
+  progress: fallbackProgress,
 })
 
 export function ProgressScopeProvider({ children }: { children: React.ReactNode }) {
@@ -28,7 +30,7 @@ export function ProgressScopeProvider({ children }: { children: React.ReactNode 
     status === 'authenticated' && userId !== null && preparedOwnerId === userId
       ? 'account'
       : 'anonymous'
-  const repository = useMemo(() => new LocalProgressRepository(scope), [scope])
+  const progress = useMemo(() => new BrowserProgressModule(scope), [scope])
 
   useEffect(() => {
     if (status !== 'authenticated' || userId === null) {
@@ -39,7 +41,7 @@ export function ProgressScopeProvider({ children }: { children: React.ReactNode 
       return
     }
 
-    const ownerChanged = LocalProgressRepository.prepareAccountOwner(userId)
+    const ownerChanged = BrowserProgressModule.prepareAccountOwner(userId)
     if (ownerChanged) {
       queryClient.removeQueries({ queryKey: ['progress', 'account'] })
     }
@@ -47,7 +49,7 @@ export function ProgressScopeProvider({ children }: { children: React.ReactNode 
   }, [queryClient, status, userId])
 
   return (
-    <ProgressScopeContext.Provider value={{ scope, repository }}>
+    <ProgressScopeContext.Provider value={{ scope, progress }}>
       {children}
     </ProgressScopeContext.Provider>
   )
@@ -57,6 +59,6 @@ export function useProgressScope(): ProgressScopeValue {
   return useContext(ProgressScopeContext)
 }
 
-export function useProgressRepository(): ProgressRepository {
-  return useProgressScope().repository
+export function useProgressModule(): BrowserQuestionProgressModule {
+  return useProgressScope().progress
 }

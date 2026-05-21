@@ -11,8 +11,8 @@ import { useAccountProgressSync } from '@/components/providers/account-progress-
 import type { Locale, Theme } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import { useToast } from '@/hooks/use-toast'
+import { clearProgressScope } from '@/lib/browser-progress-module'
 import { resetOnboarding } from '@/lib/onboarding-client'
-import { clearProgressScope } from '@/repositories/local-progress-repository'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 /** Theme icon — circle with the left half filled and a vertical divider.

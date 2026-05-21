@@ -2,7 +2,7 @@
 import { ArrowRight, Check, ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { BottomSheet } from '@/components/primitives/bottom-sheet'
-import { useProgressRepository } from '@/components/providers/progress-scope-provider'
+import { useProgressModule } from '@/components/providers/progress-scope-provider'
 import type { CertCode } from '@/data/types'
 import { useT } from '@/hooks/use-t'
 import {
@@ -46,7 +46,7 @@ export function CertSwitcherSheet({
   errorMessage = null,
 }: CertSwitcherSheetProps) {
   const t = useT()
-  const progressRepository = useProgressRepository()
+  const progress = useProgressModule()
 
   if (!open) return null
 
@@ -64,7 +64,7 @@ export function CertSwitcherSheet({
         cert,
         index,
         ready,
-        answered: ready ? progressRepository.getStats(code).answered : 0,
+        answered: ready ? progress.getStats(code).answered : 0,
       }
     })
     .sort((a, b) => {

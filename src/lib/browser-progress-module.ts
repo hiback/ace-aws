@@ -1,15 +1,31 @@
 import type { CertCode, Letter, ProgressScope, QuestionProgress } from '@/data/types'
 import { isReadyCertCode, READY_CERTS } from '@/lib/cert-catalog'
-import type { ProgressRepository } from './progress-repository'
 
 const PROGRESS_KEYS: Record<ProgressScope, string> = {
   anonymous: 'ace-aws/progress/v1',
   account: 'ace-aws/account-progress/v1',
 }
 
-export const ACCOUNT_PROGRESS_OWNER_KEY = 'ace-aws/account-owner/v1'
-export const ACCOUNT_PROGRESS_SYNC_KEY = 'ace-aws/account-progress-sync/v1'
-export const ANONYMOUS_IMPORT_DISMISSAL_KEY = 'ace-aws/anonymous-import-dismissal/v1'
+const ACCOUNT_PROGRESS_OWNER_KEY = 'ace-aws/account-owner/v1'
+const ACCOUNT_PROGRESS_SYNC_KEY = 'ace-aws/account-progress-sync/v1'
+
+interface StoredQuestionProgress extends QuestionProgress {
+  dirtySince?: number
+}
+
+export interface BrowserQuestionProgressModule {
+  getProgress(qid: number, cert: CertCode): QuestionProgress | null
+  recordAnswer(qid: number, picks: Letter[], correct: boolean, cert: CertCode): void
+  listProgress(cert: CertCode): QuestionProgress[]
+  listAnswered(cert: CertCode): QuestionProgress[]
+  listWrong(cert: CertCode): QuestionProgress[]
+
+  toggleBookmark(qid: number, cert: CertCode): void
+  isBookmarked(qid: number, cert: CertCode): boolean
+  listBookmarks(cert: CertCode): number[]
+
+  getStats(cert: CertCode): { answered: number; correct: number; total: number }
+}
 
 export interface AccountSyncBaseline {
   revision: number
@@ -31,7 +47,7 @@ export interface AnonymousImportSummary {
 }
 
 interface CertProgressData {
-  progress: Record<number, QuestionProgress>
+  progress: Record<number, StoredQuestionProgress>
 }
 
 const EMPTY_CERT_PROGRESS: CertProgressData = { progress: {} }
@@ -87,26 +103,11 @@ function writeAccountSyncData(data: AccountSyncData): void {
   window.localStorage.setItem(ACCOUNT_PROGRESS_SYNC_KEY, JSON.stringify(data))
 }
 
-function readAnonymousImportDismissals(): Record<string, true> {
-  if (typeof window === 'undefined') return {}
-  const raw = window.localStorage.getItem(ANONYMOUS_IMPORT_DISMISSAL_KEY)
-  if (!raw) return {}
-  try {
-    const value = JSON.parse(raw) as unknown
-    if (!value || typeof value !== 'object') return {}
-    return Object.fromEntries(
-      Object.entries(value).filter(([, dismissed]) => dismissed === true),
-    ) as Record<string, true>
-  } catch {
-    return {}
-  }
-}
-
 function emptyCertProgress(): CertProgressData {
   return { progress: {} }
 }
 
-function createProgress(qid: number): QuestionProgress {
+function createProgress(qid: number): StoredQuestionProgress {
   return {
     qid,
     correctCount: 0,
@@ -116,6 +117,19 @@ function createProgress(qid: number): QuestionProgress {
     lastAnsweredAt: null,
     bookmarked: false,
     bookmarkUpdatedAt: null,
+  }
+}
+
+function toQuestionProgress(progress: QuestionProgress): QuestionProgress {
+  return {
+    qid: progress.qid,
+    correctCount: progress.correctCount,
+    wrongCount: progress.wrongCount,
+    lastPicks: [...progress.lastPicks],
+    lastCorrect: progress.lastCorrect,
+    lastAnsweredAt: progress.lastAnsweredAt,
+    bookmarked: progress.bookmarked,
+    bookmarkUpdatedAt: progress.bookmarkUpdatedAt,
   }
 }
 
@@ -144,7 +158,7 @@ function sameCanonicalProgress(a: QuestionProgress | undefined, b: QuestionProgr
   )
 }
 
-function normalizeProgress(qid: number, value: Record<string, unknown>): QuestionProgress {
+function normalizeProgress(qid: number, value: Record<string, unknown>): StoredQuestionProgress {
   return {
     qid,
     correctCount: typeof value.correctCount === 'number' ? value.correctCount : 0,
@@ -158,7 +172,7 @@ function normalizeProgress(qid: number, value: Record<string, unknown>): Questio
   }
 }
 
-function normalizeProgressMap(value: unknown): Record<number, QuestionProgress> {
+function normalizeProgressMap(value: unknown): Record<number, StoredQuestionProgress> {
   if (!value || typeof value !== 'object') return {}
 
   return Object.fromEntries(
@@ -197,7 +211,7 @@ function normalizeProgressData(value: unknown): ProgressData {
   }
 }
 
-export class LocalProgressRepository implements ProgressRepository {
+export class BrowserProgressModule implements BrowserQuestionProgressModule {
   private readonly storageKey: string
   private readonly scope: ProgressScope
 
@@ -230,7 +244,7 @@ export class LocalProgressRepository implements ProgressRepository {
     revision: number,
     progress: QuestionProgress[],
   ): void {
-    const repo = new LocalProgressRepository('account')
+    const repo = new BrowserProgressModule('account')
     const data = repo.read()
     data.byCert[cert] = {
       progress: Object.fromEntries(
@@ -259,15 +273,17 @@ export class LocalProgressRepository implements ProgressRepository {
     preserveUploaded = false,
   ): void {
     const uploadedByQid = new Map(uploaded.map((entry) => [entry.qid, entry]))
-    const laterDirty = LocalProgressRepository.listDirtyAccountProgress(cert).filter((current) => {
-      const uploadedEntry = uploadedByQid.get(current.qid)
-      return preserveUploaded || !uploadedEntry || !sameCanonicalProgress(current, uploadedEntry)
-    })
+    const laterDirty = BrowserProgressModule.listStoredDirtyAccountProgress(cert).filter(
+      (current) => {
+        const uploadedEntry = uploadedByQid.get(current.qid)
+        return preserveUploaded || !uploadedEntry || !sameCanonicalProgress(current, uploadedEntry)
+      },
+    )
 
-    LocalProgressRepository.replaceAccountCertFromSnapshot(userId, cert, revision, progress)
+    BrowserProgressModule.replaceAccountCertFromSnapshot(userId, cert, revision, progress)
 
     if (laterDirty.length === 0) return
-    const repo = new LocalProgressRepository('account')
+    const repo = new BrowserProgressModule('account')
     const data = repo.read()
     const certData = repo.certData(data, cert)
     for (const entry of laterDirty) {
@@ -277,12 +293,12 @@ export class LocalProgressRepository implements ProgressRepository {
   }
 
   static clearAccountCert(userId: string, cert: CertCode): void {
-    const repo = new LocalProgressRepository('account')
+    const repo = new BrowserProgressModule('account')
     const data = repo.read()
     delete data.byCert[cert]
     repo.write(data)
 
-    LocalProgressRepository.clearAccountSyncBaseline(userId, cert)
+    BrowserProgressModule.clearAccountSyncBaseline(userId, cert)
   }
 
   static clearAccountSyncBaseline(userId: string, cert: CertCode): void {
@@ -303,13 +319,17 @@ export class LocalProgressRepository implements ProgressRepository {
   }
 
   static listDirtyAccountProgress(cert: CertCode): QuestionProgress[] {
-    return new LocalProgressRepository('account')
-      .listProgress(cert)
-      .filter((progress) => progress.dirtySince !== undefined && hasProgressContent(progress))
+    return BrowserProgressModule.listStoredDirtyAccountProgress(cert).map(toQuestionProgress)
+  }
+
+  private static listStoredDirtyAccountProgress(cert: CertCode): StoredQuestionProgress[] {
+    return Object.values(new BrowserProgressModule('account').readCert(cert).progress).filter(
+      (progress) => progress.dirtySince !== undefined && hasProgressContent(progress),
+    )
   }
 
   static summarizeAnonymousImport(): AnonymousImportSummary {
-    const repo = new LocalProgressRepository('anonymous')
+    const repo = new BrowserProgressModule('anonymous')
     const certs: CertCode[] = []
     let recordCount = 0
 
@@ -324,34 +344,15 @@ export class LocalProgressRepository implements ProgressRepository {
   }
 
   static listAnonymousImportProgress(cert: CertCode): QuestionProgress[] {
-    return new LocalProgressRepository('anonymous').listProgress(cert).filter(hasProgressContent)
+    return new BrowserProgressModule('anonymous').listProgress(cert).filter(hasProgressContent)
   }
 
   static clearAnonymousImportCert(cert: CertCode): void {
     if (typeof window === 'undefined') return
-    const repo = new LocalProgressRepository('anonymous')
+    const repo = new BrowserProgressModule('anonymous')
     const data = repo.read()
     delete data.byCert[cert]
     repo.write(data)
-  }
-
-  static hasDismissedAnonymousImport(userId: string): boolean {
-    return readAnonymousImportDismissals()[userId] === true
-  }
-
-  static dismissAnonymousImport(userId: string): void {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(
-      ANONYMOUS_IMPORT_DISMISSAL_KEY,
-      JSON.stringify({ ...readAnonymousImportDismissals(), [userId]: true }),
-    )
-  }
-
-  static clearAnonymousImportDismissal(userId: string): void {
-    if (typeof window === 'undefined') return
-    const dismissals = readAnonymousImportDismissals()
-    delete dismissals[userId]
-    window.localStorage.setItem(ANONYMOUS_IMPORT_DISMISSAL_KEY, JSON.stringify(dismissals))
   }
 
   static applyAcceptedAccountSync(
@@ -361,7 +362,7 @@ export class LocalProgressRepository implements ProgressRepository {
     accepted: QuestionProgress[],
     uploaded: QuestionProgress[] = accepted,
   ): void {
-    const repo = new LocalProgressRepository('account')
+    const repo = new BrowserProgressModule('account')
     const data = repo.read()
     const certData = repo.certData(data, cert)
     const uploadedByQid = new Map(uploaded.map((entry) => [entry.qid, entry]))
@@ -393,7 +394,7 @@ export class LocalProgressRepository implements ProgressRepository {
     accepted: QuestionProgress[],
     uploaded: QuestionProgress[] = accepted,
   ): void {
-    const repo = new LocalProgressRepository('account')
+    const repo = new BrowserProgressModule('account')
     const data = repo.read()
     const certData = repo.certData(data, cert)
     const uploadedByQid = new Map(uploaded.map((entry) => [entry.qid, entry]))
@@ -427,7 +428,7 @@ export class LocalProgressRepository implements ProgressRepository {
     if (typeof window === 'undefined') return false
     const ownerId = window.localStorage.getItem(ACCOUNT_PROGRESS_OWNER_KEY)
     if (ownerId !== userId) {
-      LocalProgressRepository.clearScope('account')
+      BrowserProgressModule.clearScope('account')
       window.localStorage.setItem(ACCOUNT_PROGRESS_OWNER_KEY, userId)
       return true
     }
@@ -463,7 +464,7 @@ export class LocalProgressRepository implements ProgressRepository {
     return this.read().byCert[cert] ?? EMPTY_CERT_PROGRESS
   }
 
-  private progressFor(certData: CertProgressData, qid: number): QuestionProgress {
+  private progressFor(certData: CertProgressData, qid: number): StoredQuestionProgress {
     const existing = certData.progress[qid]
     if (existing) return existing
     const next = createProgress(qid)
@@ -471,14 +472,15 @@ export class LocalProgressRepository implements ProgressRepository {
     return next
   }
 
-  private markDirty(progress: QuestionProgress): void {
+  private markDirty(progress: StoredQuestionProgress): void {
     if (this.scope === 'account' && progress.dirtySince === undefined) {
       progress.dirtySince = Date.now()
     }
   }
 
   getProgress(qid: number, cert: CertCode): QuestionProgress | null {
-    return this.readCert(cert).progress[qid] ?? null
+    const progress = this.readCert(cert).progress[qid]
+    return progress ? toQuestionProgress(progress) : null
   }
 
   recordAnswer(qid: number, picks: Letter[], correct: boolean, cert: CertCode): void {
@@ -497,7 +499,7 @@ export class LocalProgressRepository implements ProgressRepository {
   }
 
   listProgress(cert: CertCode): QuestionProgress[] {
-    return Object.values(this.readCert(cert).progress)
+    return Object.values(this.readCert(cert).progress).map(toQuestionProgress)
   }
 
   listAnswered(cert: CertCode): QuestionProgress[] {
@@ -526,7 +528,7 @@ export class LocalProgressRepository implements ProgressRepository {
   listBookmarks(cert: CertCode): number[] {
     return this.listProgress(cert)
       .filter((progress) => progress.bookmarked)
-      .map((progress) => progress.qid)
+      .map((entry) => entry.qid)
   }
 
   getStats(cert: CertCode): { answered: number; correct: number; total: number } {
@@ -540,7 +542,7 @@ export class LocalProgressRepository implements ProgressRepository {
 }
 
 export function clearProgressScope(scope: ProgressScope): void {
-  LocalProgressRepository.clearScope(scope)
+  BrowserProgressModule.clearScope(scope)
 }
 
-export const progressRepo: LocalProgressRepository = new LocalProgressRepository()
+export const browserProgress: BrowserProgressModule = new BrowserProgressModule()

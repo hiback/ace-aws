@@ -275,8 +275,8 @@ function HomeContent({ cert }: { cert: CertCode }) {
           icon={List}
           label={t('homeList')}
           href="/list"
-          iconBgClass="bg-bg-alt"
-          iconColorClass="text-ink-soft"
+          iconBgClass="bg-accent-soft"
+          iconColorClass="text-accent"
         />
         <QuickActionCard
           icon={Bookmark}

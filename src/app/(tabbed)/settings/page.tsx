@@ -28,7 +28,7 @@ function ThemeIcon({ className, strokeWidth = 1.75, ...rest }: SVGProps<SVGSVGEl
   )
 }
 
-const APP_VERSION = '0.3.2'
+const APP_VERSION = '0.4.0'
 const REPO_URL = 'https://github.com/hiback/ace-aws'
 
 function formatSettingsTimestamp(date: Date | number) {
@@ -253,7 +253,7 @@ export default function SettingsPage() {
                   <AccountAvatar user={user} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-body font-bold text-ink truncate">{displayName}</p>
+                      <p className="min-w-0 truncate text-body font-bold text-ink">{displayName}</p>
                     </div>
                     {accountHandle ? (
                       <p className="mt-0.5 text-secondary text-ink-mute truncate">
@@ -264,7 +264,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 rounded-button border border-border bg-bg-alt px-3 py-2.5">
+                <div className="-mx-4 flex items-center justify-between gap-3 border-y border-border px-4 py-3">
                   <div className="flex min-w-0 items-center gap-2">
                     <span
                       className={[
@@ -283,7 +283,7 @@ export default function SettingsPage() {
                     title={t('accountProgressSyncSyncNow')}
                     onClick={handleSyncNow}
                     disabled={syncDisabled}
-                    className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-ink-soft disabled:opacity-50"
+                    className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-ink-soft hover:bg-bg-alt disabled:opacity-50 disabled:hover:bg-surface"
                   >
                     <RefreshCw
                       className={[

@@ -7,6 +7,7 @@ export const PRACTICE_SOURCES = [
   '/list/wrong',
   '/list/bookmarks',
   '/list/unanswered',
+  '/wrong-redo',
 ] as const
 
 export type PracticeSource = (typeof PRACTICE_SOURCES)[number]

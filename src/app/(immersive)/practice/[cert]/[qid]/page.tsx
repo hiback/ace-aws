@@ -1,7 +1,7 @@
 'use client'
 import { Bookmark, BookmarkCheck, Check, ChevronLeft, X } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { StickyFooter } from '@/components/chrome/sticky-footer'
 import { ExplanationCard } from '@/components/domain/explanation-card'
 import { MultiStatusLine } from '@/components/domain/multi-status-line'
@@ -31,8 +31,10 @@ import { useT } from '@/hooks/use-t'
 import {
   buildCompletionHref,
   buildPracticeHref,
+  findNextInPracticeSet,
   isListPracticeSource,
   normalizePracticeSource,
+  type PracticeSource,
   parsePracticeSet,
 } from '@/lib/practice-flow'
 import { TOPIC_KEYS } from '@/lib/topic'
@@ -49,6 +51,48 @@ const RESULT_LABEL_KEY = {
   wrong: 'bannerWrong',
   partial: 'bannerPartial',
 } as const
+
+function findNextCurrentBankQidAfterRawSetPosition(
+  currentQid: number,
+  rawSet: string,
+  bankIds: ReadonlySet<number>,
+): number | null | undefined {
+  const rawQids = rawSet.split(',').map(Number)
+  const currentIndex = rawQids.indexOf(currentQid)
+  if (currentIndex < 0) return undefined
+
+  const seenValidBeforeCurrent = new Set<number>()
+  for (let i = 0; i < currentIndex; i++) {
+    if (bankIds.has(rawQids[i])) seenValidBeforeCurrent.add(rawQids[i])
+  }
+
+  for (let i = currentIndex + 1; i < rawQids.length; i++) {
+    const candidate = rawQids[i]
+    if (bankIds.has(candidate) && !seenValidBeforeCurrent.has(candidate)) return candidate
+  }
+
+  return null
+}
+
+function resolveWrongRedoRedirectHref(
+  qid: number,
+  practiceSet: readonly number[] | null,
+  setRaw: string | null,
+  bankIds: ReadonlySet<number>,
+  cert: CertCode,
+  source: PracticeSource,
+): string | null {
+  if (practiceSet === null) return '/'
+  if (practiceSet.includes(qid)) return null
+
+  const nextAfterRawPosition = findNextCurrentBankQidAfterRawSetPosition(qid, setRaw ?? '', bankIds)
+
+  if (nextAfterRawPosition === undefined) {
+    return buildPracticeHref(cert, practiceSet[0], source, setRaw)
+  }
+  if (nextAfterRawPosition === null) return buildCompletionHref(cert, source)
+  return buildPracticeHref(cert, nextAfterRawPosition, source, setRaw)
+}
 
 function HeaderPartialMark() {
   return (
@@ -70,6 +114,8 @@ export default function PracticePage() {
   const source = normalizePracticeSource(searchParams.get('from'))
   const setRaw = searchParams.get('set')
   const isListReview = isListPracticeSource(source)
+  const isWrongRedo = source === '/wrong-redo'
+  const isFixedSetPractice = isListReview || isWrongRedo
   const [selection, setSelection] = useState<{ qid: number; picks: Letter[] }>({ qid, picks: [] })
   const [resultModeQid, setResultModeQid] = useState<number | null>(null)
   const [pending, startTransition] = useTransition()
@@ -82,6 +128,16 @@ export default function PracticePage() {
   const toggleBookmark = useToggleBookmark(cert)
   const progress = useProgressModule()
   const picks = selection.qid === qid ? selection.picks : []
+  const bankIds = new Set(bank.data?.map((item) => item.id) ?? [])
+  const practiceSet = isFixedSetPractice && bank.data ? parsePracticeSet(setRaw, bankIds) : null
+  const wrongRedoRedirectHref =
+    !bank.isLoading && isWrongRedo
+      ? resolveWrongRedoRedirectHref(qid, practiceSet, setRaw, bankIds, cert, source)
+      : null
+
+  useEffect(() => {
+    if (wrongRedoRedirectHref) router.push(wrongRedoRedirectHref)
+  }, [router, wrongRedoRedirectHref])
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
     return (
@@ -93,6 +149,8 @@ export default function PracticePage() {
       </main>
     )
   }
+
+  if (wrongRedoRedirectHref) return null
 
   if (!question.data) {
     return (
@@ -107,15 +165,12 @@ export default function PracticePage() {
 
   const q = question.data
   const total = bank.data?.length ?? 0
-  const practiceSet = isListReview
-    ? parsePracticeSet(setRaw, new Set(bank.data?.map((item) => item.id) ?? []))
-    : null
   const listPosition = practiceSet?.indexOf(qid) ?? -1
   const displayCurrent = listPosition >= 0 ? listPosition + 1 : qid
   const displayTotal = listPosition >= 0 && practiceSet ? practiceSet.length : total
   const hasPreviousResult =
     answer.data?.lastAnsweredAt !== null && answer.data?.lastAnsweredAt !== undefined
-  const submitted = hasPreviousResult && (!isListReview || resultModeQid === qid)
+  const submitted = hasPreviousResult && (!isFixedSetPractice || resultModeQid === qid)
   const isMulti = q.type === 'multi'
   const required = q.type === 'multi' ? q.answer_count : 1
   const correctSorted = q.correct_answer
@@ -162,6 +217,16 @@ export default function PracticePage() {
     startTransition(async () => {
       if (isListReview) {
         const next = await findNextListReviewQid(qid, cert, source, setRaw, progress)
+        router.push(
+          next === null
+            ? buildCompletionHref(cert, source)
+            : buildPracticeHref(cert, next, source, setRaw),
+        )
+        return
+      }
+
+      if (isWrongRedo) {
+        const next = practiceSet ? findNextInPracticeSet(qid, practiceSet) : null
         router.push(
           next === null
             ? buildCompletionHref(cert, source)
@@ -249,7 +314,7 @@ export default function PracticePage() {
           <div className="mb-2.5 flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push(source)}
+              onClick={() => router.push(isWrongRedo ? '/' : source)}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-ink"
               aria-label={t('back')}
             >

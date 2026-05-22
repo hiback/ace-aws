@@ -6,6 +6,7 @@ interface QuickActionCardProps {
   label: string
   count?: number
   href?: string
+  onClick?: () => void
   disabled?: boolean
   /** Tailwind classes for the icon tile background + icon color. */
   iconBgClass?: string
@@ -19,6 +20,7 @@ export function QuickActionCard({
   label,
   count,
   href,
+  onClick,
   disabled = false,
   iconBgClass = 'bg-accent-soft',
   iconColorClass = 'text-accent',
@@ -44,12 +46,14 @@ export function QuickActionCard({
     </>
   )
 
-  if (disabled || !href) {
+  if (onClick || disabled || !href) {
+    const buttonDisabled = disabled || !onClick
     return (
       <button
         type="button"
-        disabled
-        aria-disabled="true"
+        onClick={onClick}
+        disabled={buttonDisabled}
+        aria-disabled={buttonDisabled ? 'true' : undefined}
         className={`w-full text-left ${className}`}
       >
         {content}

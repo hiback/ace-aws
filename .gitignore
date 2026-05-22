@@ -2,6 +2,7 @@
 refs/
 docs/agents/
 docs/superpowers/
+docs/adr/
 .scratch/
 .worktrees/
 .agents/

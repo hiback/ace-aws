@@ -67,7 +67,10 @@ vi.mock('../src/hooks/use-progress-stats', () => ({
 }))
 
 vi.mock('../src/hooks/use-question', () => ({
-  useQuestion: () => ({ data: question, isLoading: false }),
+  useQuestion: () => ({
+    data: Number(mocks.params.qid) === question.id ? question : null,
+    isLoading: false,
+  }),
 }))
 
 vi.mock('../src/hooks/use-question-bank', () => ({
@@ -156,6 +159,157 @@ describe('progress page compatibility', () => {
     expect(screen.queryByText('Because A is correct.')).toBeNull()
   })
 
+  it('starts wrong redo session questions in answer mode without a view-last-result action', () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,2')
+    mocks.progress = {
+      qid: 1,
+      correctCount: 0,
+      wrongCount: 1,
+      lastPicks: ['B'],
+      lastCorrect: false,
+      lastAnsweredAt: 1_700_000_000_001,
+      bookmarked: false,
+      bookmarkUpdatedAt: null,
+    }
+
+    render(<PracticePage />)
+
+    expect(screen.getByText('Skip')).not.toBeNull()
+    expect(screen.getByText('Submit')).not.toBeNull()
+    expect(screen.queryByText('View last result')).toBeNull()
+    expect(screen.queryByText('Wrong')).toBeNull()
+    expect(screen.queryByText('Because A is correct.')).toBeNull()
+  })
+
+  it('returns wrong redo URLs without a captured set to home', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo')
+
+    render(<PracticePage />)
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledWith('/'))
+    expect(screen.queryByText('Submit')).toBeNull()
+  })
+
+  it('returns wrong redo URLs with an invalid captured set to home', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,nope')
+
+    render(<PracticePage />)
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledWith('/'))
+    expect(screen.queryByText('Submit')).toBeNull()
+  })
+
+  it('continues wrong redo URLs with partially stale captured sets in remaining captured order', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=99,1,2')
+    mocks.bank = [question, { id: 2 }]
+
+    render(<PracticePage />)
+
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName.toLowerCase() === 'span' &&
+          element.textContent?.replace(/\s+/g, ' ').trim() === 'Question 1 of 2',
+      ),
+    ).not.toBeNull()
+
+    fireEvent.click(screen.getByText('Skip'))
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fwrong-redo&set=99%2C1%2C2',
+      ),
+    )
+  })
+
+  it('continues a wrong redo URL to the next captured current-bank qid when the path qid is stale', async () => {
+    mocks.params = { cert: 'dva-c02', qid: '99' }
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,99,2')
+    mocks.bank = [question, { id: 2 }]
+
+    render(<PracticePage />)
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fwrong-redo&set=1%2C99%2C2',
+      ),
+    )
+    expect(mocks.router.push).not.toHaveBeenCalledWith(
+      '/practice/dva-c02/1?from=%2Fwrong-redo&set=1%2C99%2C2',
+    )
+  })
+
+  it('routes a wrong redo URL to completion when a stale path qid has no later current-bank qid', async () => {
+    mocks.params = { cert: 'dva-c02', qid: '99' }
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,99')
+    mocks.bank = [question]
+
+    render(<PracticePage />)
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/complete?from=%2Fwrong-redo',
+      ),
+    )
+    expect(mocks.router.push).not.toHaveBeenCalledWith(
+      '/practice/dva-c02/1?from=%2Fwrong-redo&set=1%2C99',
+    )
+  })
+
+  it('continues copied wrong redo URLs by captured order even after the question is no longer wrong', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,2')
+    mocks.bank = [question, { id: 2 }]
+    mocks.progress = {
+      qid: 1,
+      correctCount: 1,
+      wrongCount: 1,
+      lastPicks: ['A'],
+      lastCorrect: true,
+      lastAnsweredAt: 1_700_000_000_002,
+      bookmarked: false,
+      bookmarkUpdatedAt: null,
+    }
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByText('Skip'))
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fwrong-redo&set=1%2C2',
+      ),
+    )
+  })
+
+  it('returns wrong redo URLs with fully stale captured sets to home', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=99,100')
+
+    render(<PracticePage />)
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledWith('/'))
+    expect(screen.queryByText('Submit')).toBeNull()
+  })
+
+  it('does not regenerate a wrong redo session in-page when the captured set is missing', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo')
+    mocks.bank = [question, { id: 2 }]
+    mocks.progress = {
+      qid: 1,
+      correctCount: 0,
+      wrongCount: 1,
+      lastPicks: ['B'],
+      lastCorrect: false,
+      lastAnsweredAt: 1_700_000_000_001,
+      bookmarked: false,
+      bookmarkUpdatedAt: null,
+    }
+
+    render(<PracticePage />)
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledWith('/'))
+    expect(mocks.router.push).not.toHaveBeenCalledWith(
+      expect.stringContaining('/practice/dva-c02/'),
+    )
+  })
+
   it('shows list-review position and total in the header', () => {
     mocks.searchParams = new URLSearchParams('from=/list/wrong&set=2,1,3')
     mocks.bank = [{ id: 2 }, question, { id: 3 }]
@@ -169,6 +323,155 @@ describe('progress page compatibility', () => {
           element.textContent?.replace(/\s+/g, ' ').trim() === 'Question 2 of 3',
       ),
     ).not.toBeNull()
+  })
+
+  it('shows wrong redo position and total from the captured set', () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=2,1,3')
+    mocks.bank = [{ id: 2 }, question, { id: 3 }]
+
+    render(<PracticePage />)
+
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName.toLowerCase() === 'span' &&
+          element.textContent?.replace(/\s+/g, ' ').trim() === 'Question 2 of 3',
+      ),
+    ).not.toBeNull()
+  })
+
+  it('advances wrong redo skip through the captured set and preserves query params', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,2')
+    mocks.bank = [question, { id: 2 }]
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByText('Skip'))
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fwrong-redo&set=1%2C2',
+      ),
+    )
+  })
+
+  it('advances wrong redo next through the captured set after submission', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,2')
+    mocks.bank = [question, { id: 2 }]
+    mocks.recordAnswer.mutate.mockImplementationOnce((_vars, options) => {
+      mocks.progress = {
+        qid: 1,
+        correctCount: 1,
+        wrongCount: 0,
+        lastPicks: ['A'],
+        lastCorrect: true,
+        lastAnsweredAt: 1_700_000_000_002,
+        bookmarked: false,
+        bookmarkUpdatedAt: null,
+      }
+      options?.onSuccess?.(mocks.progress, { qid: 1, picks: ['A'], correct: true })
+    })
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByText('Correct option'))
+    fireEvent.click(screen.getByText('Submit'))
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fwrong-redo&set=1%2C2',
+      ),
+    )
+  })
+
+  it('keeps the current wrong redo session order fixed after recovering the current question', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=2,1,3')
+    mocks.bank = [{ id: 2 }, question, { id: 3 }]
+    mocks.recordAnswer.mutate.mockImplementationOnce((_vars, options) => {
+      mocks.progress = {
+        qid: 1,
+        correctCount: 1,
+        wrongCount: 1,
+        lastPicks: ['A'],
+        lastCorrect: true,
+        lastAnsweredAt: 1_700_000_000_002,
+        bookmarked: false,
+        bookmarkUpdatedAt: null,
+      }
+      options?.onSuccess?.(mocks.progress, { qid: 1, picks: ['A'], correct: true })
+    })
+
+    render(<PracticePage />)
+
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName.toLowerCase() === 'span' &&
+          element.textContent?.replace(/\s+/g, ' ').trim() === 'Question 2 of 3',
+      ),
+    ).not.toBeNull()
+
+    fireEvent.click(screen.getByText('Correct option'))
+    fireEvent.click(screen.getByText('Submit'))
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/3?from=%2Fwrong-redo&set=2%2C1%2C3',
+      ),
+    )
+    expect(mocks.router.push).not.toHaveBeenCalledWith(
+      '/practice/dva-c02/complete?from=%2Fwrong-redo',
+    )
+    expect(mocks.router.push).not.toHaveBeenCalledWith(
+      '/practice/dva-c02/2?from=%2Fwrong-redo&set=2%2C1%2C3',
+    )
+  })
+
+  it('advances wrong redo next through the captured set after an incorrect submission', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1,2')
+    mocks.bank = [question, { id: 2 }]
+    mocks.recordAnswer.mutate.mockImplementationOnce((_vars, options) => {
+      mocks.progress = {
+        qid: 1,
+        correctCount: 0,
+        wrongCount: 1,
+        lastPicks: ['B'],
+        lastCorrect: false,
+        lastAnsweredAt: 1_700_000_000_002,
+        bookmarked: false,
+        bookmarkUpdatedAt: null,
+      }
+      options?.onSuccess?.(mocks.progress, { qid: 1, picks: ['B'], correct: false })
+    })
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByText('Wrong option'))
+    fireEvent.click(screen.getByText('Submit'))
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fwrong-redo&set=1%2C2',
+      ),
+    )
+  })
+
+  it('routes wrong redo final item to wrong redo completion and backs out to home', async () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo&set=1')
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByLabelText('Back'))
+    expect(mocks.router.push).toHaveBeenCalledWith('/')
+
+    fireEvent.click(screen.getByText('Skip'))
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/complete?from=%2Fwrong-redo',
+      ),
+    )
   })
 
   it('shows only next after viewing a list-review previous result', () => {
@@ -346,6 +649,17 @@ describe('progress page compatibility', () => {
     expect(screen.getByText('Unanswered session complete')).not.toBeNull()
     fireEvent.click(screen.getByText('Back to unanswered'))
     expect(mocks.router.push).toHaveBeenCalledWith('/list/unanswered')
+  })
+
+  it('renders wrong redo completion with dedicated copy and only a home action', () => {
+    mocks.searchParams = new URLSearchParams('from=/wrong-redo')
+
+    render(<PracticeCompletePage />)
+
+    expect(screen.getByText('Wrong redo complete')).not.toBeNull()
+    fireEvent.click(screen.getByText('Back to home'))
+    expect(mocks.router.push).toHaveBeenCalledWith('/')
+    expect(screen.queryByText('Back to wrong list')).toBeNull()
   })
 
   it('falls back to home completion for invalid sources', () => {

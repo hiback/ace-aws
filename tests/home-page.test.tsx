@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import HomePage from '../src/app/(tabbed)/page'
+import { loadBank } from '../src/data/loaders'
 import { findNextUnansweredQid } from '../src/hooks/use-answer'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
@@ -32,6 +33,10 @@ const progressScopeMocks = vi.hoisted(() => ({
   },
 }))
 
+const progressStatsMocks = vi.hoisted(() => ({
+  wrongRedoCount: { data: 2 as number | undefined, isPending: false },
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMocks,
 }))
@@ -52,9 +57,17 @@ vi.mock('@/hooks/use-answer', () => ({
   findNextUnansweredQid: vi.fn(),
 }))
 
+vi.mock('@/data/loaders', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/data/loaders')>()
+  return {
+    ...actual,
+    loadBank: vi.fn(),
+  }
+})
+
 vi.mock('@/hooks/use-progress-stats', () => ({
   useProgressStats: () => ({ data: { answered: 0, total: 557, correct: 0 } }),
-  useWrongRedoCount: () => ({ data: 2 }),
+  useWrongRedoCount: () => progressStatsMocks.wrongRedoCount,
   useBookmarksList: () => ({ data: [] }),
 }))
 
@@ -73,10 +86,44 @@ beforeEach(() => {
     async (cert: 'DVA-C02' | 'CLF-C02') => cert,
   )
   progressScopeMocks.progress.getStats.mockReturnValue({ answered: 0, correct: 0, total: 0 })
+  progressScopeMocks.progress.listProgress.mockReturnValue([
+    makeProgress(1, false),
+    makeProgress(2, true),
+    makeProgress(3, false),
+  ])
+  progressStatsMocks.wrongRedoCount = { data: 2, isPending: false }
+  vi.mocked(loadBank).mockReset()
+  vi.mocked(loadBank).mockResolvedValue([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
   vi.mocked(findNextUnansweredQid).mockReset()
   vi.mocked(findNextUnansweredQid).mockResolvedValue(3)
   usePrefsStore.setState({ locale: 'en', theme: 'light', currentCert: 'DVA-C02' })
 })
+
+function makeQuestion(id: number) {
+  return {
+    id,
+    cert: 'DVA-C02' as const,
+    topic: 'Domain',
+    type: 'single' as const,
+    correct_answer: ['A' as const],
+    en: { question: `Question ${id}`, options: { A: 'A' }, explanation: 'Explain' },
+    zh: { question: `题目 ${id}`, options: { A: 'A' }, explanation: '解释' },
+    vote_distribution: {},
+  }
+}
+
+function makeProgress(qid: number, lastCorrect: boolean | null) {
+  return {
+    qid,
+    correctCount: lastCorrect ? 1 : 0,
+    wrongCount: lastCorrect === false ? 1 : 0,
+    lastPicks: ['A' as const],
+    lastCorrect,
+    lastAnsweredAt: 1,
+    bookmarked: false,
+    bookmarkUpdatedAt: null,
+  }
+}
 
 afterEach(() => {
   cleanup()
@@ -223,7 +270,7 @@ describe('HomePage continue practice', () => {
 })
 
 describe('HomePage quick actions', () => {
-  it('orders wrong redo, list, and bookmarks while keeping wrong redo disabled', () => {
+  it('orders wrong redo, list, and bookmarks while enabling wrong redo when count is positive', () => {
     render(<HomePage />)
 
     const quickStart = screen.getByText('Quick start')
@@ -235,11 +282,177 @@ describe('HomePage quick actions', () => {
       'Question list',
       'Bookmarks0',
     ])
-    expect(screen.getByText('Wrong redo').closest('a')).toBeNull()
-    expect(screen.getByText('Wrong redo').closest('[aria-disabled="true"]')?.textContent).toContain(
-      '2',
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Wrong redo/ }).disabled).toBe(
+      false,
     )
     expect(screen.getByText('Question list').closest('a')?.getAttribute('href')).toBe('/list')
     expect(screen.getByText('Bookmarks').closest('a')?.getAttribute('href')).toBe('/list/bookmarks')
+  })
+
+  it('disables wrong redo while the count is loading', () => {
+    progressStatsMocks.wrongRedoCount = { data: undefined, isPending: true }
+
+    render(<HomePage />)
+
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Wrong redo/ }).disabled).toBe(
+      true,
+    )
+  })
+
+  it('disables wrong redo when there are no wrong redo questions', () => {
+    progressStatsMocks.wrongRedoCount = { data: 0, isPending: false }
+
+    render(<HomePage />)
+
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Wrong redo/ }).disabled).toBe(
+      true,
+    )
+  })
+
+  it('starts a wrong redo session from the current-bank latest incorrect answers', async () => {
+    progressScopeMocks.progress.listProgress.mockReturnValue([
+      makeProgress(1, false),
+      makeProgress(2, false),
+      makeProgress(3, true),
+      makeProgress(4, false),
+    ])
+    vi.mocked(loadBank).mockResolvedValue([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
+
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+
+    await waitFor(() => {
+      expect(loadBank).toHaveBeenCalledWith('DVA-C02')
+      expect(progressScopeMocks.progress.listProgress).toHaveBeenCalledWith('DVA-C02')
+      expect(routerMocks.push).toHaveBeenCalledTimes(1)
+    })
+    const href = routerMocks.push.mock.calls[0][0] as string
+    expect(href).toMatch(/^\/practice\/dva-c02\/[12]\?/)
+    const query = new URLSearchParams(href.split('?')[1])
+    const set = query.get('set')?.split(',').map(Number)
+    expect(query.get('from')).toBe('/wrong-redo')
+    expect(set?.toSorted()).toEqual([1, 2])
+    expect(href).toContain(`/practice/dva-c02/${set?.[0]}?`)
+  })
+
+  it('starts the next wrong redo session from home without recovered wrong questions', async () => {
+    const wrongQuestionsAfterRecovery = [
+      {
+        ...makeProgress(1, true),
+        wrongCount: 1,
+        lastPicks: ['A' as const],
+        lastAnsweredAt: 2,
+      },
+      makeProgress(2, false),
+    ]
+    progressScopeMocks.progress.listProgress.mockReturnValue(wrongQuestionsAfterRecovery)
+    progressStatsMocks.wrongRedoCount = { data: 1, isPending: false }
+    vi.mocked(loadBank).mockResolvedValue([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
+
+    render(<HomePage />)
+
+    expect(screen.getByText('Wrong redo').parentElement?.textContent).toContain('1')
+
+    fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
+    const href = routerMocks.push.mock.calls[0][0] as string
+    const query = new URLSearchParams(href.split('?')[1])
+
+    expect(query.get('from')).toBe('/wrong-redo')
+    expect(query.get('set')?.split(',').map(Number)).toEqual([2])
+    expect(href).toBe('/practice/dva-c02/2?from=%2Fwrong-redo&set=2')
+  })
+
+  it('creates a fresh random order on each wrong redo start', async () => {
+    progressScopeMocks.progress.listProgress.mockReturnValue([
+      makeProgress(1, false),
+      makeProgress(2, false),
+      makeProgress(3, false),
+    ])
+    const random = vi.spyOn(Math, 'random')
+    try {
+      random
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0.99)
+        .mockReturnValueOnce(0.99)
+      const firstView = render(<HomePage />)
+
+      fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+      await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
+      firstView.unmount()
+
+      render(<HomePage />)
+      fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+      await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(2))
+
+      const firstHref = routerMocks.push.mock.calls[0][0] as string
+      const secondHref = routerMocks.push.mock.calls[1][0] as string
+      const firstSet = new URLSearchParams(firstHref.split('?')[1])
+        .get('set')
+        ?.split(',')
+        .map(Number)
+      const secondSet = new URLSearchParams(secondHref.split('?')[1])
+        .get('set')
+        ?.split(',')
+        .map(Number)
+      expect(firstSet?.toSorted()).toEqual([1, 2, 3])
+      expect(secondSet?.toSorted()).toEqual([1, 2, 3])
+      expect(firstHref).not.toBe(secondHref)
+    } finally {
+      random.mockRestore()
+    }
+  })
+
+  it('disables wrong redo while generating the session', async () => {
+    let resolveBank: (value: Awaited<ReturnType<typeof loadBank>>) => void = () => {}
+    vi.mocked(loadBank).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBank = resolve
+        }),
+    )
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: /Wrong redo/ }).disabled).toBe(
+        true,
+      )
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+    expect(loadBank).toHaveBeenCalledTimes(1)
+
+    resolveBank([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
+  })
+
+  it('keeps wrong redo disabled after navigation starts to prevent duplicate sessions', async () => {
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
+
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Wrong redo/ }).disabled).toBe(
+      true,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+
+    expect(loadBank).toHaveBeenCalledTimes(1)
+    expect(routerMocks.push).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays on home when click-time capture is empty', async () => {
+    progressScopeMocks.progress.listProgress.mockReturnValue([makeProgress(1, true)])
+
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
+
+    await waitFor(() => expect(loadBank).toHaveBeenCalledWith('DVA-C02'))
+    expect(routerMocks.push).not.toHaveBeenCalled()
   })
 })

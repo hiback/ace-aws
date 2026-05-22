@@ -48,6 +48,14 @@ const COMPLETION_COPY = {
     secondaryLabel: 'backToHome',
     secondaryHref: '/',
   },
+  '/wrong-redo': {
+    title: 'wrongRedoCompleteTitle',
+    description: 'wrongRedoCompleteDescription',
+    primaryLabel: 'backToHome',
+    primaryHref: '/',
+    secondaryLabel: null,
+    secondaryHref: null,
+  },
 } as const
 
 export default function PracticeCompletePage() {

@@ -15,6 +15,7 @@ describe('practice-flow helpers', () => {
     expect(normalizePracticeSource('/list/wrong')).toBe('/list/wrong')
     expect(normalizePracticeSource('/list/bookmarks')).toBe('/list/bookmarks')
     expect(normalizePracticeSource('/list/unanswered')).toBe('/list/unanswered')
+    expect(normalizePracticeSource('/wrong-redo')).toBe('/wrong-redo')
     expect(normalizePracticeSource('/settings')).toBe('/')
     expect(normalizePracticeSource(null)).toBe('/')
   })
@@ -25,6 +26,7 @@ describe('practice-flow helpers', () => {
     expect(isListPracticeSource('/list/wrong')).toBe(true)
     expect(isListPracticeSource('/list/bookmarks')).toBe(true)
     expect(isListPracticeSource('/list/unanswered')).toBe(true)
+    expect(isListPracticeSource('/wrong-redo')).toBe(false)
   })
 
   it('builds encoded practice hrefs with optional set snapshots', () => {

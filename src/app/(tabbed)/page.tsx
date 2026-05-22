@@ -11,11 +11,14 @@ import { Button } from '@/components/primitives/button'
 import { Spinner } from '@/components/primitives/spinner'
 import { useAccountPreferences } from '@/components/providers/account-preferences-provider'
 import { useProgressModule } from '@/components/providers/progress-scope-provider'
+import { loadBank } from '@/data/loaders'
 import type { CertCode } from '@/data/types'
 import { findNextUnansweredQid } from '@/hooks/use-answer'
 import { useBookmarksList, useProgressStats, useWrongRedoCount } from '@/hooks/use-progress-stats'
 import { useT } from '@/hooks/use-t'
 import { certPath, getCertGroupLabelKey, getCertOption } from '@/lib/cert-catalog'
+import { buildPracticeHref } from '@/lib/practice-flow'
+import { buildWrongRedoSessionQids } from '@/lib/wrong-redo-session'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 type GreetingPeriod = 'morning' | 'afternoon' | 'evening' | 'night'
@@ -63,6 +66,7 @@ function HomeContent({ cert }: { cert: CertCode }) {
   const wrongRedoCount = useWrongRedoCount(cert)
   const bookmarks = useBookmarksList(cert)
   const [pending, startTransition] = useTransition()
+  const [wrongRedoPending, setWrongRedoPending] = useState(false)
   const [certSwitchPending, startCertSwitchTransition] = useTransition()
   const [certSheetOpen, setCertSheetOpen] = useState(false)
   const [certSwitchError, setCertSwitchError] = useState(false)
@@ -81,6 +85,27 @@ function HomeContent({ cert }: { cert: CertCode }) {
         router.push(`/practice/${certPath(cert)}/${next}?from=${encodeURIComponent('/')}`)
       }
     })
+  }
+
+  const handleWrongRedo = async () => {
+    if (wrongRedoPending || wrongRedoCount.isPending || (wrongRedoCount.data ?? 0) === 0) return
+
+    setWrongRedoPending(true)
+    try {
+      const bank = await loadBank(cert)
+      const qids = buildWrongRedoSessionQids(
+        bank.map((question) => question.id),
+        progress.listProgress(cert),
+      )
+      if (qids.length === 0) {
+        setWrongRedoPending(false)
+        return
+      }
+      router.push(buildPracticeHref(cert, qids[0], '/wrong-redo', qids))
+    } catch (error) {
+      console.error('Failed to start wrong redo session', error)
+      setWrongRedoPending(false)
+    }
   }
 
   const handleBrowseAllCerts = () => {
@@ -203,7 +228,10 @@ function HomeContent({ cert }: { cert: CertCode }) {
           icon={Flag}
           label={t('homeWrongRedo')}
           count={wrongRedoCount.data ?? 0}
-          disabled
+          onClick={handleWrongRedo}
+          disabled={
+            wrongRedoPending || wrongRedoCount.isPending || (wrongRedoCount.data ?? 0) === 0
+          }
           iconBgClass="bg-danger-soft"
           iconColorClass="text-danger"
         />

@@ -37,6 +37,7 @@ import {
   type PracticeSource,
   parsePracticeSet,
 } from '@/lib/practice-flow'
+import { SMART_PRACTICE_SESSION_SIZE } from '@/lib/smart-practice-session'
 import { TOPIC_KEYS } from '@/lib/topic'
 import { usePrefsStore } from '@/stores/prefs-store'
 
@@ -115,7 +116,8 @@ export default function PracticePage() {
   const setRaw = searchParams.get('set')
   const isListReview = isListPracticeSource(source)
   const isWrongRedo = source === '/wrong-redo'
-  const isFixedSetPractice = isListReview || isWrongRedo
+  const isSmartPractice = source === '/smart-practice'
+  const isFixedSetPractice = isListReview || isWrongRedo || isSmartPractice
   const [selection, setSelection] = useState<{ qid: number; picks: Letter[] }>({ qid, picks: [] })
   const [resultModeQid, setResultModeQid] = useState<number | null>(null)
   const [pending, startTransition] = useTransition()
@@ -129,7 +131,20 @@ export default function PracticePage() {
   const progress = useProgressModule()
   const picks = selection.qid === qid ? selection.picks : []
   const bankIds = new Set(bank.data?.map((item) => item.id) ?? [])
-  const practiceSet = isFixedSetPractice && bank.data ? parsePracticeSet(setRaw, bankIds) : null
+  const practiceSet =
+    isFixedSetPractice && bank.data
+      ? parsePracticeSet(
+          setRaw,
+          bankIds,
+          isSmartPractice ? { maxItems: SMART_PRACTICE_SESSION_SIZE } : undefined,
+        )
+      : null
+  const invalidSmartPracticeHref =
+    !bank.isLoading && isSmartPractice && practiceSet === null ? '/' : null
+  const smartPracticeRedirectHref =
+    !bank.isLoading && isSmartPractice && practiceSet !== null && !practiceSet.includes(qid)
+      ? buildPracticeHref(cert, practiceSet[0], source, practiceSet)
+      : null
   const wrongRedoRedirectHref =
     !bank.isLoading && isWrongRedo
       ? resolveWrongRedoRedirectHref(qid, practiceSet, setRaw, bankIds, cert, source)
@@ -137,7 +152,9 @@ export default function PracticePage() {
 
   useEffect(() => {
     if (wrongRedoRedirectHref) router.push(wrongRedoRedirectHref)
-  }, [router, wrongRedoRedirectHref])
+    else if (smartPracticeRedirectHref) router.push(smartPracticeRedirectHref)
+    else if (invalidSmartPracticeHref) router.push(invalidSmartPracticeHref)
+  }, [router, wrongRedoRedirectHref, smartPracticeRedirectHref, invalidSmartPracticeHref])
 
   if (question.isLoading || answer.isLoading || bank.isLoading) {
     return (
@@ -150,7 +167,7 @@ export default function PracticePage() {
     )
   }
 
-  if (wrongRedoRedirectHref) return null
+  if (wrongRedoRedirectHref || smartPracticeRedirectHref || invalidSmartPracticeHref) return null
 
   if (!question.data) {
     return (
@@ -225,12 +242,13 @@ export default function PracticePage() {
         return
       }
 
-      if (isWrongRedo) {
+      if (isWrongRedo || isSmartPractice) {
         const next = practiceSet ? findNextInPracticeSet(qid, practiceSet) : null
+        const nextSet = isSmartPractice ? practiceSet : setRaw
         router.push(
           next === null
-            ? buildCompletionHref(cert, source)
-            : buildPracticeHref(cert, next, source, setRaw),
+            ? buildCompletionHref(cert, source, isSmartPractice ? practiceSet : null)
+            : buildPracticeHref(cert, next, source, nextSet),
         )
         return
       }
@@ -314,7 +332,7 @@ export default function PracticePage() {
           <div className="mb-2.5 flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push(isWrongRedo ? '/' : source)}
+              onClick={() => router.push(isWrongRedo || isSmartPractice ? '/' : source)}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-ink"
               aria-label={t('back')}
             >
@@ -397,6 +415,14 @@ export default function PracticePage() {
         {submitted ? (
           <Button onClick={handleNext} className="w-full" disabled={pending}>
             {pending ? <Spinner size={16} /> : t('next')}
+          </Button>
+        ) : isSmartPractice ? (
+          <Button
+            onClick={handleSubmit}
+            disabled={!canSubmit || recordAnswer.isPending}
+            className="w-full"
+          >
+            {t('submit')}
           </Button>
         ) : (
           <>

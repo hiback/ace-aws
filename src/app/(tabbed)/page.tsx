@@ -1,5 +1,5 @@
 'use client'
-import { ArrowRight, Bell, Bookmark, Flag, List, RefreshCw } from 'lucide-react'
+import { ArrowRight, Bell, Bookmark, Flag, List, RefreshCw, Sparkles } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -16,8 +16,10 @@ import type { CertCode } from '@/data/types'
 import { findNextUnansweredQid } from '@/hooks/use-answer'
 import { useBookmarksList, useProgressStats, useWrongRedoCount } from '@/hooks/use-progress-stats'
 import { useT } from '@/hooks/use-t'
+import { useToast } from '@/hooks/use-toast'
 import { certPath, getCertGroupLabelKey, getCertOption } from '@/lib/cert-catalog'
 import { buildPracticeHref } from '@/lib/practice-flow'
+import { buildSmartPracticeSessionQids } from '@/lib/smart-practice-session'
 import { buildWrongRedoSessionQids } from '@/lib/wrong-redo-session'
 import { usePrefsStore } from '@/stores/prefs-store'
 
@@ -58,6 +60,7 @@ export default function HomePage() {
 function HomeContent({ cert }: { cert: CertCode }) {
   const router = useRouter()
   const t = useT()
+  const { toast } = useToast()
   const { data: session, status } = useSession()
   const accountPreferences = useAccountPreferences()
   const progress = useProgressModule()
@@ -66,6 +69,7 @@ function HomeContent({ cert }: { cert: CertCode }) {
   const wrongRedoCount = useWrongRedoCount(cert)
   const bookmarks = useBookmarksList(cert)
   const [pending, startTransition] = useTransition()
+  const [smartPracticePending, setSmartPracticePending] = useState(false)
   const [wrongRedoPending, setWrongRedoPending] = useState(false)
   const [certSwitchPending, startCertSwitchTransition] = useTransition()
   const [certSheetOpen, setCertSheetOpen] = useState(false)
@@ -105,6 +109,29 @@ function HomeContent({ cert }: { cert: CertCode }) {
     } catch (error) {
       console.error('Failed to start wrong redo session', error)
       setWrongRedoPending(false)
+    }
+  }
+
+  const handleSmartPractice = async () => {
+    if (smartPracticePending) return
+
+    setSmartPracticePending(true)
+    try {
+      const bank = await loadBank(cert)
+      const qids = buildSmartPracticeSessionQids(
+        bank.map((question) => question.id),
+        progress.listProgress(cert),
+      )
+      if (qids.length === 0) {
+        toast(t('homeSmartPracticeError'))
+        setSmartPracticePending(false)
+        return
+      }
+      router.push(buildPracticeHref(cert, qids[0], '/smart-practice', qids))
+    } catch (error) {
+      console.error('Failed to start smart practice session', error)
+      toast(t('homeSmartPracticeError'))
+      setSmartPracticePending(false)
     }
   }
 
@@ -224,6 +251,15 @@ function HomeContent({ cert }: { cert: CertCode }) {
         {t('homeQuickStart')}
       </p>
       <div className="grid grid-cols-2 gap-2.5">
+        <QuickActionCard
+          icon={Sparkles}
+          label={t('homeSmartPractice')}
+          description={t('homeSmartPracticeDescription')}
+          onClick={handleSmartPractice}
+          disabled={smartPracticePending}
+          iconBgClass="bg-accent-soft"
+          iconColorClass="text-accent"
+        />
         <QuickActionCard
           icon={Flag}
           label={t('homeWrongRedo')}

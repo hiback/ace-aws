@@ -8,6 +8,7 @@ export const PRACTICE_SOURCES = [
   '/list/bookmarks',
   '/list/unanswered',
   '/wrong-redo',
+  '/smart-practice',
 ] as const
 
 export type PracticeSource = (typeof PRACTICE_SOURCES)[number]
@@ -18,6 +19,10 @@ export type ListPracticeSource = Extract<
 
 const SOURCE_SET = new Set<string>(PRACTICE_SOURCES)
 const MAX_SET_LENGTH = 4096
+
+type ParsePracticeSetOptions = {
+  maxItems?: number
+}
 
 export function normalizePracticeSource(value: string | null | undefined): PracticeSource {
   return value && SOURCE_SET.has(value) ? (value as PracticeSource) : '/'
@@ -49,14 +54,21 @@ export function buildPracticeHref(
   return `/practice/${certPath(cert)}/${qid}?${params.toString()}`
 }
 
-export function buildCompletionHref(cert: CertCode, source: PracticeSource): string {
+export function buildCompletionHref(
+  cert: CertCode,
+  source: PracticeSource,
+  set: readonly number[] | string | null = null,
+): string {
   const params = new URLSearchParams({ from: source })
+  if (Array.isArray(set) && set.length > 0) params.set('set', encodePracticeSet(set))
+  else if (typeof set === 'string' && set.length > 0) params.set('set', set)
   return `/practice/${certPath(cert)}/complete?${params.toString()}`
 }
 
 export function parsePracticeSet(
   raw: string | null,
   bankQids: ReadonlySet<number>,
+  options: ParsePracticeSetOptions = {},
 ): number[] | null {
   if (!raw || raw.length > MAX_SET_LENGTH) return null
 
@@ -74,6 +86,7 @@ export function parsePracticeSet(
     if (seen.has(qid)) continue
     seen.add(qid)
     parsed.push(qid)
+    if (options.maxItems !== undefined && parsed.length > options.maxItems) return null
   }
 
   if (parsed.length === 0 || parsed.length > bankQids.size) return null

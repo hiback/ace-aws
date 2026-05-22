@@ -37,6 +37,10 @@ const progressStatsMocks = vi.hoisted(() => ({
   wrongRedoCount: { data: 2 as number | undefined, isPending: false },
 }))
 
+const toastMocks = vi.hoisted(() => ({
+  toast: vi.fn(),
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMocks,
 }))
@@ -71,6 +75,10 @@ vi.mock('@/hooks/use-progress-stats', () => ({
   useBookmarksList: () => ({ data: [] }),
 }))
 
+vi.mock('@/hooks/use-toast', () => ({
+  useToast: () => toastMocks,
+}))
+
 function openCertSwitcher() {
   fireEvent.click(screen.getByLabelText('Switch certification'))
 }
@@ -86,12 +94,14 @@ beforeEach(() => {
     async (cert: 'DVA-C02' | 'CLF-C02') => cert,
   )
   progressScopeMocks.progress.getStats.mockReturnValue({ answered: 0, correct: 0, total: 0 })
+  progressScopeMocks.progress.listProgress.mockReset()
   progressScopeMocks.progress.listProgress.mockReturnValue([
     makeProgress(1, false),
     makeProgress(2, true),
     makeProgress(3, false),
   ])
   progressStatsMocks.wrongRedoCount = { data: 2, isPending: false }
+  toastMocks.toast.mockClear()
   vi.mocked(loadBank).mockReset()
   vi.mocked(loadBank).mockResolvedValue([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
   vi.mocked(findNextUnansweredQid).mockReset()
@@ -254,6 +264,8 @@ describe('HomePage continue practice', () => {
       expect(findNextUnansweredQid).toHaveBeenCalledWith(0, 'DVA-C02', progressScopeMocks.progress)
       expect(routerMocks.push).toHaveBeenCalledWith('/practice/dva-c02/3?from=%2F')
     })
+    expect(loadBank).not.toHaveBeenCalled()
+    expect(progressScopeMocks.progress.listProgress).not.toHaveBeenCalled()
   })
 
   it('keeps the all-answered route when no unanswered question remains', async () => {
@@ -270,7 +282,7 @@ describe('HomePage continue practice', () => {
 })
 
 describe('HomePage quick actions', () => {
-  it('orders wrong redo, list, and bookmarks while enabling wrong redo when count is positive', () => {
+  it('orders smart practice before wrong redo, list, and bookmarks while enabling wrong redo when count is positive', () => {
     render(<HomePage />)
 
     const quickStart = screen.getByText('Quick start')
@@ -278,6 +290,7 @@ describe('HomePage quick actions', () => {
 
     expect(quickStart.nextElementSibling?.className).toContain('grid-cols-2')
     expect(cards.map((card) => card.textContent)).toEqual([
+      'Smart practice10 questions',
       'Wrong redo2',
       'Question list',
       'Bookmarks0',
@@ -287,6 +300,111 @@ describe('HomePage quick actions', () => {
     )
     expect(screen.getByText('Question list').closest('a')?.getAttribute('href')).toBe('/list')
     expect(screen.getByText('Bookmarks').closest('a')?.getAttribute('href')).toBe('/list/bookmarks')
+  })
+
+  it('starts a smart practice session with a fixed current-bank set', async () => {
+    vi.mocked(loadBank).mockResolvedValue(
+      Array.from({ length: 12 }, (_, index) => makeQuestion(index + 1)),
+    )
+    progressScopeMocks.progress.listProgress.mockReturnValue([makeProgress(99, false)])
+
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
+
+    await waitFor(() => {
+      expect(loadBank).toHaveBeenCalledWith('DVA-C02')
+      expect(progressScopeMocks.progress.listProgress).toHaveBeenCalledWith('DVA-C02')
+      expect(routerMocks.push).toHaveBeenCalledTimes(1)
+    })
+    const href = routerMocks.push.mock.calls[0][0] as string
+    const query = new URLSearchParams(href.split('?')[1])
+    const set = query.get('set')?.split(',').map(Number) ?? []
+
+    expect(query.get('from')).toBe('/smart-practice')
+    expect(set).toHaveLength(10)
+    expect(new Set(set).size).toBe(10)
+    expect(set.every((qid) => qid >= 1 && qid <= 12)).toBe(true)
+    expect(href).toContain(`/practice/dva-c02/${set[0]}?`)
+  })
+
+  it('starts smart practice from the active progress module for the selected certification only', async () => {
+    usePrefsStore.setState({ locale: 'en', theme: 'light', currentCert: 'CLF-C02' })
+    vi.mocked(loadBank).mockResolvedValue(
+      Array.from({ length: 12 }, (_, index) => ({
+        ...makeQuestion(index + 101),
+        cert: 'CLF-C02' as const,
+      })),
+    )
+    progressScopeMocks.progress.listProgress.mockImplementation((cert: 'DVA-C02' | 'CLF-C02') => {
+      if (cert === 'DVA-C02') return [makeProgress(1, false), makeProgress(2, false)]
+      return [makeProgress(101, false), makeProgress(102, true)]
+    })
+
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
+
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
+    expect(loadBank).toHaveBeenCalledWith('CLF-C02')
+    expect(progressScopeMocks.progress.listProgress).toHaveBeenCalledWith('CLF-C02')
+    expect(progressScopeMocks.progress.listProgress).not.toHaveBeenCalledWith('DVA-C02')
+
+    const href = routerMocks.push.mock.calls[0][0] as string
+    const query = new URLSearchParams(href.split('?')[1])
+    const set = query.get('set')?.split(',').map(Number) ?? []
+    expect(href).toMatch(/^\/practice\/clf-c02\/\d+\?from=%2Fsmart-practice&set=/)
+    expect(set).toHaveLength(10)
+    expect(set.every((qid) => qid >= 101 && qid <= 112)).toBe(true)
+    expect(set).not.toEqual(expect.arrayContaining([1, 2]))
+  })
+
+  it('disables smart practice while generating and ignores duplicate taps', async () => {
+    let resolveBank: (value: Awaited<ReturnType<typeof loadBank>>) => void = () => {}
+    vi.mocked(loadBank).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBank = resolve
+        }),
+    )
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole<HTMLButtonElement>('button', { name: /Smart practice/ }).disabled,
+      ).toBe(true)
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
+    expect(loadBank).toHaveBeenCalledTimes(1)
+
+    resolveBank([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
+  })
+
+  it('stays on home and shows a toast when smart practice generation fails', async () => {
+    vi.mocked(loadBank).mockRejectedValueOnce(new Error('failed'))
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
+
+    await waitFor(() => {
+      expect(routerMocks.push).not.toHaveBeenCalled()
+      expect(toastMocks.toast).toHaveBeenCalledWith('Could not start smart practice. Try again.')
+    })
+  })
+
+  it('stays on home and shows a toast when smart practice has no questions', async () => {
+    vi.mocked(loadBank).mockResolvedValueOnce([])
+    render(<HomePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
+
+    await waitFor(() => {
+      expect(routerMocks.push).not.toHaveBeenCalled()
+      expect(toastMocks.toast).toHaveBeenCalledWith('Could not start smart practice. Try again.')
+    })
   })
 
   it('disables wrong redo while the count is loading', () => {

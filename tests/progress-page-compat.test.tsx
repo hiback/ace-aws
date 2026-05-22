@@ -13,7 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PracticePage from '../src/app/(immersive)/practice/[cert]/[qid]/page'
 import PracticeCompletePage from '../src/app/(immersive)/practice/[cert]/complete/page'
 import BookmarksPage from '../src/app/(tabbed)/list/bookmarks/page'
-import type { CertCode, QuestionProgress } from '../src/data/types'
+import { loadBank } from '../src/data/loaders'
+import type { CertCode, Question, QuestionProgress } from '../src/data/types'
 import { findNextListReviewQid, findNextUnansweredQid } from '../src/hooks/use-answer'
 import { browserProgress } from '../src/lib/browser-progress-module'
 import { usePrefsStore } from '../src/stores/prefs-store'
@@ -22,10 +23,16 @@ const mocks = vi.hoisted(() => ({
   params: { cert: 'dva-c02', qid: '1' },
   searchParams: new URLSearchParams(),
   bank: [] as Array<{ id: number }>,
+  bankLoading: false,
+  question: undefined as unknown as { id: number },
   progress: null as QuestionProgress | null,
   router: { push: vi.fn(), replace: vi.fn() },
   recordAnswer: { mutate: vi.fn(), isPending: false },
   toggleBookmark: { mutate: vi.fn() },
+  progressModule: {
+    listProgress: vi.fn(),
+  },
+  toast: vi.fn(),
 }))
 
 const question = {
@@ -47,6 +54,26 @@ const question = {
   },
 } as const
 
+const multiQuestion = {
+  ...question,
+  type: 'multi',
+  correct_answer: ['A', 'B'],
+  answer_count: 2,
+  vote_distribution: { AB: 1 },
+  en: {
+    ...question.en,
+    options: { A: 'Correct option A', B: 'Correct option B', C: 'Wrong option C' },
+  },
+  zh: {
+    ...question.zh,
+    options: { A: '正确选项 A', B: '正确选项 B', C: '错误选项 C' },
+  },
+} as const
+
+function loadableQuestion(id: number): Question {
+  return { ...question, id, correct_answer: ['A'] } as Question
+}
+
 vi.mock('next/navigation', () => ({
   useParams: () => mocks.params,
   useRouter: () => mocks.router,
@@ -66,15 +93,39 @@ vi.mock('../src/hooks/use-progress-stats', () => ({
   useBookmarksList: () => ({ data: [1], isLoading: false }),
 }))
 
+vi.mock('../src/components/providers/progress-scope-provider', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../src/components/providers/progress-scope-provider')>()
+  return {
+    ...actual,
+    useProgressModule: () => mocks.progressModule,
+  }
+})
+
+vi.mock('../src/hooks/use-toast', () => ({
+  useToast: () => ({ toast: mocks.toast }),
+}))
+
+vi.mock('../src/data/loaders', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/data/loaders')>()
+  return {
+    ...actual,
+    loadBank: vi.fn(),
+  }
+})
+
 vi.mock('../src/hooks/use-question', () => ({
   useQuestion: () => ({
-    data: Number(mocks.params.qid) === question.id ? question : null,
+    data: Number(mocks.params.qid) === mocks.question.id ? mocks.question : null,
     isLoading: false,
   }),
 }))
 
 vi.mock('../src/hooks/use-question-bank', () => ({
-  useQuestionBank: () => ({ data: mocks.bank, isLoading: false }),
+  useQuestionBank: () => ({
+    data: mocks.bankLoading ? undefined : mocks.bank,
+    isLoading: mocks.bankLoading,
+  }),
 }))
 
 vi.mock('../src/components/domain/question-list-row', () => ({
@@ -86,7 +137,9 @@ vi.mock('../src/components/domain/question-list-row', () => ({
 beforeEach(() => {
   mocks.params = { cert: 'dva-c02', qid: '1' }
   mocks.searchParams = new URLSearchParams()
+  mocks.question = question
   mocks.bank = [question]
+  mocks.bankLoading = false
   mocks.progress = {
     qid: 1,
     correctCount: 0,
@@ -102,6 +155,11 @@ beforeEach(() => {
   mocks.recordAnswer.mutate.mockClear()
   mocks.recordAnswer.isPending = false
   mocks.toggleBookmark.mutate.mockClear()
+  mocks.progressModule.listProgress.mockReset()
+  mocks.progressModule.listProgress.mockReturnValue([mocks.progress])
+  mocks.toast.mockClear()
+  vi.mocked(loadBank).mockReset()
+  vi.mocked(loadBank).mockResolvedValue([loadableQuestion(1)])
   vi.mocked(findNextListReviewQid).mockReset()
   vi.mocked(findNextListReviewQid).mockResolvedValue(null)
   vi.mocked(findNextUnansweredQid).mockReset()
@@ -179,6 +237,263 @@ describe('progress page compatibility', () => {
     expect(screen.queryByText('View last result')).toBeNull()
     expect(screen.queryByText('Wrong')).toBeNull()
     expect(screen.queryByText('Because A is correct.')).toBeNull()
+  })
+
+  it('starts smart practice answered questions as mandatory fresh attempts', () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1,2')
+    mocks.progress = {
+      qid: 1,
+      correctCount: 0,
+      wrongCount: 1,
+      lastPicks: ['B'],
+      lastCorrect: false,
+      lastAnsweredAt: 1_700_000_000_001,
+      bookmarked: false,
+      bookmarkUpdatedAt: null,
+    }
+
+    render(<PracticePage />)
+
+    expect(screen.getByText('Submit')).not.toBeNull()
+    expect(screen.queryByText('Skip')).toBeNull()
+    expect(screen.queryByText('View last result')).toBeNull()
+    expect(screen.queryByText('Wrong')).toBeNull()
+    expect(screen.queryByText('Because A is correct.')).toBeNull()
+  })
+
+  it('routes smart practice without a fixed set safely home', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice')
+
+    render(<PracticePage />)
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledWith('/'))
+    expect(screen.queryByText('Submit')).toBeNull()
+  })
+
+  it.each([
+    'set=1,nope',
+    'set=99,100',
+    'set=1,2,3,4,5,6,7,8,9,10,11',
+  ])('routes smart practice with invalid fixed set %s safely home', async (query) => {
+    mocks.searchParams = new URLSearchParams(`from=/smart-practice&${query}`)
+    mocks.bank = Array.from({ length: 11 }, (_value, index) => ({ ...question, id: index + 1 }))
+
+    render(<PracticePage />)
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledWith('/'))
+    expect(screen.queryByText('Submit')).toBeNull()
+  })
+
+  it('requires one selected option before submitting a smart practice single-select question', () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1,2')
+
+    render(<PracticePage />)
+
+    expect(screen.queryByText('Skip')).toBeNull()
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByText('Correct option'))
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('requires the full answer count before submitting a smart practice multi-select question', () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1,2')
+    mocks.question = multiQuestion
+    mocks.bank = [multiQuestion, { id: 2 }]
+
+    render(<PracticePage />)
+
+    expect(screen.queryByText('Skip')).toBeNull()
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByText('Correct option A'))
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByText('Correct option B'))
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('keeps normal single-select practice rendering with skip plus disabled submit until selected', () => {
+    render(<PracticePage />)
+
+    expect(screen.getByText('Skip')).not.toBeNull()
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByText('Correct option'))
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('keeps normal multi-select practice rendering with skip plus full-count submit gating', () => {
+    mocks.question = multiQuestion
+    mocks.bank = [multiQuestion]
+
+    render(<PracticePage />)
+
+    expect(screen.getByText('Skip')).not.toBeNull()
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByText('Correct option A'))
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByText('Correct option B'))
+    expect(screen.getByText('Submit').closest('button')?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('records smart practice answers and advances through the fixed set with source and set preserved', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1,2')
+    mocks.bank = [question, { id: 2 }]
+    mocks.recordAnswer.mutate.mockImplementationOnce((_vars, options) => {
+      mocks.progress = {
+        qid: 1,
+        correctCount: 1,
+        wrongCount: 0,
+        lastPicks: ['A'],
+        lastCorrect: true,
+        lastAnsweredAt: 1_700_000_000_002,
+        bookmarked: false,
+        bookmarkUpdatedAt: null,
+      }
+      options?.onSuccess?.(mocks.progress, { qid: 1, picks: ['A'], correct: true })
+    })
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByText('Correct option'))
+    fireEvent.click(screen.getByText('Submit'))
+
+    expect(mocks.recordAnswer.mutate).toHaveBeenCalledWith(
+      { qid: 1, picks: ['A'], correct: true },
+      expect.any(Object),
+    )
+
+    fireEvent.click(screen.getByText('Next'))
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fsmart-practice&set=1%2C2',
+      ),
+    )
+  })
+
+  it('normalizes smart practice next URLs after dropping stale and duplicate fixed-set ids', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=99,1,1,2')
+    mocks.bank = [question, { id: 2 }]
+    mocks.recordAnswer.mutate.mockImplementationOnce((_vars, options) => {
+      mocks.progress = {
+        qid: 1,
+        correctCount: 1,
+        wrongCount: 0,
+        lastPicks: ['A'],
+        lastCorrect: true,
+        lastAnsweredAt: 1_700_000_000_002,
+        bookmarked: false,
+        bookmarkUpdatedAt: null,
+      }
+      options?.onSuccess?.(mocks.progress, { qid: 1, picks: ['A'], correct: true })
+    })
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByText('Correct option'))
+    fireEvent.click(screen.getByText('Submit'))
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fsmart-practice&set=1%2C2',
+      ),
+    )
+  })
+
+  it('redirects smart practice path qids outside the fixed set to the normalized first set item', async () => {
+    mocks.params = { cert: 'dva-c02', qid: '1' }
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=99,2,2,3')
+    mocks.bank = [question, { id: 2 }, { id: 3 }]
+
+    render(<PracticePage />)
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/2?from=%2Fsmart-practice&set=2%2C3',
+      ),
+    )
+    expect(screen.queryByText('Submit')).toBeNull()
+  })
+
+  it('shows smart practice position from the fixed set', () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=2,1,3')
+    mocks.bank = [{ id: 2 }, question, { id: 3 }]
+
+    render(<PracticePage />)
+
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName.toLowerCase() === 'span' &&
+          element.textContent?.replace(/\s+/g, ' ').trim() === 'Question 2 of 3',
+      ),
+    ).not.toBeNull()
+  })
+
+  it('routes smart practice final item to completion with source and set preserved and backs out to home', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1')
+    mocks.recordAnswer.mutate.mockImplementationOnce((_vars, options) => {
+      mocks.progress = {
+        qid: 1,
+        correctCount: 1,
+        wrongCount: 0,
+        lastPicks: ['A'],
+        lastCorrect: true,
+        lastAnsweredAt: 1_700_000_000_002,
+        bookmarked: false,
+        bookmarkUpdatedAt: null,
+      }
+      options?.onSuccess?.(mocks.progress, { qid: 1, picks: ['A'], correct: true })
+    })
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByLabelText('Back'))
+    expect(mocks.router.push).toHaveBeenCalledWith('/')
+
+    fireEvent.click(screen.getByText('Correct option'))
+    fireEvent.click(screen.getByText('Submit'))
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/complete?from=%2Fsmart-practice&set=1',
+      ),
+    )
+  })
+
+  it('normalizes smart practice completion URLs after dropping stale and duplicate fixed-set ids', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=99,1,1')
+    mocks.bank = [question]
+    mocks.recordAnswer.mutate.mockImplementationOnce((_vars, options) => {
+      mocks.progress = {
+        qid: 1,
+        correctCount: 1,
+        wrongCount: 0,
+        lastPicks: ['A'],
+        lastCorrect: true,
+        lastAnsweredAt: 1_700_000_000_002,
+        bookmarked: false,
+        bookmarkUpdatedAt: null,
+      }
+      options?.onSuccess?.(mocks.progress, { qid: 1, picks: ['A'], correct: true })
+    })
+
+    render(<PracticePage />)
+
+    fireEvent.click(screen.getByText('Correct option'))
+    fireEvent.click(screen.getByText('Submit'))
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() =>
+      expect(mocks.router.push).toHaveBeenCalledWith(
+        '/practice/dva-c02/complete?from=%2Fsmart-practice&set=1',
+      ),
+    )
   })
 
   it('returns wrong redo URLs without a captured set to home', async () => {
@@ -658,6 +973,127 @@ describe('progress page compatibility', () => {
 
     expect(screen.getByText('Wrong redo complete')).not.toBeNull()
     fireEvent.click(screen.getByText('Back to home'))
+    expect(mocks.router.push).toHaveBeenCalledWith('/')
+    expect(screen.queryByText('Back to wrong list')).toBeNull()
+  })
+
+  it('renders smart practice completion stats from the fixed set and latest progress', () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1,2,3')
+    mocks.bank = [question, { ...question, id: 2 }, { ...question, id: 3 }]
+    mocks.progressModule.listProgress.mockReturnValue([
+      { ...mocks.progress, qid: 1, lastCorrect: true, correctCount: 1, wrongCount: 0 },
+      { ...mocks.progress, qid: 2, lastCorrect: false, correctCount: 0, wrongCount: 1 },
+    ])
+
+    render(<PracticeCompletePage />)
+
+    expect(screen.getByText(/Session complete/)).not.toBeNull()
+    expect(screen.getByRole('img', { name: 'You got 1 of 3 correct' })).not.toBeNull()
+    expect(screen.getByText('Accuracy').closest('div')?.textContent).toBe('33%Accuracy')
+    expect(screen.getByText('Wrong').closest('div')?.textContent).toBe('2Wrong')
+    expect(screen.getByText('Round size').closest('div')?.textContent).toBe('3qRound size')
+    expect(screen.queryByText(/elapsed/i)).toBeNull()
+    expect(screen.queryByText(/average/i)).toBeNull()
+  })
+
+  it('shows loading instead of a smart summary while the completion bank is loading', () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1')
+    mocks.bankLoading = true
+
+    render(<PracticeCompletePage />)
+
+    expect(screen.getByRole('status', { name: 'Loading' })).not.toBeNull()
+    expect(screen.queryByText(/Session complete/)).toBeNull()
+    expect(screen.queryByText('/ 0')).toBeNull()
+    expect(mocks.router.push).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', 'from=/smart-practice'],
+    ['malformed', 'from=/smart-practice&set=1,nope'],
+    ['fully stale', 'from=/smart-practice&set=99,100'],
+    ['overlong', 'from=/smart-practice&set=1,2,3,4,5,6,7,8,9,10,11'],
+  ])('routes %s smart completion fixed sets home without rendering a summary', async (_name, query) => {
+    mocks.searchParams = new URLSearchParams(query)
+    mocks.bank = Array.from({ length: 11 }, (_value, index) => ({ ...question, id: index + 1 }))
+
+    render(<PracticeCompletePage />)
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledWith('/'))
+    expect(screen.queryByText(/Session complete/)).toBeNull()
+    expect(screen.queryByText('/ 0')).toBeNull()
+  })
+
+  it('starts another smart practice round from latest progress', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1')
+    vi.mocked(loadBank).mockResolvedValue([loadableQuestion(2), loadableQuestion(3)])
+    mocks.progressModule.listProgress.mockReturnValue([
+      { ...mocks.progress, qid: 1, lastCorrect: true, correctCount: 1, wrongCount: 0 },
+      { ...mocks.progress, qid: 2, lastCorrect: false, correctCount: 0, wrongCount: 1 },
+    ])
+
+    render(<PracticeCompletePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Again' }))
+
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledTimes(1))
+    expect(loadBank).toHaveBeenCalledWith('DVA-C02')
+    expect(mocks.progressModule.listProgress).toHaveBeenCalledWith('DVA-C02')
+    const href = mocks.router.push.mock.calls[0][0] as string
+    expect(href).toMatch(/^\/practice\/dva-c02\/[23]\?from=%2Fsmart-practice&set=/)
+    expect(
+      new URLSearchParams(href.split('?')[1]).get('set')?.split(',').map(Number).toSorted(),
+    ).toEqual([2, 3])
+  })
+
+  it('prevents duplicate smart completion starts while pending', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1')
+    let resolveBank: (value: Awaited<ReturnType<typeof loadBank>>) => void = () => {}
+    vi.mocked(loadBank).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBank = resolve
+        }),
+    )
+
+    render(<PracticeCompletePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Again' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Starting...' }).disabled).toBe(
+        true,
+      )
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Starting...' }))
+    expect(loadBank).toHaveBeenCalledTimes(1)
+
+    resolveBank([loadableQuestion(1)])
+    await waitFor(() => expect(mocks.router.push).toHaveBeenCalledTimes(1))
+  })
+
+  it('keeps smart completion visible and shows a toast when next round generation fails', async () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1')
+    vi.mocked(loadBank).mockRejectedValueOnce(new Error('failed'))
+
+    render(<PracticeCompletePage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Again' }))
+
+    await waitFor(() => {
+      expect(mocks.router.push).not.toHaveBeenCalled()
+      expect(mocks.toast).toHaveBeenCalledWith('Could not start smart practice. Try again.')
+    })
+    expect(screen.getByText(/Session complete/)).not.toBeNull()
+  })
+
+  it('returns home from smart practice completion', () => {
+    mocks.searchParams = new URLSearchParams('from=/smart-practice&set=1')
+
+    render(<PracticeCompletePage />)
+
+    fireEvent.click(screen.getByText('Back to home'))
+
     expect(mocks.router.push).toHaveBeenCalledWith('/')
     expect(screen.queryByText('Back to wrong list')).toBeNull()
   })

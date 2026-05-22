@@ -16,6 +16,7 @@ describe('practice-flow helpers', () => {
     expect(normalizePracticeSource('/list/bookmarks')).toBe('/list/bookmarks')
     expect(normalizePracticeSource('/list/unanswered')).toBe('/list/unanswered')
     expect(normalizePracticeSource('/wrong-redo')).toBe('/wrong-redo')
+    expect(normalizePracticeSource('/smart-practice')).toBe('/smart-practice')
     expect(normalizePracticeSource('/settings')).toBe('/')
     expect(normalizePracticeSource(null)).toBe('/')
   })
@@ -27,6 +28,7 @@ describe('practice-flow helpers', () => {
     expect(isListPracticeSource('/list/bookmarks')).toBe(true)
     expect(isListPracticeSource('/list/unanswered')).toBe(true)
     expect(isListPracticeSource('/wrong-redo')).toBe(false)
+    expect(isListPracticeSource('/smart-practice')).toBe(false)
   })
 
   it('builds encoded practice hrefs with optional set snapshots', () => {
@@ -37,6 +39,9 @@ describe('practice-flow helpers', () => {
     expect(buildPracticeHref('DVA-C02', 7, '/list/wrong', '7,9')).toBe(
       '/practice/dva-c02/7?from=%2Flist%2Fwrong&set=7%2C9',
     )
+    expect(buildPracticeHref('DVA-C02', 7, '/smart-practice', [7, 9])).toBe(
+      '/practice/dva-c02/7?from=%2Fsmart-practice&set=7%2C9',
+    )
   })
 
   it('builds encoded completion hrefs', () => {
@@ -46,6 +51,9 @@ describe('practice-flow helpers', () => {
     )
     expect(buildCompletionHref('DVA-C02', '/list/unanswered')).toBe(
       '/practice/dva-c02/complete?from=%2Flist%2Funanswered',
+    )
+    expect(buildCompletionHref('DVA-C02', '/smart-practice', [7, 9])).toBe(
+      '/practice/dva-c02/complete?from=%2Fsmart-practice&set=7%2C9',
     )
   })
 
@@ -62,6 +70,14 @@ describe('practice-flow helpers', () => {
 
   it('drops qids that do not exist in the current bank', () => {
     expect(parsePracticeSet('1,2,99,3', new Set([1, 2, 3]))).toEqual([1, 2, 3])
+  })
+
+  it('rejects sets above an explicit parsed item limit without globally capping parsed sets', () => {
+    const bankIds = new Set(Array.from({ length: 11 }, (_value, index) => index + 1))
+    const raw = '1,2,3,4,5,6,7,8,9,10,11'
+
+    expect(parsePracticeSet(raw, bankIds, { maxItems: 10 })).toBeNull()
+    expect(parsePracticeSet(raw, bankIds)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
   })
 
   it('finds the next qid inside a parsed snapshot', () => {

@@ -4,6 +4,7 @@ import Link from 'next/link'
 interface QuickActionCardProps {
   icon: LucideIcon
   label: string
+  description?: string
   count?: number
   href?: string
   onClick?: () => void
@@ -18,6 +19,7 @@ interface QuickActionCardProps {
 export function QuickActionCard({
   icon: Icon,
   label,
+  description,
   count,
   href,
   onClick,
@@ -40,6 +42,9 @@ export function QuickActionCard({
         />
       </div>
       <p className="text-body font-semibold text-ink">{label}</p>
+      {description ? (
+        <p className="text-secondary font-semibold text-ink-mute">{description}</p>
+      ) : null}
       {typeof count === 'number' ? (
         <p className="font-mono text-page font-bold text-ink leading-tight">{count}</p>
       ) : null}

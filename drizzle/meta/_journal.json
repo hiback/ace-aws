@@ -8,6 +8,13 @@
       "when": 1778915651345,
       "tag": "0000_sticky_magus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779601585494,
+      "tag": "0001_wealthy_bloodstrike",
+      "breakpoints": true
     }
   ]
 }

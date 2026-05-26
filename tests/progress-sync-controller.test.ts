@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CertCode, QuestionProgress } from '../src/data/types'
 import type { ProgressSyncResult } from '../src/lib/account-progress-sync-client'
+import { BrowserProgressModule } from '../src/lib/browser-progress-module'
+import {
+  getAccountMockExamSyncLedger,
+  syncDirtyMockExam,
+} from '../src/lib/mock-exam/account-sync-ledger'
+import type { MockExamAttempt } from '../src/lib/mock-exam/start-attempt'
+import type { SubmittedMockExamAttempt } from '../src/lib/mock-exam/submission'
 import {
   createProgressSyncController,
   type ProgressSyncControllerAdapter,
@@ -22,12 +29,64 @@ function progress(qid: number, overrides: Partial<QuestionProgress> = {}): Quest
   }
 }
 
+function mockExamDraft(id: string, cert: CertCode = 'DVA-C02'): MockExamAttempt {
+  return {
+    id,
+    cert,
+    draftStatus: 'saved',
+    currentIndex: 0,
+    questionCount: 1,
+    timeLimitSeconds: 120,
+    startedAt: 1000,
+    updatedAt: 2000,
+    questions: [
+      {
+        qid: 1,
+        domain: 'Development with AWS Services',
+        topic: 'Development',
+        correctAnswer: ['A'],
+        type: 'single',
+        userPicks: ['A'],
+        correct: true,
+        flagged: false,
+        answered: true,
+      },
+    ],
+  }
+}
+
+function mockExamSubmitted(
+  id: string,
+  cert: CertCode = 'DVA-C02',
+  submittedAt = 3000,
+): SubmittedMockExamAttempt {
+  return {
+    id,
+    cert,
+    submittedAt,
+    questions: mockExamDraft(`${id}-draft`, cert).questions,
+    summary: {
+      score: 850,
+      passed: true,
+      correctCount: 1,
+      totalCount: 1,
+      unansweredCount: 0,
+      accuracy: 1,
+      timeUsedSeconds: 60,
+      autoSubmitted: false,
+      domains: [],
+    },
+  }
+}
+
 function createAdapter() {
   const baselines = new Map<string, { revision: number; lastSyncedAt: number }>()
   const dirty = new Map<CertCode, QuestionProgress[]>()
   const accountProgress = new Map<CertCode, QuestionProgress[]>()
   const dismissedImports = new Set<string>()
   const anonymous = new Map<CertCode, QuestionProgress[]>()
+  const anonymousMockExam = new Set<CertCode>()
+  const dirtyMockExam = new Set<CertCode>()
   const owner = { userId: 'user-1' }
   const syncResponses: Array<
     | ProgressSyncResult
@@ -44,6 +103,9 @@ function createAdapter() {
   const notices: ProgressSyncNotice[] = []
   const syncCalls: Array<{ cert: CertCode; baseRevision: number; progress: QuestionProgress[] }> =
     []
+  const mockExamImportCalls: CertCode[] = []
+  const mockExamSyncCalls: CertCode[] = []
+  const mockExamInvalidations: string[] = []
   const snapshotCalls: CertCode[] = []
   const invalidations: string[] = []
   const keepingDirtySnapshotCalls: Array<{
@@ -165,6 +227,27 @@ function createAdapter() {
         dismissedImports.delete(userId)
       },
     },
+    mockExam: {
+      hasDirty: (cert) => dirtyMockExam.has(cert),
+      syncDirty: async (cert) => {
+        mockExamSyncCalls.push(cert)
+        dirtyMockExam.delete(cert)
+        return { ok: true }
+      },
+      summarizeImport: () => {
+        const certs = Array.from(anonymousMockExam)
+        return { certs, certCount: certs.length, recordCount: certs.length }
+      },
+      importAnonymousCert: async (cert) => {
+        mockExamImportCalls.push(cert)
+        anonymousMockExam.delete(cert)
+        return { ok: true }
+      },
+      clearScope: vi.fn(),
+      invalidate: async () => {
+        mockExamInvalidations.push('mock-exam')
+      },
+    },
     auth: {
       storeExpiredLoginMessage: vi.fn(),
       signOut: vi.fn(),
@@ -180,18 +263,41 @@ function createAdapter() {
     dirty,
     accountProgress,
     anonymous,
+    anonymousMockExam,
+    dirtyMockExam,
     syncResponses,
     snapshotErrors,
     snapshotResponses,
     owner,
     notices,
     syncCalls,
+    mockExamImportCalls,
+    mockExamSyncCalls,
+    mockExamInvalidations,
     snapshotCalls,
     invalidations,
     keepingDirtySnapshotCalls,
     afterSyncSnapshotCalls,
     baselineKey,
   }
+}
+
+function useLedgerBackedMockExamAdapter(ctx: ReturnType<typeof createAdapter>) {
+  if (!ctx.adapter.mockExam) throw new Error('mock exam adapter missing')
+  ctx.adapter.mockExam = {
+    hasDirty: (cert) => getAccountMockExamSyncLedger().hasDirty(cert),
+    syncDirty: async (cert) => {
+      ctx.mockExamSyncCalls.push(cert)
+      return syncDirtyMockExam(cert)
+    },
+    summarizeImport: () => getAccountMockExamSyncLedger().summarizeAnonymousImport(),
+    importAnonymousCert: async () => ({ ok: true }),
+    clearScope: () => getAccountMockExamSyncLedger().clearCurrentOwner(),
+    invalidate: async () => {
+      ctx.mockExamInvalidations.push('mock-exam')
+    },
+  }
+  return ctx
 }
 
 async function flushPromises() {
@@ -407,6 +513,219 @@ describe('Progress Sync controller', () => {
     expect(controller.getState().status).toBe('synced')
   })
 
+  it('enqueueDirtySync flushes dirty mock exam state without dirty question progress', async () => {
+    vi.useFakeTimers()
+    const ctx = createAdapter()
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.dirtyMockExam.add('DVA-C02')
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.enqueueDirtySync('DVA-C02')
+    await vi.advanceTimersByTimeAsync(750)
+
+    expect(ctx.syncCalls).toEqual([])
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.dirtyMockExam.has('DVA-C02')).toBe(false)
+    expect(controller.getState().status).toBe('synced')
+  })
+
+  it('enqueueDirtySync invalidates mock exam queries after dirty mock exam sync succeeds', async () => {
+    vi.useFakeTimers()
+    const ctx = createAdapter()
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.dirtyMockExam.add('DVA-C02')
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.enqueueDirtySync('DVA-C02')
+    await vi.advanceTimersByTimeAsync(750)
+    await flushPromises()
+
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.mockExamInvalidations).toEqual(['mock-exam'])
+  })
+
+  it('manual sync flushes ledger-backed dirty mock exam drafts through the mockExam sub-adapter', async () => {
+    localStorage.clear()
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    const ctx = useLedgerBackedMockExamAdapter(createAdapter())
+    const dirtyDraft = mockExamDraft('ledger-backed-controller-draft')
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    getAccountMockExamSyncLedger().writeDraft(dirtyDraft)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 1,
+          draft: dirtyDraft,
+          snapshotRequired: false,
+        }),
+      } as Response),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/mock-exam/dva-c02/draft/sync',
+      expect.objectContaining({
+        body: JSON.stringify({ baseRevision: 0, draft: dirtyDraft }),
+      }),
+    )
+    expect(getAccountMockExamSyncLedger().hasDirty('DVA-C02')).toBe(false)
+    vi.unstubAllGlobals()
+  })
+
+  it('manual sync flushes ledger-backed dirty submitted mock exam attempts through the mockExam sub-adapter', async () => {
+    localStorage.clear()
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    const ctx = useLedgerBackedMockExamAdapter(createAdapter())
+    const submitted = mockExamSubmitted('ledger-backed-controller-submitted')
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    getAccountMockExamSyncLedger().appendSubmittedAttempt(submitted)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          cert: 'DVA-C02',
+          revision: 1,
+          submittedAttempts: [submitted],
+        }),
+      } as Response),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/mock-exam/dva-c02/history/sync',
+      expect.objectContaining({
+        body: JSON.stringify({ baseRevision: 0, submittedAttempts: [submitted] }),
+      }),
+    )
+    expect(getAccountMockExamSyncLedger().listDirtySubmittedAttemptIds('DVA-C02')).toEqual([])
+    vi.unstubAllGlobals()
+  })
+
+  it('does not invalidate mock exam queries when no dirty mock exam state is flushed', async () => {
+    const ctx = createAdapter()
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(ctx.mockExamSyncCalls).toEqual([])
+    expect(ctx.mockExamInvalidations).toEqual([])
+  })
+
+  it('startup revision check flushes dirty mock exam state without dirty question progress', async () => {
+    const ctx = createAdapter()
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.dirtyMockExam.add('DVA-C02')
+    const controller = createProgressSyncController(ctx.adapter)
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+    await flushPromises()
+    await flushPromises()
+    await flushPromises()
+    await flushPromises()
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 2, progress: [] }])
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.dirtyMockExam.has('DVA-C02')).toBe(false)
+    expect(controller.getState().status).toBe('synced')
+  })
+
+  it('startup revision check continues after a dirty mock exam retry succeeds', async () => {
+    vi.useFakeTimers()
+    const ctx = createAdapter()
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.dirtyMockExam.add('DVA-C02')
+    if (!ctx.adapter.mockExam) throw new Error('mock exam adapter missing')
+    ctx.adapter.mockExam.syncDirty = async (cert) => {
+      ctx.mockExamSyncCalls.push(cert)
+      if (ctx.mockExamSyncCalls.length === 1) return { ok: false, reason: 'temporary' }
+      ctx.dirtyMockExam.delete(cert)
+      return { ok: true }
+    }
+    const controller = createProgressSyncController(ctx.adapter)
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+    await flushPromises()
+
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.syncCalls).toEqual([])
+    expect(ctx.dirtyMockExam.has('DVA-C02')).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    await flushPromises()
+    await flushPromises()
+    await flushPromises()
+
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02', 'DVA-C02'])
+    expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 2, progress: [] }])
+    expect(ctx.dirtyMockExam.has('DVA-C02')).toBe(false)
+    expect(controller.getState().status).toBe('synced')
+  })
+
   it('keeps visible state stable while a non-current cert sync is in flight', async () => {
     vi.useFakeTimers()
     const ctx = createAdapter()
@@ -588,6 +907,53 @@ describe('Progress Sync controller', () => {
     expect(ctx.baselines.get(ctx.baselineKey('user-1', 'DVA-C02'))?.revision).toBe(4)
   })
 
+  it('starts background mock exam sync for the previous cert when switching certs', async () => {
+    const ctx = createAdapter()
+    let resolveCurrentSync: (result: ProgressSyncResult) => void = () => {}
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    ctx.dirtyMockExam.add('DVA-C02')
+    ctx.syncResponses.push(
+      () =>
+        new Promise<ProgressSyncResult>((resolve) => {
+          resolveCurrentSync = resolve
+        }),
+    )
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    controller.update({
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'CLF-C02',
+      scope: 'account',
+    })
+    await flushPromises()
+
+    expect(ctx.syncCalls.filter((call) => call.cert === 'DVA-C02')).toEqual([])
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.dirtyMockExam.has('DVA-C02')).toBe(false)
+
+    resolveCurrentSync({
+      cert: 'CLF-C02',
+      revision: 5,
+      accepted: [],
+      rejected: [],
+      snapshotRequired: false,
+    })
+    await flushPromises()
+  })
+
   it('keeps previous cert dirty progress when switch background sync fails', async () => {
     vi.useFakeTimers()
     const ctx = createAdapter()
@@ -656,6 +1022,7 @@ describe('Progress Sync controller', () => {
     await flushPromises()
 
     expect(ctx.syncCalls.filter((call) => call.cert === 'DVA-C02')).toEqual([])
+    expect(ctx.mockExamSyncCalls).toEqual([])
   })
 
   it('does not start previous cert background sync when the account user changes', async () => {
@@ -776,6 +1143,136 @@ describe('Progress Sync controller', () => {
       [anonymousProgress],
     ])
     expect(ctx.anonymous.get('CLF-C02')).toBeUndefined()
+  })
+
+  it('imports anonymous mock exam data after flushing dirty account mock exam state for that cert', async () => {
+    const ctx = createAdapter()
+    ctx.anonymousMockExam.add('DVA-C02')
+    ctx.dirtyMockExam.add('DVA-C02')
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: null,
+      scope: 'account',
+    })
+
+    await expect(controller.importAnonymousProgress()).resolves.toEqual({ ok: true })
+
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.mockExamImportCalls).toEqual(['DVA-C02'])
+    expect(ctx.anonymousMockExam.has('DVA-C02')).toBe(false)
+  })
+
+  it('shows the existing anonymous import action when only anonymous mock exam data exists', () => {
+    const ctx = createAdapter()
+    ctx.anonymousMockExam.add('DVA-C02')
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    expect(controller.getState()).toMatchObject({
+      view: 'anonymous-import',
+      anonymousImportAvailable: true,
+      anonymousImportSummary: { certCount: 1, recordCount: 1 },
+    })
+  })
+
+  it('marks the current cert dirty and manual sync clears dirty mock exam state', async () => {
+    const ctx = createAdapter()
+    ctx.dirtyMockExam.add('DVA-C02')
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    expect(controller.getState()).toMatchObject({ status: 'dirty', hasDirtyProgress: true })
+
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.dirtyMockExam.has('DVA-C02')).toBe(false)
+    expect(controller.getState()).toMatchObject({ status: 'synced', hasDirtyProgress: false })
+  })
+
+  it('manual sync flushes current cert mock exam dirty state without clearing other certs', async () => {
+    const ctx = createAdapter()
+    ctx.dirtyMockExam.add('DVA-C02')
+    ctx.dirtyMockExam.add('CLF-C02')
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 4,
+      lastSyncedAt: 1_700_000_001_000,
+    })
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02'])
+    expect(ctx.dirtyMockExam.has('DVA-C02')).toBe(false)
+    expect(ctx.dirtyMockExam.has('CLF-C02')).toBe(true)
+  })
+
+  it('before-sign-out flushes dirty mock exam data for all ready certifications', async () => {
+    const ctx = createAdapter()
+    ctx.dirtyMockExam.add('DVA-C02')
+    ctx.dirtyMockExam.add('CLF-C02')
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('before-sign-out')).resolves.toEqual({ ok: true })
+
+    expect(ctx.mockExamSyncCalls).toEqual(['DVA-C02', 'CLF-C02'])
+    expect(ctx.dirtyMockExam.size).toBe(0)
+  })
+
+  it('blocks before-sign-out when dirty account-backed mock exam data cannot sync', async () => {
+    const ctx = createAdapter()
+    ctx.dirtyMockExam.add('CLF-C02')
+    if (!ctx.adapter.mockExam) throw new Error('mock exam adapter missing')
+    ctx.adapter.mockExam.syncDirty = async (cert) => {
+      ctx.mockExamSyncCalls.push(cert)
+      return { ok: false, reason: 'temporary' }
+    }
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    await expect(controller.sync('before-sign-out')).resolves.toEqual({
+      ok: false,
+      reason: 'temporary',
+    })
+
+    expect(ctx.mockExamSyncCalls).toEqual(['CLF-C02'])
+    expect(ctx.dirtyMockExam.has('CLF-C02')).toBe(true)
   })
 
   it('clears account progress and hides UI when sync auth expires', async () => {

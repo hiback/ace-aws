@@ -14,6 +14,7 @@ interface StoredQuestionProgress extends QuestionProgress {
 }
 
 export interface BrowserQuestionProgressModule {
+  getScope?(): ProgressScope
   getProgress(qid: number, cert: CertCode): QuestionProgress | null
   recordAnswer(qid: number, picks: Letter[], correct: boolean, cert: CertCode): void
   listProgress(cert: CertCode): QuestionProgress[]
@@ -218,6 +219,10 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
   constructor(scope: ProgressScope = 'anonymous') {
     this.scope = scope
     this.storageKey = PROGRESS_KEYS[scope]
+  }
+
+  getScope(): ProgressScope {
+    return this.scope
   }
 
   static clearScope(scope: ProgressScope): void {

@@ -29,6 +29,12 @@ import {
 import { BrowserProgressModule } from '@/lib/browser-progress-module'
 import { READY_CERTS } from '@/lib/cert-catalog'
 import {
+  getAccountMockExamSyncLedger,
+  syncDirtyMockExam,
+} from '@/lib/mock-exam/account-sync-ledger'
+import type { MockExamAttempt } from '@/lib/mock-exam/start-attempt'
+import type { SubmittedMockExamAttempt } from '@/lib/mock-exam/submission'
+import {
   type AccountProgressSyncResult,
   type AccountProgressSyncStatus,
   type AnonymousImportResult,
@@ -126,8 +132,66 @@ function throwControllerError(error: unknown): never {
   throw error
 }
 
+async function importAnonymousMockExamCert(cert: CertCode): Promise<AnonymousImportResult> {
+  return getAccountMockExamSyncLedger().importAnonymousCert(cert, {
+    syncHistory: async (historyCert, history) => {
+      if (history.length === 0) return
+      await fetchAccountMockExamHistorySnapshot(historyCert)
+      for (const attempt of history) getAccountMockExamSyncLedger().appendSubmittedAttempt(attempt)
+      const result = await syncDirtyMockExam(historyCert)
+      if (!result.ok) throw new Error('Failed to sync account-backed Mock Exam History')
+    },
+    fetchAccountDraft: fetchAccountMockExamDraftSnapshot,
+    syncDraft: async (draft) => {
+      getAccountMockExamSyncLedger().writeDraft(draft)
+      const result = await syncDirtyMockExam(draft.cert)
+      if (!result.ok) throw new Error('Failed to sync account-backed Mock Exam Draft')
+    },
+  })
+}
+
+async function fetchAccountMockExamDraftSnapshot(cert: CertCode): Promise<MockExamAttempt | null> {
+  const response = await fetch(`/api/mock-exam/${cert.toLowerCase()}/draft/snapshot`, {
+    cache: 'no-store',
+    credentials: 'same-origin',
+  })
+  if (!response.ok) throw new Error('Failed to fetch account-backed Mock Exam Draft')
+  const body = (await response.json()) as {
+    cert: CertCode
+    revision: number
+    draft: MockExamAttempt | null
+  }
+  if (body.cert !== cert || !Number.isFinite(body.revision)) {
+    throw new Error('Invalid account-backed Mock Exam Draft snapshot')
+  }
+  getAccountMockExamSyncLedger().setRevision(cert, body.revision)
+  getAccountMockExamSyncLedger().setDraftSnapshot(cert, body.draft)
+  return body.draft
+}
+
+async function fetchAccountMockExamHistorySnapshot(
+  cert: CertCode,
+): Promise<SubmittedMockExamAttempt[]> {
+  const response = await fetch(`/api/mock-exam/${cert.toLowerCase()}/history/snapshot`, {
+    cache: 'no-store',
+    credentials: 'same-origin',
+  })
+  if (!response.ok) throw new Error('Failed to fetch account-backed Mock Exam History')
+  const body = (await response.json()) as {
+    cert: CertCode
+    revision: number
+    submittedAttempts: SubmittedMockExamAttempt[]
+  }
+  if (body.cert !== cert || !Number.isFinite(body.revision)) {
+    throw new Error('Invalid account-backed Mock Exam History snapshot')
+  }
+  getAccountMockExamSyncLedger().applyHistorySnapshot(cert, body.revision, body.submittedAttempts)
+  return getAccountMockExamSyncLedger().readHistory(cert)
+}
+
 function createProviderAdapter(
   runtimeRef: RefObject<ProviderRuntime | null>,
+  userIdRef: RefObject<string | null>,
 ): ProgressSyncControllerAdapter {
   return {
     readyCerts: READY_CERTS,
@@ -202,6 +266,20 @@ function createProviderAdapter(
       dismissImport: dismissAnonymousImport,
       clearImportDismissal: clearAnonymousImportDismissal,
     },
+    mockExam: {
+      hasDirty: (cert) => getAccountMockExamSyncLedger().hasDirty(cert),
+      syncDirty: syncDirtyMockExam,
+      summarizeImport: () => getAccountMockExamSyncLedger().summarizeAnonymousImport(),
+      importAnonymousCert: importAnonymousMockExamCert,
+      clearScope: () => {
+        const ownerId = userIdRef.current
+        if (ownerId !== null) getAccountMockExamSyncLedger().clearOwner(ownerId)
+        else getAccountMockExamSyncLedger().clearCurrentOwner()
+      },
+      invalidate: async () => {
+        await requireRuntime(runtimeRef).queryClient.invalidateQueries({ queryKey: ['mock-exam'] })
+      },
+    },
     auth: {
       storeExpiredLoginMessage: storeSyncExpiredLoginMessage,
       signOut: () => {
@@ -240,6 +318,7 @@ export function AccountProgressSyncProvider({ children }: { children: React.Reac
   const currentCert = usePrefsStore((s) => s.currentCert)
   const userId = userIdFromSession(session)
   const runtimeRef = useRef<ProviderRuntime | null>(null)
+  const userIdRef = useRef<string | null>(null)
   const controllerRef = useRef<ProgressSyncController | null>(null)
   const disposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [gateSigningOut, setGateSigningOut] = useState(false)
@@ -250,9 +329,13 @@ export function AccountProgressSyncProvider({ children }: { children: React.Reac
     currentCert,
     scope,
   }
+  userIdRef.current = userId
 
   if (controllerRef.current === null) {
-    controllerRef.current = createProgressSyncController(createProviderAdapter(runtimeRef), input)
+    controllerRef.current = createProgressSyncController(
+      createProviderAdapter(runtimeRef, userIdRef),
+      input,
+    )
   }
   const controller = controllerRef.current
   const controllerState = useSyncExternalStore(

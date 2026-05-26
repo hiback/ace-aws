@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm'
-import { boolean, check, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  check,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core'
 import type { Account } from 'next-auth'
 
 export const users = pgTable('users', {
@@ -122,5 +131,53 @@ export const certProgressRevisions = pgTable(
   (revision) => [
     primaryKey({ columns: [revision.userId, revision.cert] }),
     check('cert_progress_revisions_revision_non_negative', sql`${revision.revision} >= 0`),
+  ],
+)
+
+export const mockExamDrafts = pgTable(
+  'mock_exam_drafts',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cert: text('cert').notNull(),
+    attemptId: text('attempt_id').notNull(),
+    detail: jsonb('detail').notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true }).notNull(),
+  },
+  (draft) => [primaryKey({ columns: [draft.userId, draft.cert] })],
+)
+
+export const mockExamSubmittedAttempts = pgTable(
+  'mock_exam_submitted_attempts',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cert: text('cert').notNull(),
+    attemptId: text('attempt_id').notNull(),
+    submittedAt: timestamp('submitted_at', { mode: 'date', withTimezone: true }).notNull(),
+    score: integer('score').notNull(),
+    passed: boolean('passed').notNull(),
+    timeUsedSeconds: integer('time_used_seconds').notNull(),
+    autoSubmitted: boolean('auto_submitted').notNull(),
+    detail: jsonb('detail').notNull(),
+  },
+  (attempt) => [primaryKey({ columns: [attempt.userId, attempt.cert, attempt.attemptId] })],
+)
+
+export const mockExamRevisions = pgTable(
+  'mock_exam_revisions',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cert: text('cert').notNull(),
+    revision: integer('revision').notNull().default(0),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true }).notNull().defaultNow(),
+  },
+  (revision) => [
+    primaryKey({ columns: [revision.userId, revision.cert] }),
+    check('mock_exam_revisions_revision_non_negative', sql`${revision.revision} >= 0`),
   ],
 )

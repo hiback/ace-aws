@@ -1,8 +1,14 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import HomePage from '../src/app/(tabbed)/page'
 import { loadBank } from '../src/data/loaders'
 import { findNextUnansweredQid } from '../src/hooks/use-answer'
+import {
+  getLocalMockExamAttempt,
+  saveLocalMockExamAttempt,
+} from '../src/lib/mock-exam/local-repository'
+import type { MockExamAttempt } from '../src/lib/mock-exam/start-attempt'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const routerMocks = vi.hoisted(() => ({
@@ -20,6 +26,7 @@ const accountPreferenceMocks = vi.hoisted(() => ({
 }))
 
 const progressScopeMocks = vi.hoisted(() => ({
+  scope: 'anonymous' as 'anonymous' | 'account',
   progress: {
     getProgress: vi.fn(),
     recordAnswer: vi.fn(),
@@ -54,6 +61,10 @@ vi.mock('@/components/providers/account-preferences-provider', () => ({
 }))
 
 vi.mock('@/components/providers/progress-scope-provider', () => ({
+  useProgressScope: () => ({
+    scope: progressScopeMocks.scope,
+    progress: progressScopeMocks.progress,
+  }),
   useProgressModule: () => progressScopeMocks.progress,
 }))
 
@@ -83,12 +94,25 @@ function openCertSwitcher() {
   fireEvent.click(screen.getByLabelText('Switch certification'))
 }
 
+function createHomeQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+}
+
+function renderHome(client = createHomeQueryClient()) {
+  return render(
+    <QueryClientProvider client={client}>
+      <HomePage />
+    </QueryClientProvider>,
+  )
+}
+
 beforeEach(() => {
   localStorage.clear()
   routerMocks.push.mockClear()
   routerMocks.replace.mockClear()
   authMocks.status = 'unauthenticated'
   authMocks.session = null
+  progressScopeMocks.scope = 'anonymous'
   accountPreferenceMocks.saveCurrentCert.mockReset()
   accountPreferenceMocks.saveCurrentCert.mockImplementation(
     async (cert: 'DVA-C02' | 'CLF-C02') => cert,
@@ -135,6 +159,29 @@ function makeProgress(qid: number, lastCorrect: boolean | null) {
   }
 }
 
+function makeMockExamAttempt(id: string): MockExamAttempt {
+  return {
+    id,
+    cert: 'DVA-C02',
+    draftStatus: 'active',
+    currentIndex: 0,
+    questionCount: 2,
+    timeLimitSeconds: 7800,
+    startedAt: Date.now(),
+    questions: [1, 2].map((qid) => ({
+      qid,
+      domain: 'Development with AWS Services',
+      topic: 'Development',
+      correctAnswer: ['A'],
+      type: 'single',
+      userPicks: [],
+      correct: null,
+      flagged: false,
+      answered: false,
+    })),
+  }
+}
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -154,7 +201,7 @@ describe('HomePage greeting', () => {
       expires: '2099-01-01T00:00:00.000Z',
     }
 
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByText('Good morning, Ada Lovelace')).toBeTruthy()
   })
@@ -167,7 +214,7 @@ describe('HomePage greeting', () => {
       expires: '2099-01-01T00:00:00.000Z',
     }
 
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByText('Good afternoon, ada@example.com')).toBeTruthy()
   })
@@ -180,7 +227,7 @@ describe('HomePage greeting', () => {
       expires: '2099-01-01T00:00:00.000Z',
     }
 
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByText('Good evening, ada@example.com')).toBeTruthy()
   })
@@ -190,14 +237,14 @@ describe('HomePage greeting', () => {
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
 
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByText('Good night, CloudLearner')).toBeTruthy()
   })
 
   it('uses the local greeting for guests', () => {
     setLocalHour(0)
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByText('Good night, CloudLearner')).toBeTruthy()
   })
@@ -205,7 +252,7 @@ describe('HomePage greeting', () => {
 
 describe('HomePage cert switcher', () => {
   it('switches cert locally for guests without saving account preferences', async () => {
-    render(<HomePage />)
+    renderHome()
     openCertSwitcher()
 
     fireEvent.click(screen.getByRole('button', { name: /Cloud Practitioner/ }))
@@ -224,7 +271,7 @@ describe('HomePage cert switcher', () => {
           resolveSave = resolve
         }),
     )
-    render(<HomePage />)
+    renderHome()
     openCertSwitcher()
 
     fireEvent.click(screen.getByRole('button', { name: /Cloud Practitioner/ }))
@@ -242,7 +289,7 @@ describe('HomePage cert switcher', () => {
     authMocks.status = 'authenticated'
     authMocks.session = { user: { id: 'user-1' }, expires: '2099-01-01T00:00:00.000Z' }
     accountPreferenceMocks.saveCurrentCert.mockRejectedValueOnce(new Error('failed'))
-    render(<HomePage />)
+    renderHome()
     openCertSwitcher()
 
     fireEvent.click(screen.getByRole('button', { name: /Cloud Practitioner/ }))
@@ -256,7 +303,7 @@ describe('HomePage cert switcher', () => {
 
 describe('HomePage continue practice', () => {
   it('finds the next unanswered question with the active progress module', async () => {
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
@@ -270,7 +317,7 @@ describe('HomePage continue practice', () => {
 
   it('keeps the all-answered route when no unanswered question remains', async () => {
     vi.mocked(findNextUnansweredQid).mockResolvedValueOnce(null)
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
@@ -282,8 +329,134 @@ describe('HomePage continue practice', () => {
 })
 
 describe('HomePage quick actions', () => {
+  it('shows the normal mock exam start entry for the selected certification', async () => {
+    renderHome()
+
+    expect(await screen.findByRole('heading', { name: 'Mock Exam' })).toBeTruthy()
+    expect(screen.getByText('DVA-C02')).toBeTruthy()
+    expect(screen.getByText('130 min')).toBeTruthy()
+    expect(screen.getByText('65 Qs')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Start/ }))
+
+    expect(routerMocks.push).toHaveBeenCalledWith('/mock-exam/dva-c02')
+  })
+
+  it('shows a mock exam resume card for a deliberately saved draft', async () => {
+    const attempt = makeMockExamAttempt('attempt-saved-home')
+    saveLocalMockExamAttempt({
+      ...attempt,
+      draftStatus: 'saved',
+      currentIndex: 1,
+      timeLimitSeconds: 3600,
+      questions: attempt.questions.map((question, index) =>
+        index === 0
+          ? { ...question, userPicks: ['A'], answered: true, correct: true, flagged: true }
+          : question,
+      ),
+    })
+
+    renderHome()
+
+    expect(await screen.findByRole('heading', { name: 'Mock Exam' })).toBeTruthy()
+    expect(screen.queryByText('Resume draft')).toBeNull()
+    expect(screen.getByText('Paused')).toBeTruthy()
+    expect(screen.getByText('DVA-C02')).toBeTruthy()
+    expect(screen.getByText('01:00:00')).toBeTruthy()
+    expect(screen.getByText('left')).toBeTruthy()
+    expect(screen.getByText('1/2 Answered')).toBeTruthy()
+    expect(screen.getByText('Time left saved')).toBeTruthy()
+
+    const savedCard = screen.getByTestId('mock-exam-saved-entry')
+    expect(savedCard).toBeTruthy()
+
+    const primaryPauseIcon = savedCard.querySelector('svg')
+    expect(primaryPauseIcon).not.toBeNull()
+    expect(primaryPauseIcon?.querySelector('circle')).toBeNull()
+
+    const progressbar = screen.getByRole('progressbar', { name: 'Mock exam answered progress' })
+    expect(progressbar.getAttribute('aria-valuemin')).toBe('0')
+    expect(progressbar.getAttribute('aria-valuemax')).toBe('2')
+    expect(progressbar.getAttribute('aria-valuenow')).toBe('1')
+
+    fireEvent.click(screen.getByRole('button', { name: /Resume/ }))
+
+    await waitFor(() =>
+      expect(routerMocks.push).toHaveBeenCalledWith('/mock-exam/attempt/attempt-saved-home/1'),
+    )
+    await waitFor(() =>
+      expect(getLocalMockExamAttempt('attempt-saved-home')).toMatchObject({
+        draftStatus: 'active',
+      }),
+    )
+  })
+
+  it('updates the saved mock exam card from the draft query cache', async () => {
+    const client = createHomeQueryClient()
+    const draftQueryKey = ['mock-exam', 'anonymous', 'draft', 'DVA-C02']
+    const draft = {
+      ...makeMockExamAttempt('attempt-saved-query-home'),
+      draftStatus: 'saved' as const,
+      currentIndex: 1,
+      timeLimitSeconds: 3600,
+    }
+
+    renderHome(client)
+
+    expect(screen.queryByTestId('mock-exam-saved-entry')).toBeNull()
+    await waitFor(() => expect(client.getQueryState(draftQueryKey)?.status).toBe('success'))
+
+    act(() => {
+      client.setQueryData(draftQueryKey, draft)
+    })
+
+    expect(await screen.findByTestId('mock-exam-saved-entry')).toBeTruthy()
+    expect(screen.getByText('Paused')).toBeTruthy()
+    expect(screen.getByText('01:00:00')).toBeTruthy()
+  })
+
+  it('recovers an interrupted active mock exam draft directly at the last question', async () => {
+    saveLocalMockExamAttempt({
+      ...makeMockExamAttempt('attempt-active-home'),
+      draftStatus: 'active',
+      currentIndex: 1,
+    })
+
+    renderHome()
+
+    await waitFor(() => {
+      expect(routerMocks.replace).toHaveBeenCalledWith('/mock-exam/attempt/attempt-active-home/1')
+    })
+  })
+
+  it('uses only the selected certification draft after switching certifications', async () => {
+    saveLocalMockExamAttempt({
+      ...makeMockExamAttempt('attempt-saved-dva-home'),
+      draftStatus: 'saved',
+      timeLimitSeconds: 3600,
+    })
+
+    renderHome()
+
+    expect(await screen.findByTestId('mock-exam-saved-entry')).toBeTruthy()
+    expect(screen.getByText('Paused')).toBeTruthy()
+
+    openCertSwitcher()
+    fireEvent.click(screen.getByRole('button', { name: /Cloud Practitioner/ }))
+
+    await waitFor(() => {
+      expect(usePrefsStore.getState().currentCert).toBe('CLF-C02')
+    })
+    expect(screen.queryByText('Resume draft')).toBeNull()
+    expect(await screen.findByText('CLF-C02')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Start/ }))
+
+    expect(routerMocks.push).toHaveBeenCalledWith('/mock-exam/clf-c02')
+  })
+
   it('orders smart practice before wrong redo, list, and bookmarks while enabling wrong redo when count is positive', () => {
-    render(<HomePage />)
+    renderHome()
 
     const quickStart = screen.getByText('Quick start')
     const cards = Array.from(quickStart.nextElementSibling?.children ?? [])
@@ -308,7 +481,7 @@ describe('HomePage quick actions', () => {
     )
     progressScopeMocks.progress.listProgress.mockReturnValue([makeProgress(99, false)])
 
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
 
@@ -341,7 +514,7 @@ describe('HomePage quick actions', () => {
       return [makeProgress(101, false), makeProgress(102, true)]
     })
 
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
 
@@ -367,7 +540,7 @@ describe('HomePage quick actions', () => {
           resolveBank = resolve
         }),
     )
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
 
@@ -385,7 +558,7 @@ describe('HomePage quick actions', () => {
 
   it('stays on home and shows a toast when smart practice generation fails', async () => {
     vi.mocked(loadBank).mockRejectedValueOnce(new Error('failed'))
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
 
@@ -397,7 +570,7 @@ describe('HomePage quick actions', () => {
 
   it('stays on home and shows a toast when smart practice has no questions', async () => {
     vi.mocked(loadBank).mockResolvedValueOnce([])
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Smart practice/ }))
 
@@ -410,7 +583,7 @@ describe('HomePage quick actions', () => {
   it('disables wrong redo while the count is loading', () => {
     progressStatsMocks.wrongRedoCount = { data: undefined, isPending: true }
 
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Wrong redo/ }).disabled).toBe(
       true,
@@ -420,7 +593,7 @@ describe('HomePage quick actions', () => {
   it('disables wrong redo when there are no wrong redo questions', () => {
     progressStatsMocks.wrongRedoCount = { data: 0, isPending: false }
 
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Wrong redo/ }).disabled).toBe(
       true,
@@ -436,7 +609,7 @@ describe('HomePage quick actions', () => {
     ])
     vi.mocked(loadBank).mockResolvedValue([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
 
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
 
@@ -468,7 +641,7 @@ describe('HomePage quick actions', () => {
     progressStatsMocks.wrongRedoCount = { data: 1, isPending: false }
     vi.mocked(loadBank).mockResolvedValue([makeQuestion(1), makeQuestion(2), makeQuestion(3)])
 
-    render(<HomePage />)
+    renderHome()
 
     expect(screen.getByText('Wrong redo').parentElement?.textContent).toContain('1')
 
@@ -496,13 +669,13 @@ describe('HomePage quick actions', () => {
         .mockReturnValueOnce(0)
         .mockReturnValueOnce(0.99)
         .mockReturnValueOnce(0.99)
-      const firstView = render(<HomePage />)
+      const firstView = renderHome()
 
       fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
       await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
       firstView.unmount()
 
-      render(<HomePage />)
+      renderHome()
       fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
       await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(2))
 
@@ -532,7 +705,7 @@ describe('HomePage quick actions', () => {
           resolveBank = resolve
         }),
     )
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
 
@@ -549,7 +722,7 @@ describe('HomePage quick actions', () => {
   })
 
   it('keeps wrong redo disabled after navigation starts to prevent duplicate sessions', async () => {
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
     await waitFor(() => expect(routerMocks.push).toHaveBeenCalledTimes(1))
@@ -566,7 +739,7 @@ describe('HomePage quick actions', () => {
   it('stays on home when click-time capture is empty', async () => {
     progressScopeMocks.progress.listProgress.mockReturnValue([makeProgress(1, true)])
 
-    render(<HomePage />)
+    renderHome()
 
     fireEvent.click(screen.getByRole('button', { name: /Wrong redo/ }))
 

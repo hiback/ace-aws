@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest'
 import {
   accounts,
   certProgressRevisions,
+  mockExamDrafts,
+  mockExamRevisions,
+  mockExamSubmittedAttempts,
   questionProgress,
   sessions,
   userPreferences,
@@ -14,11 +17,17 @@ import {
 
 function readGeneratedMigrationSql() {
   const drizzleDir = join(process.cwd(), 'drizzle')
-  const sqlFiles = readdirSync(drizzleDir).filter((file) => file.endsWith('.sql'))
+  const sqlFiles = readdirSync(drizzleDir)
+    .filter((file) => file.endsWith('.sql'))
+    .toSorted()
 
-  expect(sqlFiles).toHaveLength(1)
+  expect(sqlFiles).toEqual(['0000_sticky_magus.sql', '0001_wealthy_bloodstrike.sql'])
 
-  return readFileSync(join(drizzleDir, sqlFiles[0]), 'utf8')
+  return sqlFiles.map((file) => readFileSync(join(drizzleDir, file), 'utf8')).join('\n')
+}
+
+function countOccurrences(value: string, search: string) {
+  return value.split(search).length - 1
 }
 
 describe('database schema', () => {
@@ -30,6 +39,9 @@ describe('database schema', () => {
     expect(getTableName(userPreferences)).toBe('user_preferences')
     expect(getTableName(questionProgress)).toBe('question_progress')
     expect(getTableName(certProgressRevisions)).toBe('cert_progress_revisions')
+    expect(getTableName(mockExamDrafts)).toBe('mock_exam_drafts')
+    expect(getTableName(mockExamSubmittedAttempts)).toBe('mock_exam_submitted_attempts')
+    expect(getTableName(mockExamRevisions)).toBe('mock_exam_revisions')
   })
 
   it('exposes columns needed by Auth.js and sync planning', () => {
@@ -44,6 +56,14 @@ describe('database schema', () => {
     expect(questionProgress.lastPicks).toBeDefined()
     expect(questionProgress.bookmarkUpdatedAt).toBeDefined()
     expect(certProgressRevisions.revision).toBeDefined()
+    expect(mockExamDrafts.attemptId).toBeDefined()
+    expect(mockExamDrafts.detail).toBeDefined()
+    expect(mockExamDrafts.updatedAt).toBeDefined()
+    expect(mockExamSubmittedAttempts.attemptId).toBeDefined()
+    expect(mockExamSubmittedAttempts.submittedAt).toBeDefined()
+    expect(mockExamSubmittedAttempts.score).toBeDefined()
+    expect(mockExamSubmittedAttempts.detail).toBeDefined()
+    expect(mockExamRevisions.revision).toBeDefined()
   })
 
   it('generates migration SQL for auth and progress schema intent', () => {
@@ -72,10 +92,28 @@ describe('database schema', () => {
       'ALTER TABLE "cert_progress_revisions" ADD CONSTRAINT "cert_progress_revisions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
     )
     expect(sql).toContain(
+      'ALTER TABLE "mock_exam_drafts" ADD CONSTRAINT "mock_exam_drafts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
+    )
+    expect(sql).toContain(
+      'ALTER TABLE "mock_exam_submitted_attempts" ADD CONSTRAINT "mock_exam_submitted_attempts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
+    )
+    expect(sql).toContain(
+      'ALTER TABLE "mock_exam_revisions" ADD CONSTRAINT "mock_exam_revisions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
+    )
+    expect(sql).toContain(
       'CONSTRAINT "cert_progress_revisions_user_id_cert_pk" PRIMARY KEY("user_id","cert")',
     )
     expect(sql).toContain(
       'CONSTRAINT "question_progress_user_id_cert_qid_pk" PRIMARY KEY("user_id","cert","qid")',
+    )
+    expect(sql).toContain(
+      'CONSTRAINT "mock_exam_drafts_user_id_cert_pk" PRIMARY KEY("user_id","cert")',
+    )
+    expect(sql).toContain(
+      'CONSTRAINT "mock_exam_submitted_attempts_user_id_cert_attempt_id_pk" PRIMARY KEY("user_id","cert","attempt_id")',
+    )
+    expect(sql).toContain(
+      'CONSTRAINT "mock_exam_revisions_user_id_cert_pk" PRIMARY KEY("user_id","cert")',
     )
     expect(sql).toContain('CONSTRAINT "question_progress_qid_positive" CHECK ("qid" > 0)')
     expect(sql).toContain(
@@ -93,6 +131,9 @@ describe('database schema', () => {
     expect(sql).toContain(
       'CONSTRAINT "cert_progress_revisions_revision_non_negative" CHECK ("revision" >= 0)',
     )
+    expect(sql).toContain(
+      'CONSTRAINT "mock_exam_revisions_revision_non_negative" CHECK ("mock_exam_revisions"."revision" >= 0)',
+    )
     expect(sql).not.toContain('question_progress_user_cert_qid_unique')
     expect(sql).not.toContain('cert_progress_revisions_user_cert_unique')
 
@@ -104,8 +145,12 @@ describe('database schema', () => {
       'user_preferences',
       'question_progress',
       'cert_progress_revisions',
+      'mock_exam_drafts',
+      'mock_exam_submitted_attempts',
+      'mock_exam_revisions',
     ]) {
       expect(sql).toContain(`CREATE TABLE "${tableName}"`)
+      expect(countOccurrences(sql, `CREATE TABLE "${tableName}"`)).toBe(1)
     }
   })
 })

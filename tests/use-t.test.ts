@@ -11,6 +11,7 @@ describe('useT', () => {
     const { result } = renderHook(() => useT())
     expect(result.current('appName')).toBe('ace-aws')
     expect(result.current('settingsTitle')).toBe('设置')
+    expect(result.current('mockExamKeepDraft')).toBe('返回')
   })
 
   it('returns en string when locale is en', () => {
@@ -19,6 +20,7 @@ describe('useT', () => {
     })
     const { result } = renderHook(() => useT())
     expect(result.current('settingsTitle')).toBe('Settings')
+    expect(result.current('mockExamKeepDraft')).toBe('Back')
   })
 
   it('interpolates {var} placeholders', () => {

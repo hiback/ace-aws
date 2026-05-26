@@ -128,6 +128,14 @@ export interface ProgressSyncControllerAdapter {
     dismissImport(userId: string): void
     clearImportDismissal(userId: string): void
   }
+  mockExam?: {
+    hasDirty(cert: CertCode): boolean
+    syncDirty(cert: CertCode): Promise<AccountProgressSyncResult>
+    summarizeImport(): AnonymousImportSummary
+    importAnonymousCert(cert: CertCode): Promise<AnonymousImportResult>
+    clearScope(): void
+    invalidate(): Promise<void>
+  }
   auth: {
     storeExpiredLoginMessage(): void
     signOut(): void | Promise<void>
@@ -184,6 +192,18 @@ function noticeForFatalError(error: ProgressSyncControllerError): ProgressSyncNo
   return error.kind === 'unknown-cert' ? 'unknown-cert' : 'payload'
 }
 
+function mergeImportSummaries(
+  progressSummary: AnonymousImportSummary,
+  mockExamSummary: AnonymousImportSummary,
+): AnonymousImportSummary {
+  const certs = Array.from(new Set([...progressSummary.certs, ...mockExamSummary.certs]))
+  return {
+    certs,
+    certCount: certs.length,
+    recordCount: progressSummary.recordCount + mockExamSummary.recordCount,
+  }
+}
+
 class ProgressSyncControllerImpl implements ProgressSyncController {
   private input: ProgressSyncControllerInput = EMPTY_INPUT
   private state: ProgressSyncControllerState
@@ -208,6 +228,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
   private readonly dirtyRetryTimers = new Map<CertCode, TimerId>()
   private readonly revisionCheckedCerts = new Set<string>()
   private readonly revisionCheckingCerts = new Set<string>()
+  private readonly pendingRevisionChecksAfterDirty = new Set<string>()
   private recoveryOwner: string | null = null
   private disposed = false
 
@@ -395,6 +416,17 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           failed = true
         }
       }
+      const mockExamImportCerts = this.adapter.mockExam?.summarizeImport().certs ?? []
+      for (const cert of mockExamImportCerts) {
+        const dirtyResult = await this.flushMockExamCert(cert)
+        if (!dirtyResult.ok) {
+          failed = true
+          continue
+        }
+        const result = await this.adapter.mockExam?.importAnonymousCert(cert)
+        if (!result?.ok) failed = true
+        else await this.adapter.mockExam?.invalidate()
+      }
       if (!failed) this.adapter.anonymousProgress.clearImportDismissal(accountUserId)
       const result: AnonymousImportResult = failed
         ? { ok: false, reason: 'temporary' }
@@ -419,6 +451,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     this.clearPendingDirtySyncWaits()
     this.clearPerCertSyncState()
     this.adapter.accountProgress.clearScope()
+    this.adapter.mockExam?.clearScope()
     this.adapter.questionProgress.removeAccountProgressQueries()
     this.emitState()
   }
@@ -460,9 +493,10 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     if (previousInput.currentCert === null || previousInput.currentCert === nextInput.currentCert) {
       return null
     }
-    return this.adapter.accountProgress.listDirty(previousInput.currentCert).length > 0
-      ? previousInput.currentCert
-      : null
+    const hasDirtyProgress =
+      this.adapter.accountProgress.listDirty(previousInput.currentCert).length > 0
+    const hasDirtyMockExam = this.adapter.mockExam?.hasDirty(previousInput.currentCert) ?? false
+    return hasDirtyProgress || hasDirtyMockExam ? previousInput.currentCert : null
   }
 
   private refreshGate(runEffects: boolean): void {
@@ -512,14 +546,18 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       authStatus === 'authenticated' &&
       userId !== null &&
       currentCert !== null &&
-      this.adapter.accountProgress.listDirty(currentCert).length > 0
+      (this.adapter.accountProgress.listDirty(currentCert).length > 0 ||
+        !!this.adapter.mockExam?.hasDirty(currentCert))
     const lastSyncedAt =
       authStatus === 'authenticated' && userId !== null && currentCert !== null
         ? (this.adapter.progressRevision.getBaseline(userId, currentCert)?.lastSyncedAt ?? null)
         : null
     const rawAnonymousImportSummary =
       authStatus === 'authenticated' && userId !== null
-        ? this.adapter.anonymousProgress.summarizeImport()
+        ? mergeImportSummaries(
+            this.adapter.anonymousProgress.summarizeImport(),
+            this.adapter.mockExam?.summarizeImport() ?? EMPTY_ANONYMOUS_IMPORT_SUMMARY,
+          )
         : EMPTY_ANONYMOUS_IMPORT_SUMMARY
     const anonymousImportSummary =
       authStatus === 'authenticated' &&
@@ -634,6 +672,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     this.inFlightRevisionCerts.clear()
     this.fatalCerts.clear()
     this.dirtyFailureCounts.clear()
+    this.pendingRevisionChecksAfterDirty.clear()
   }
 
   private clearBaselineRetryTimer(): void {
@@ -667,6 +706,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
   private handleAuthExpired(): void {
     this.adapter.auth.storeExpiredLoginMessage()
     this.adapter.accountProgress.clearScope()
+    this.adapter.mockExam?.clearScope()
     this.adapter.questionProgress.removeAccountProgressQueries()
     this.escapingSignOut = true
     this.emitState()
@@ -777,7 +817,8 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
         for (const cert of orderedCerts) {
           if (!this.isCurrentAccount(accountUserId)) break
           try {
-            await this.flushCert(accountUserId, cert)
+            const result = await this.flushCert(accountUserId, cert)
+            this.continuePendingRevisionCheckAfterDirty(accountUserId, cert, result)
           } catch {
             if (cert === this.input.currentCert) this.markBaselineError()
           }
@@ -791,10 +832,11 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       .then(async () => {
         if (!this.isCurrentAccount(accountUserId)) return
         try {
-          await this.flushCert(accountUserId, cert, {
+          const result = await this.flushCert(accountUserId, cert, {
             scheduleRetry: false,
             showTemporaryNotice: false,
           })
+          this.continuePendingRevisionCheckAfterDirty(accountUserId, cert, result)
         } catch {
           // If the learner already switched back, surface the failure for the visible cert.
           if (cert === this.input.currentCert) this.markBaselineError()
@@ -813,73 +855,91 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     if (!this.isCurrentAccount(accountUserId)) return 'clean'
     if (this.fatalCerts.has(cert)) return 'fatal-failure'
     const dirty = this.adapter.accountProgress.listDirty(cert)
-    if (dirty.length === 0) return 'clean'
+    const hasDirtyMockExam = this.adapter.mockExam?.hasDirty(cert) ?? false
+    if (dirty.length === 0 && !hasDirtyMockExam) return 'clean'
     this.inFlightCerts.add(cert)
     this.emitState()
     try {
-      const baseline = this.adapter.progressRevision.getBaseline(accountUserId, cert)
-      const result = await this.adapter.progressSync.post(cert, baseline?.revision ?? 0, dirty)
-      if (!this.isCurrentAccount(accountUserId)) return 'clean'
-      this.dirtyFailureCounts.delete(cert)
-      if (result.errorCode === 'revision_conflict') {
-        this.conflictRecoveryCerts.add(cert)
-        if (cert === this.input.currentCert) this.setGateState('syncing')
-        this.emitState()
-        this.adapter.accountProgress.clearCert(accountUserId, cert)
-        let snapshot: ProgressSnapshot
-        try {
-          snapshot = await this.adapter.progressSnapshot.fetch(cert)
-        } catch (error) {
-          this.conflictRecoveryCerts.delete(cert)
-          if (error instanceof ProgressSyncControllerError && error.kind === 'auth') throw error
-          if (cert === this.input.currentCert) this.markBaselineError()
-          this.failedSyncCerts.add(cert)
-          this.emitState()
-          return 'temporary-failure'
-        }
-        if (!this.isCurrentAccount(accountUserId)) {
-          this.conflictRecoveryCerts.delete(cert)
-          return 'clean'
-        }
-        this.adapter.accountProgress.replaceCertFromSnapshot(
-          accountUserId,
-          snapshot.cert,
-          snapshot.revision,
-          snapshot.progress,
-        )
-        this.conflictRecoveryCerts.delete(cert)
-        if (cert === this.input.currentCert) this.setGateState('ready')
-      } else if (result.snapshotRequired || result.rejected.length > 0) {
-        if (result.rejected.length > 0) this.adapter.notices.show('partial')
-        this.adapter.progressRevision.clearBaseline(accountUserId, cert)
-        const snapshot = await this.adapter.progressSnapshot.fetch(cert)
+      if (dirty.length > 0) {
+        const baseline = this.adapter.progressRevision.getBaseline(accountUserId, cert)
+        const result = await this.adapter.progressSync.post(cert, baseline?.revision ?? 0, dirty)
         if (!this.isCurrentAccount(accountUserId)) return 'clean'
-        if (baseline === null) {
-          this.adapter.accountProgress.refreshCertFromSnapshotKeepingDirty(
+        this.dirtyFailureCounts.delete(cert)
+        if (result.errorCode === 'revision_conflict') {
+          this.conflictRecoveryCerts.add(cert)
+          if (cert === this.input.currentCert) this.setGateState('syncing')
+          this.emitState()
+          this.adapter.accountProgress.clearCert(accountUserId, cert)
+          let snapshot: ProgressSnapshot
+          try {
+            snapshot = await this.adapter.progressSnapshot.fetch(cert)
+          } catch (error) {
+            this.conflictRecoveryCerts.delete(cert)
+            if (error instanceof ProgressSyncControllerError && error.kind === 'auth') throw error
+            if (cert === this.input.currentCert) this.markBaselineError()
+            this.failedSyncCerts.add(cert)
+            this.emitState()
+            return 'temporary-failure'
+          }
+          if (!this.isCurrentAccount(accountUserId)) {
+            this.conflictRecoveryCerts.delete(cert)
+            return 'clean'
+          }
+          this.adapter.accountProgress.replaceCertFromSnapshot(
             accountUserId,
             snapshot.cert,
             snapshot.revision,
             snapshot.progress,
           )
+          this.conflictRecoveryCerts.delete(cert)
+          if (cert === this.input.currentCert) this.setGateState('ready')
+        } else if (result.snapshotRequired || result.rejected.length > 0) {
+          if (result.rejected.length > 0) this.adapter.notices.show('partial')
+          this.adapter.progressRevision.clearBaseline(accountUserId, cert)
+          const snapshot = await this.adapter.progressSnapshot.fetch(cert)
+          if (!this.isCurrentAccount(accountUserId)) return 'clean'
+          if (baseline === null) {
+            this.adapter.accountProgress.refreshCertFromSnapshotKeepingDirty(
+              accountUserId,
+              snapshot.cert,
+              snapshot.revision,
+              snapshot.progress,
+            )
+          } else {
+            this.adapter.accountProgress.recoverCertFromSnapshotAfterSync(
+              accountUserId,
+              snapshot.cert,
+              snapshot.revision,
+              snapshot.progress,
+              dirty,
+            )
+          }
         } else {
-          this.adapter.accountProgress.recoverCertFromSnapshotAfterSync(
+          this.adapter.accountProgress.applyAcceptedSync(
             accountUserId,
-            snapshot.cert,
-            snapshot.revision,
-            snapshot.progress,
+            cert,
+            result.revision,
+            result.accepted,
             dirty,
           )
         }
-      } else {
-        this.adapter.accountProgress.applyAcceptedSync(
-          accountUserId,
-          cert,
-          result.revision,
-          result.accepted,
-          dirty,
-        )
+        await this.adapter.questionProgress.invalidateAccountProgress()
       }
-      await this.adapter.questionProgress.invalidateAccountProgress()
+      const mockExamResult = await this.flushMockExamCert(cert)
+      if (!this.isCurrentAccount(accountUserId)) return 'clean'
+      if (!mockExamResult.ok) {
+        if (mockExamResult.reason === 'temporary') {
+          return this.handleTemporaryDirtyFailure(
+            accountUserId,
+            cert,
+            scheduleRetry,
+            showTemporaryNotice,
+          )
+        }
+        this.failedSyncCerts.add(cert)
+        this.emitState()
+        return 'fatal-failure'
+      }
       this.failedSyncCerts.delete(cert)
       this.emitState()
       return 'synced'
@@ -891,29 +951,12 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           return 'auth-signout'
         }
         if (error.kind === 'temporary') {
-          const failures = (this.dirtyFailureCounts.get(cert) ?? 0) + 1
-          this.dirtyFailureCounts.set(cert, failures)
-          const backoffMs = Math.min(
-            FIRST_DIRTY_RETRY_BACKOFF_MS * 2 ** Math.max(0, failures - 1),
-            MAX_DIRTY_RETRY_BACKOFF_MS,
+          return this.handleTemporaryDirtyFailure(
+            accountUserId,
+            cert,
+            scheduleRetry,
+            showTemporaryNotice,
           )
-          if (scheduleRetry && !this.dirtyRetryTimers.has(cert)) {
-            const timer = setTimeout(() => {
-              this.dirtyRetryTimers.delete(cert)
-              this.flushDirtyQueue(cert)
-            }, backoffMs)
-            this.dirtyRetryTimers.set(cert, timer)
-          }
-          if (showTemporaryNotice) this.adapter.notices.show('temporary')
-          if (
-            cert === this.input.currentCert &&
-            !this.adapter.progressRevision.getBaseline(accountUserId, cert)
-          ) {
-            this.markBaselineError()
-          }
-          this.failedSyncCerts.add(cert)
-          this.emitState()
-          return 'temporary-failure'
         }
         if (isFatalControllerError(error)) {
           this.fatalCerts.add(cert)
@@ -933,6 +976,37 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     }
   }
 
+  private handleTemporaryDirtyFailure(
+    accountUserId: string,
+    cert: CertCode,
+    scheduleRetry: boolean,
+    showTemporaryNotice: boolean,
+  ): FlushCertResult {
+    const failures = (this.dirtyFailureCounts.get(cert) ?? 0) + 1
+    this.dirtyFailureCounts.set(cert, failures)
+    const backoffMs = Math.min(
+      FIRST_DIRTY_RETRY_BACKOFF_MS * 2 ** Math.max(0, failures - 1),
+      MAX_DIRTY_RETRY_BACKOFF_MS,
+    )
+    if (scheduleRetry && !this.dirtyRetryTimers.has(cert)) {
+      const timer = setTimeout(() => {
+        this.dirtyRetryTimers.delete(cert)
+        this.flushDirtyQueue(cert)
+      }, backoffMs)
+      this.dirtyRetryTimers.set(cert, timer)
+    }
+    if (showTemporaryNotice) this.adapter.notices.show('temporary')
+    if (
+      cert === this.input.currentCert &&
+      !this.adapter.progressRevision.getBaseline(accountUserId, cert)
+    ) {
+      this.markBaselineError()
+    }
+    this.failedSyncCerts.add(cert)
+    this.emitState()
+    return 'temporary-failure'
+  }
+
   private async flushCurrentDirtyNow(
     accountUserId: string,
     cert: CertCode | null,
@@ -946,7 +1020,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     if (result === 'temporary-failure') return { ok: false, reason: 'temporary' }
     if (result === 'fatal-failure' || result === 'auth-signout')
       return { ok: false, reason: 'fatal' }
-    return { ok: true }
+    return this.flushMockExamCert(cert)
   }
 
   private async flushAllDirtyNow(accountUserId: string): Promise<AccountProgressSyncResult> {
@@ -960,7 +1034,32 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       if (result === 'fatal-failure' || result === 'auth-signout')
         return { ok: false, reason: 'fatal' }
     }
+    for (const cert of this.orderedReadyCertsForDirtyFlush()) {
+      const result = await this.flushMockExamCert(cert)
+      if (!result.ok) return result
+    }
     return { ok: true }
+  }
+
+  private async flushMockExamCert(cert: CertCode): Promise<AccountProgressSyncResult> {
+    if (!this.adapter.mockExam?.hasDirty(cert)) return { ok: true }
+    const result = await this.adapter.mockExam.syncDirty(cert)
+    if (result.ok) await this.adapter.mockExam.invalidate()
+    return result
+  }
+
+  private continuePendingRevisionCheckAfterDirty(
+    accountUserId: string,
+    cert: CertCode,
+    result: FlushCertResult,
+  ): void {
+    if (result !== 'synced' && result !== 'clean') return
+    const checkedKey = this.revisionCheckedKey(accountUserId, cert)
+    if (!this.pendingRevisionChecksAfterDirty.has(checkedKey)) return
+    if (this.adapter.accountProgress.listDirty(cert).length > 0) return
+    if (this.adapter.mockExam?.hasDirty(cert)) return
+    this.pendingRevisionChecksAfterDirty.delete(checkedKey)
+    this.enqueueRevisionCheck(cert)
   }
 
   private async flushOtherReadyCerts(accountUserId: string, currentCert: CertCode): Promise<void> {
@@ -991,18 +1090,32 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           if (currentBaseline === null) return
 
           const dirty = this.adapter.accountProgress.listDirty(cert)
-          if (dirty.length > 0) {
+          const hasDirtyMockExam = this.adapter.mockExam?.hasDirty(cert) ?? false
+          if (dirty.length > 0 || hasDirtyMockExam) {
             const result = await this.flushCert(userId, cert)
-            if (
-              result === 'synced' ||
-              (result === 'clean' && this.adapter.accountProgress.listDirty(cert).length === 0)
-            ) {
-              this.revisionCheckedCerts.add(checkedKey)
+            if (dirty.length > 0) {
+              if (
+                result === 'synced' ||
+                (result === 'clean' &&
+                  this.adapter.accountProgress.listDirty(cert).length === 0 &&
+                  !this.adapter.mockExam?.hasDirty(cert))
+              ) {
+                this.revisionCheckedCerts.add(checkedKey)
+              }
+              if (result === 'synced' || result === 'clean') {
+                await this.flushOtherReadyCerts(userId, cert)
+              }
+              return
             }
-            if (result === 'synced' || result === 'clean') {
-              await this.flushOtherReadyCerts(userId, cert)
+            if (result !== 'synced' && result !== 'clean') {
+              this.pendingRevisionChecksAfterDirty.add(checkedKey)
+              return
             }
-            return
+            if (this.adapter.mockExam?.hasDirty(cert)) {
+              this.pendingRevisionChecksAfterDirty.add(checkedKey)
+              return
+            }
+            this.pendingRevisionChecksAfterDirty.delete(checkedKey)
           }
 
           this.inFlightRevisionCerts.add(cert)

@@ -6,9 +6,12 @@ import {
   ProgressScopeProvider,
   useProgressScope,
 } from '../src/components/providers/progress-scope-provider'
+import type { CertCode } from '../src/data/types'
 import { useQuestionProgress, useRecordAnswer } from '../src/hooks/use-answer'
+import { useMockExamDraft } from '../src/hooks/use-mock-exam'
 import { useWrongList, useWrongRedoCount } from '../src/hooks/use-progress-stats'
 import { BrowserProgressModule } from '../src/lib/browser-progress-module'
+import type { MockExamAttempt } from '../src/lib/mock-exam/start-attempt'
 import { findNextInPracticeSet } from '../src/lib/practice-flow'
 import { buildWrongRedoSessionQids } from '../src/lib/wrong-redo-session'
 
@@ -17,8 +20,18 @@ const authMocks = vi.hoisted(() => ({
   session: null as unknown,
 }))
 
+const repositoryMocks = vi.hoisted(() => ({
+  accountGetDraft: vi.fn(),
+  anonymousGetDraft: vi.fn(),
+  getMockExamDraftRepository: vi.fn(),
+}))
+
 vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: authMocks.session, status: authMocks.status }),
+}))
+
+vi.mock('@/lib/mock-exam/repository', () => ({
+  getMockExamDraftRepository: repositoryMocks.getMockExamDraftRepository,
 }))
 
 vi.mock('@/data/loaders', async (importOriginal) => {
@@ -45,6 +58,33 @@ function createWrapper(client = createQueryClient()) {
   return Wrapper
 }
 
+function makeMockExamAttempt(id: string, cert: CertCode = 'DVA-C02'): MockExamAttempt {
+  return {
+    id,
+    cert,
+    draftStatus: 'saved',
+    currentIndex: 0,
+    questionCount: 1,
+    timeLimitSeconds: 120,
+    startedAt: 1000,
+    elapsedSeconds: 0,
+    updatedAt: 2000,
+    questions: [
+      {
+        qid: 1,
+        domain: 'Development with AWS Services',
+        topic: 'Development',
+        correctAnswer: ['A'],
+        type: 'single',
+        userPicks: [],
+        correct: null,
+        flagged: false,
+        answered: false,
+      },
+    ],
+  }
+}
+
 function wrapper({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={createQueryClient()}>
@@ -58,6 +98,16 @@ describe('progress hooks scope', () => {
     localStorage.clear()
     authMocks.status = 'unauthenticated'
     authMocks.session = null
+    repositoryMocks.accountGetDraft.mockReset()
+    repositoryMocks.anonymousGetDraft.mockReset()
+    repositoryMocks.anonymousGetDraft.mockResolvedValue(null)
+    repositoryMocks.getMockExamDraftRepository.mockReset()
+    repositoryMocks.getMockExamDraftRepository.mockImplementation(
+      (scope: 'anonymous' | 'account') =>
+        scope === 'account'
+          ? { getDraft: repositoryMocks.accountGetDraft }
+          : { getDraft: repositoryMocks.anonymousGetDraft },
+    )
   })
 
   it('reads anonymous progress when signed out', async () => {
@@ -107,6 +157,54 @@ describe('progress hooks scope', () => {
     await waitFor(() => expect(result.current.progress.data).toBeNull())
 
     expect(seenAccountPicks).not.toContainEqual(['A'])
+  })
+
+  it('does not expose cached account mock exam draft when switching owners', async () => {
+    const client = createQueryClient()
+    const queryKey = ['mock-exam', 'account', 'draft', 'DVA-C02']
+    client.setQueryData(queryKey, makeMockExamAttempt('user-a-draft'))
+    repositoryMocks.accountGetDraft.mockResolvedValue(makeMockExamAttempt('user-b-draft'))
+    BrowserProgressModule.prepareAccountOwner('user-a')
+    authMocks.status = 'authenticated'
+    authMocks.session = { user: { id: 'user-b' }, expires: '2099-01-01T00:00:00.000Z' }
+    const seenAccountDraftIds: unknown[] = []
+
+    const { result } = renderHook(
+      () => {
+        const scope = useProgressScope().scope
+        const draft = useMockExamDraft('DVA-C02')
+        if (scope === 'account') {
+          seenAccountDraftIds.push(draft.data?.id ?? null)
+        }
+        return { draft, scope }
+      },
+      { wrapper: createWrapper(client) },
+    )
+
+    await waitFor(() => expect(result.current.scope).toBe('account'))
+    await waitFor(() => expect(result.current.draft.data?.id).toBe('user-b-draft'))
+
+    expect(repositoryMocks.accountGetDraft).toHaveBeenCalledWith('DVA-C02')
+    expect(seenAccountDraftIds).not.toContain('user-a-draft')
+  })
+
+  it('clears cached account mock exam draft queries when signing out', async () => {
+    const client = createQueryClient()
+    const queryKey = ['mock-exam', 'account', 'draft', 'DVA-C02']
+    client.setQueryData(queryKey, makeMockExamAttempt('signed-in-draft'))
+    BrowserProgressModule.prepareAccountOwner('user-a')
+    authMocks.status = 'authenticated'
+    authMocks.session = { user: { id: 'user-a' }, expires: '2099-01-01T00:00:00.000Z' }
+
+    const { rerender } = renderHook(() => useProgressScope().scope, {
+      wrapper: createWrapper(client),
+    })
+
+    authMocks.status = 'unauthenticated'
+    authMocks.session = null
+    rerender()
+
+    await waitFor(() => expect(client.getQueryState(queryKey)).toBeUndefined())
   })
 
   it('counts only current-bank wrong redo questions', async () => {

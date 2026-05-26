@@ -37,6 +37,7 @@ export function ProgressScopeProvider({ children }: { children: React.ReactNode 
       setPreparedOwnerId(null)
       if (status === 'unauthenticated') {
         queryClient.removeQueries({ queryKey: ['progress', 'account'] })
+        queryClient.removeQueries({ queryKey: ['mock-exam', 'account'] })
       }
       return
     }
@@ -44,6 +45,7 @@ export function ProgressScopeProvider({ children }: { children: React.ReactNode 
     const ownerChanged = BrowserProgressModule.prepareAccountOwner(userId)
     if (ownerChanged) {
       queryClient.removeQueries({ queryKey: ['progress', 'account'] })
+      queryClient.removeQueries({ queryKey: ['mock-exam', 'account'] })
     }
     setPreparedOwnerId(userId)
   }, [queryClient, status, userId])

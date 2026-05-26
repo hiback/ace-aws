@@ -22,6 +22,7 @@ interface BottomSheetProps {
   closeButtonClassName?: string
   closeIconClassName?: string
   closeIconStrokeWidth?: number
+  showCloseButton?: boolean
 }
 
 const DRAG_ACTIVATE_PX = 12
@@ -51,6 +52,7 @@ export function BottomSheet({
   closeButtonClassName,
   closeIconClassName,
   closeIconStrokeWidth = 2,
+  showCloseButton = true,
 }: BottomSheetProps) {
   const dragRef = useRef({
     tracking: false,
@@ -295,21 +297,23 @@ export function BottomSheet({
           </div>
           <div className={cx('flex items-center gap-2.5 px-4 pt-1 pb-3', headerClassName)}>
             <div className="min-w-0 flex-1">{header}</div>
-            <button
-              type="button"
-              data-bottom-sheet-close="true"
-              onClick={closeFromButton}
-              aria-label={closeLabel}
-              className={cx(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-alt',
-                closeButtonClassName,
-              )}
-            >
-              <X
-                className={cx('h-3.5 w-3.5 text-ink-soft', closeIconClassName)}
-                strokeWidth={closeIconStrokeWidth}
-              />
-            </button>
+            {showCloseButton ? (
+              <button
+                type="button"
+                data-bottom-sheet-close="true"
+                onClick={closeFromButton}
+                aria-label={closeLabel}
+                className={cx(
+                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-alt',
+                  closeButtonClassName,
+                )}
+              >
+                <X
+                  className={cx('h-3.5 w-3.5 text-ink-soft', closeIconClassName)}
+                  strokeWidth={closeIconStrokeWidth}
+                />
+              </button>
+            ) : null}
           </div>
         </div>
         <div className={contentClassName}>{children}</div>

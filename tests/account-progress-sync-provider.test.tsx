@@ -10,6 +10,8 @@ import { ProgressScopeProvider } from '../src/components/providers/progress-scop
 import type { CertCode } from '../src/data/types'
 import { hasDismissedAnonymousImport } from '../src/lib/anonymous-import-dismissal'
 import { BrowserProgressModule } from '../src/lib/browser-progress-module'
+import { getAccountMockExamSyncLedger } from '../src/lib/mock-exam/account-sync-ledger'
+import type { MockExamAttempt } from '../src/lib/mock-exam/start-attempt'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const authMocks = vi.hoisted(() => ({
@@ -97,6 +99,32 @@ function progressDto(qid: number) {
     lastAnsweredAt: '2026-01-01T00:00:00.000Z',
     bookmarked: false,
     bookmarkUpdatedAt: null,
+  }
+}
+
+function mockExamDraft(id: string): MockExamAttempt {
+  return {
+    id,
+    cert: 'DVA-C02',
+    draftStatus: 'saved',
+    currentIndex: 0,
+    questionCount: 1,
+    timeLimitSeconds: 120,
+    startedAt: 1000,
+    updatedAt: 2000,
+    questions: [
+      {
+        qid: 1,
+        domain: 'Development with AWS Services',
+        topic: 'Development',
+        correctAnswer: ['A'],
+        type: 'single',
+        userPicks: ['A'],
+        correct: true,
+        flagged: false,
+        answered: true,
+      },
+    ],
   }
 }
 
@@ -256,6 +284,8 @@ describe('AccountProgressSyncProvider', () => {
   it('gate sign-out discards account sync state and signs out', async () => {
     authenticate('user-1')
     usePrefsStore.setState({ currentCert: 'DVA-C02' })
+    BrowserProgressModule.prepareAccountOwner('user-1')
+    getAccountMockExamSyncLedger().writeDraft(mockExamDraft('account-mock-exam-draft'))
     BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', 'DVA-C02', 3, [])
     new BrowserProgressModule('account').recordAnswer(1, ['A'], true, 'DVA-C02')
     localStorage.removeItem('ace-aws/account-progress-sync/v1')
@@ -269,7 +299,63 @@ describe('AccountProgressSyncProvider', () => {
     expect(screen.queryByText('App content')).toBeNull()
     expect(new BrowserProgressModule('account').getProgress(1, 'DVA-C02')).toBeNull()
     expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'DVA-C02')).toBeNull()
+    expect(getAccountMockExamSyncLedger().readDraft('DVA-C02')).toBeNull()
+
+    BrowserProgressModule.prepareAccountOwner('user-1')
+
+    expect(getAccountMockExamSyncLedger().readDraft('DVA-C02')).toBeNull()
     expect(authMocks.signOut).toHaveBeenCalledWith({ callbackUrl: '/login' })
+  })
+
+  it('discards the current session mock exam owner without a pre-observed ledger owner', async () => {
+    authenticate('user-a')
+    BrowserProgressModule.prepareAccountOwner('stale-user')
+    getAccountMockExamSyncLedger().readDraft('DVA-C02')
+    localStorage.clear()
+    localStorage.setItem(
+      'ace-aws/mock-exam/account-sync/v1',
+      JSON.stringify({
+        byUser: {
+          'user-a': {
+            revisions: {},
+            drafts: { 'DVA-C02': mockExamDraft('user-a-draft') },
+            submittedAttempts: {},
+            dirtyDrafts: {},
+            dirtySubmittedAttempts: {},
+          },
+          'user-b': {
+            revisions: {},
+            drafts: { 'DVA-C02': mockExamDraft('user-b-draft') },
+            submittedAttempts: {},
+            dirtyDrafts: {},
+            dirtySubmittedAttempts: {},
+          },
+        },
+      }),
+    )
+
+    function DiscardButton() {
+      const { discardAccountSyncState } = useAccountProgressSync()
+      return (
+        <button type="button" onClick={discardAccountSyncState}>
+          Discard account state
+        </button>
+      )
+    }
+
+    renderGateWithProgressScope(<DiscardButton />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Discard account state' })).not.toBeNull(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Discard account state' }))
+
+    BrowserProgressModule.prepareAccountOwner('user-a')
+
+    expect(getAccountMockExamSyncLedger().readDraft('DVA-C02')).toBeNull()
+
+    BrowserProgressModule.prepareAccountOwner('user-b')
+
+    expect(getAccountMockExamSyncLedger().readDraft('DVA-C02')?.id).toBe('user-b-draft')
   })
 
   it('dismisses the anonymous import prompt through the provider controls', async () => {

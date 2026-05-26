@@ -255,6 +255,28 @@ describe('BottomSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('can hide the built-in close button while keeping backdrop close', () => {
+    const onClose = vi.fn()
+    render(
+      <BottomSheet
+        open
+        onClose={onClose}
+        closeLabel="Close"
+        ariaLabelledby="sheet-title"
+        showCloseButton={false}
+        header={<h2 id="sheet-title">Sheet title</h2>}
+      >
+        <button type="button">Body action</button>
+      </BottomSheet>,
+    )
+
+    expect(screen.getAllByLabelText('Close')).toHaveLength(1)
+
+    fireEvent.click(screen.getByLabelText('Close'))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('clicking the backdrop closes immediately', () => {
     const { onClose } = renderSheet()
 

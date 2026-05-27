@@ -256,7 +256,6 @@ export const STRINGS = {
     langEn: 'English',
     settingsAbout: '关于',
     settingsVersion: '版本',
-    settingsPrivacy: '隐私',
     settingsLicense: '开源协议',
 
     emptyWrong: '暂无错题，继续努力 ✨',
@@ -563,7 +562,6 @@ export const STRINGS = {
     langEn: 'English',
     settingsAbout: 'About',
     settingsVersion: 'Version',
-    settingsPrivacy: 'Privacy',
     settingsLicense: 'License',
 
     emptyWrong: 'No wrong answers — keep going ✨',

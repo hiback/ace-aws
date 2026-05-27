@@ -103,6 +103,15 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('SettingsPage account UI', () => {
+  it('omits the unused privacy option from About', () => {
+    renderSettings()
+
+    expect(screen.getByText('About')).not.toBeNull()
+    expect(screen.getByText('Version')).not.toBeNull()
+    expect(screen.queryByRole('link', { name: 'Privacy' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'License' })).not.toBeNull()
+  })
+
   it('shows GitHub login while signed out', () => {
     renderSettings()
 

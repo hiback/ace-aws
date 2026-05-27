@@ -28,7 +28,7 @@ function ThemeIcon({ className, strokeWidth = 1.75, ...rest }: SVGProps<SVGSVGEl
   )
 }
 
-const APP_VERSION = '0.5.0'
+const APP_VERSION = '0.5.1'
 const REPO_URL = 'https://github.com/hiback/ace-aws'
 
 function formatSettingsTimestamp(date: Date | number) {
@@ -421,15 +421,6 @@ export default function SettingsPage() {
                 <span className="font-mono text-secondary text-ink-mute">{APP_VERSION}</span>
               }
             />
-            <a
-              href={`${REPO_URL}#privacy`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between px-3.5 py-3 border-b border-border hover:bg-bg-alt"
-            >
-              <span className="text-body text-ink">{t('settingsPrivacy')}</span>
-              <ChevronRight className="w-4 h-4 text-ink-subtle" />
-            </a>
             <a
               href={REPO_URL}
               target="_blank"

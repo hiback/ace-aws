@@ -27,47 +27,62 @@ ace-aws 是一个移动端优先的 AWS 认证刷题应用。它把体验压缩�
 
 > ace-aws 是独立学习工具，与 Amazon Web Services 无官方关联。
 
-## 预览
-
-首页提供完整的中英文界面。
-
-| English | 中文 |
-| --- | --- |
-| <img src="./assets/readme/home-en.png" alt="ace-aws 英文首页" width="260" /> | <img src="./assets/readme/home-zh.png" alt="ace-aws 中文首页" width="260" /> |
-
 ## 功能展示
+
+### 双语界面
+
+整个应用支持英文和中文。
+
+<p>
+  <img src="./assets/readme/home-en.png" alt="ace-aws 英文首页" width="220" />
+  <img src="./assets/readme/home-zh.png" alt="ace-aws 中文首页" width="220" />
+</p>
+<p><sub>English · 中文</sub></p>
 
 ### 刷题
 
 使用干净、专注的移动端界面完成题库练习。应用支持单选题、多选题、中英文题干和解析。
 
-<p align="center">
-  <img src="./assets/readme/practice-zh.png" alt="刷题页面" width="280" />
+<p>
+  <img src="./assets/readme/practice-zh.png" alt="刷题题目页面" width="180" />
+  <img src="./assets/readme/practice-correct-zh.png" alt="答对后的刷题页面" width="180" />
+  <img src="./assets/readme/practice-wrong-zh.png" alt="答错后的刷题页面" width="180" />
+  <img src="./assets/readme/practice-explanation-zh.png" alt="刷题解析页面" width="180" />
 </p>
+<p><sub>题目 · 答对后 · 答错后 · 解析</sub></p>
 
-### 错题复习
+### 题目列表与复习
 
-错题会自动归档，方便回看、重做，也可以从列表直接跳回具体题目。
+错题和收藏题会自动归档，方便回看、重做，也可以从列表直接跳回具体题目。
 
-<p align="center">
-  <img src="./assets/readme/wrong-zh.png" alt="错题页面" width="280" />
+<p>
+  <img src="./assets/readme/list-all-zh.png" alt="全部题目列表页面" width="200" />
+  <img src="./assets/readme/wrong-zh.png" alt="错题列表页面" width="200" />
+  <img src="./assets/readme/list-bookmarks-zh.png" alt="收藏题列表页面" width="200" />
 </p>
+<p><sub>全部题目 · 错题 · 收藏题</sub></p>
 
 ### 模拟考试
 
 模拟考试包含倒计时、答题卡、标记题目、保存退出和成绩报告，更接近真实考试节奏。
 
-<p align="center">
-  <img src="./assets/readme/mock-exam-zh.png" alt="模拟考试页面" width="280" />
+<p>
+  <img src="./assets/readme/mock-exam-zh.png" alt="模拟考试题目页面" width="180" />
+  <img src="./assets/readme/mock-exam-sheet-zh.png" alt="模拟考试答题卡页面" width="180" />
+  <img src="./assets/readme/mock-exam-result-zh.png" alt="模拟考试成绩结果页面" width="180" />
+  <img src="./assets/readme/mock-exam-history-zh.png" alt="模拟考试历史记录页面" width="180" />
 </p>
+<p><sub>题目 · 答题卡 · 成绩结果 · 历史记录</sub></p>
 
 ### 设置与同步
 
 游客模式适合本地练习；使用 GitHub 登录后可以跨设备同步进度。主题和语言都可以随时切换。
 
-<p align="center">
-  <img src="./assets/readme/settings-zh.png" alt="设置页面" width="280" />
+<p>
+  <img src="./assets/readme/settings-zh.png" alt="登录后的设置页面" width="220" />
+  <img src="./assets/readme/settings-dark-zh.png" alt="深色模式设置页面" width="220" />
 </p>
+<p><sub>登录后 · 深色模式</sub></p>
 
 ## 支持内容
 

@@ -27,47 +27,62 @@ Anonymous progress stays in your browser. Sign in with GitHub when you want prog
 
 > ace-aws is an independent study tool and is not affiliated with Amazon Web Services.
 
-## Preview
-
-The home screen is fully bilingual.
-
-| English | Chinese |
-| --- | --- |
-| <img src="./assets/readme/home-en.png" alt="ace-aws English home screen" width="260" /> | <img src="./assets/readme/home-zh.png" alt="ace-aws Chinese home screen" width="260" /> |
-
 ## Features
+
+### Bilingual Interface
+
+The whole app supports both English and Chinese.
+
+<p>
+  <img src="./assets/readme/home-en.png" alt="ace-aws English home screen" width="220" />
+  <img src="./assets/readme/home-zh.png" alt="ace-aws Chinese home screen" width="220" />
+</p>
+<p><sub>English · Chinese</sub></p>
 
 ### Practice Questions
 
 Work through the question bank with a clean, distraction-free mobile layout. Single-choice and multiple-choice questions are supported, with bilingual question text and explanations.
 
-<p align="center">
-  <img src="./assets/readme/practice-en.png" alt="Practice question screen" width="280" />
+<p>
+  <img src="./assets/readme/practice-en.png" alt="Practice question screen" width="180" />
+  <img src="./assets/readme/practice-correct-en.png" alt="Practice correct answer result" width="180" />
+  <img src="./assets/readme/practice-wrong-en.png" alt="Practice wrong answer result" width="180" />
+  <img src="./assets/readme/practice-explanation-en.png" alt="Practice explanation view" width="180" />
 </p>
+<p><sub>Question · Correct result · Wrong result · Explanation</sub></p>
 
-### Wrong Answer Review
+### Question Lists and Review
 
-Mistakes stay easy to find. Revisit wrong answers, restart a focused wrong-answer round, and use the list views to jump back into specific questions.
+Mistakes and saved questions stay easy to find. Use the list views to scan all questions, revisit wrong answers, open bookmarks, or jump back into a specific item.
 
-<p align="center">
-  <img src="./assets/readme/wrong-en.png" alt="Wrong answer list screen" width="280" />
+<p>
+  <img src="./assets/readme/list-all-en.png" alt="All questions list screen" width="200" />
+  <img src="./assets/readme/wrong-en.png" alt="Wrong answer list screen" width="200" />
+  <img src="./assets/readme/list-bookmarks-en.png" alt="Bookmarked questions list screen" width="200" />
 </p>
+<p><sub>All questions · Wrong answers · Bookmarks</sub></p>
 
 ### Mock Exam
 
 Run a timed mock exam that mirrors the pressure of the real test: countdown timer, answer sheet, question flags, save-and-exit, and a final score report.
 
-<p align="center">
-  <img src="./assets/readme/mock-exam-en.png" alt="Mock exam question screen" width="280" />
+<p>
+  <img src="./assets/readme/mock-exam-en.png" alt="Mock exam question screen" width="180" />
+  <img src="./assets/readme/mock-exam-sheet-en.png" alt="Mock exam answer sheet screen" width="180" />
+  <img src="./assets/readme/mock-exam-result-en.png" alt="Mock exam result screen" width="180" />
+  <img src="./assets/readme/mock-exam-history-en.png" alt="Mock exam history screen" width="180" />
 </p>
+<p><sub>Question · Answer sheet · Results · History</sub></p>
 
 ### Settings and Sync
 
 Use guest mode for local-only study, or sign in with GitHub to sync progress. Switch theme and language at any time.
 
-<p align="center">
-  <img src="./assets/readme/settings-en.png" alt="Settings screen" width="280" />
+<p>
+  <img src="./assets/readme/settings-en.png" alt="Signed-in settings screen" width="220" />
+  <img src="./assets/readme/settings-dark-en.png" alt="Dark mode settings screen" width="220" />
 </p>
+<p><sub>Signed in · Dark mode</sub></p>
 
 ## What You Can Study
 

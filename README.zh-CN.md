@@ -57,7 +57,7 @@ ace-aws 是一个移动端优先的 AWS 认证刷题应用。它把体验压缩�
 
 <p>
   <img src="./assets/readme/list-all-zh.png" alt="全部题目列表页面" width="200" />
-  <img src="./assets/readme/wrong-zh.png" alt="错题列表页面" width="200" />
+  <img src="./assets/readme/list-wrong-zh.png" alt="错题列表页面" width="200" />
   <img src="./assets/readme/list-bookmarks-zh.png" alt="收藏题列表页面" width="200" />
 </p>
 <p><sub>全部题目 · 错题 · 收藏题</sub></p>

@@ -57,7 +57,7 @@ Mistakes and saved questions stay easy to find. Use the list views to scan all q
 
 <p>
   <img src="./assets/readme/list-all-en.png" alt="All questions list screen" width="200" />
-  <img src="./assets/readme/wrong-en.png" alt="Wrong answer list screen" width="200" />
+  <img src="./assets/readme/list-wrong-en.png" alt="Wrong answer list screen" width="200" />
   <img src="./assets/readme/list-bookmarks-en.png" alt="Bookmarked questions list screen" width="200" />
 </p>
 <p><sub>All questions · Wrong answers · Bookmarks</sub></p>

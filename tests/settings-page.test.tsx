@@ -103,13 +103,20 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('SettingsPage account UI', () => {
-  it('omits the unused privacy option from About', () => {
+  it('shows repository, license, and privacy links in About', () => {
     renderSettings()
 
     expect(screen.getByText('About')).not.toBeNull()
     expect(screen.getByText('Version')).not.toBeNull()
-    expect(screen.queryByRole('link', { name: 'Privacy' })).toBeNull()
-    expect(screen.getByRole('link', { name: 'License' })).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Project repository' }).getAttribute('href')).toBe(
+      'https://github.com/hiback/ace-aws',
+    )
+    expect(screen.getByRole('link', { name: 'License' }).getAttribute('href')).toBe(
+      'https://github.com/hiback/ace-aws/blob/main/LICENSE',
+    )
+    expect(screen.getByRole('link', { name: 'Privacy' }).getAttribute('href')).toBe(
+      'https://github.com/hiback/ace-aws#privacy',
+    )
   })
 
   it('shows GitHub login while signed out', () => {

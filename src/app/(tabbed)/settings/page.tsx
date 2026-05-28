@@ -28,7 +28,7 @@ function ThemeIcon({ className, strokeWidth = 1.75, ...rest }: SVGProps<SVGSVGEl
   )
 }
 
-const APP_VERSION = '0.5.1'
+const APP_VERSION = '0.5.2'
 const REPO_URL = 'https://github.com/hiback/ace-aws'
 const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`
 const PRIVACY_URL = `${REPO_URL}#privacy`

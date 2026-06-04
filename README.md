@@ -17,6 +17,7 @@
 <p align="center">
   <img alt="AWS CLF-C02" src="https://img.shields.io/badge/AWS-CLF--C02-5277c3?style=flat-square" />
   <img alt="AWS DVA-C02" src="https://img.shields.io/badge/AWS-DVA--C02-5277c3?style=flat-square" />
+  <img alt="AWS SAA-C03" src="https://img.shields.io/badge/AWS-SAA--C03-5277c3?style=flat-square" />
   <img alt="English and Chinese" src="https://img.shields.io/badge/Language-English%20%2F%20Chinese-2d3748?style=flat-square" />
   <img alt="Docker ready" src="https://img.shields.io/badge/Deploy-Docker-2496ed?style=flat-square" />
 </p>
@@ -90,6 +91,7 @@ ace-aws currently supports:
 
 - AWS Certified Cloud Practitioner: `CLF-C02`
 - AWS Certified Developer - Associate: `DVA-C02`
+- AWS Certified Solutions Architect - Associate: `SAA-C03`
 - English and Chinese UI
 - Local guest progress
 - GitHub sign-in for cross-device progress sync

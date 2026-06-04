@@ -26,7 +26,7 @@ export const CERT_GROUPS: CertGroup[] = [
   {
     labelKey: 'certGroupAssociate',
     certs: [
-      { code: 'SAA-C03', titleKey: 'certSaaTitle' },
+      { code: 'SAA-C03', titleKey: 'certSaaTitle', count: 1019, ready: true, hot: true },
       {
         code: 'DVA-C02',
         titleKey: 'certDvaSelectTitle',

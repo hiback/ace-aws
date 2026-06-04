@@ -11,7 +11,13 @@ const BANK_CONFIGS = {
     src: 'refs/clf-c02.json',
     dst: 'src/data/clf-c02.json',
   },
+  'SAA-C03': {
+    src: 'refs/saa-c03.json',
+    dst: 'src/data/saa-c03.json',
+  },
 } as const satisfies Record<CertCode, { src: string; dst: string }>
+
+const LETTERS = new Set(['A', 'B', 'C', 'D', 'E', 'F'])
 
 export interface RawQuestion {
   id: number
@@ -39,6 +45,23 @@ export const sortedKey = (letters: readonly string[]): string =>
 export const unwrapCite = (md: string): string =>
   md.replace(/<cite\b[^>]*>([\s\S]*?)<\/cite>/g, '$1')
 
+function normalizeSingleVoteKey(key: string): VoteKey {
+  if (key === 'Other') return 'Other'
+  const letters = key.split('').map((s) => s.toUpperCase())
+  return letters.length === 1 && LETTERS.has(letters[0]) ? (letters[0] as VoteKey) : 'Other'
+}
+
+function normalizeMultiVoteKey(key: string): string {
+  if (key === 'Other') return 'Other'
+  const letters = key.split('').map((s) => s.toUpperCase())
+  const unique = new Set(letters)
+  return letters.length > 0 &&
+    unique.size === letters.length &&
+    letters.every((letter) => LETTERS.has(letter))
+    ? sortedKey(letters)
+    : 'Other'
+}
+
 export function transformQuestion(q: RawQuestion, cert: CertCode): Question {
   const correct = [...q.correct_answer].map((s) => s.toUpperCase()).sort() as Letter[]
   const isMulti = correct.length >= 2
@@ -61,15 +84,20 @@ export function transformQuestion(q: RawQuestion, cert: CertCode): Question {
   if (isMulti) {
     const vd: Record<string, number> = {}
     for (const [k, v] of Object.entries(q.vote_distribution)) {
-      const norm = k === 'Other' ? 'Other' : sortedKey(k.split(''))
+      const norm = normalizeMultiVoteKey(k)
       vd[norm] = (vd[norm] ?? 0) + v
     }
     return { type: 'multi', ...base, answer_count: correct.length, vote_distribution: vd }
   }
+  const vd: Partial<Record<VoteKey, number>> = {}
+  for (const [k, v] of Object.entries(q.vote_distribution)) {
+    const norm = normalizeSingleVoteKey(k)
+    vd[norm] = (vd[norm] ?? 0) + v
+  }
   return {
     type: 'single',
     ...base,
-    vote_distribution: q.vote_distribution as Partial<Record<VoteKey, number>>,
+    vote_distribution: vd,
   }
 }
 

@@ -86,7 +86,7 @@ describe('CertSwitcherSheet', () => {
     expect(onSelectCert).toHaveBeenCalledWith('CLF-C02')
   })
 
-  it('keeps the other-cert preview capped to two entries', () => {
+  it('offers ready certs before upcoming certs in the capped preview', () => {
     render(
       <CertSwitcherSheet
         open
@@ -101,8 +101,8 @@ describe('CertSwitcherSheet', () => {
     )
 
     expect(screen.getByText(/CLF-C02/)).not.toBeNull()
-    expect(screen.getByText(/AIF-C01/)).not.toBeNull()
-    expect(screen.queryByText(/SAA-C03/)).toBeNull()
+    expect(screen.getByText(/SAA-C03/)).not.toBeNull()
+    expect(screen.queryByText(/AIF-C01/)).toBeNull()
   })
 
   it('sorts ready preview certs by answered count before upcoming certs', () => {

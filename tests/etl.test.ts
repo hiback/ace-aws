@@ -31,6 +31,10 @@ describe('ETL: sortedKey', () => {
   it('uppercases input', () => {
     expect(sortedKey(['c', 'a'])).toBe('AC')
   })
+
+  it('supports F for six-option SAA questions', () => {
+    expect(sortedKey(['f', 'c', 'e'])).toBe('CEF')
+  })
 })
 
 describe('ETL: transformQuestion (single)', () => {
@@ -68,6 +72,42 @@ describe('ETL: transformQuestion (single)', () => {
     const out = transformQuestion(single, 'CLF-C02')
     expect(out.cert).toBe('CLF-C02')
   })
+
+  it('aggregates non-single-letter vote keys into Other', () => {
+    const out = transformQuestion(
+      {
+        ...single,
+        vote_distribution: { C: 80, BD: 7, AF: 5, ABC: 3, Other: 2 },
+      },
+      'SAA-C03',
+    )
+
+    expect(out.type).toBe('single')
+    if (out.type !== 'single') throw new Error('narrowing failed')
+    expect(out.vote_distribution.C).toBe(80)
+    expect(out.vote_distribution.Other).toBe(17)
+    expect(Object.hasOwn(out.vote_distribution, 'BD')).toBe(false)
+    expect(Object.hasOwn(out.vote_distribution, 'AF')).toBe(false)
+    expect(Object.hasOwn(out.vote_distribution, 'ABC')).toBe(false)
+  })
+
+  it('aggregates empty and repeated vote keys into Other', () => {
+    const out = transformQuestion(
+      {
+        ...single,
+        vote_distribution: { C: 80, '': 4, AA: 3, AAB: 2 },
+      },
+      'SAA-C03',
+    )
+
+    expect(out.type).toBe('single')
+    if (out.type !== 'single') throw new Error('narrowing failed')
+    expect(out.vote_distribution.C).toBe(80)
+    expect(out.vote_distribution.Other).toBe(9)
+    expect(Object.hasOwn(out.vote_distribution, '')).toBe(false)
+    expect(Object.hasOwn(out.vote_distribution, 'AA')).toBe(false)
+    expect(Object.hasOwn(out.vote_distribution, 'AAB')).toBe(false)
+  })
 })
 
 describe('ETL: transformQuestion (multi)', () => {
@@ -102,5 +142,56 @@ describe('ETL: transformQuestion (multi)', () => {
     if (out.type !== 'multi') throw new Error('narrowing failed')
     expect(out.vote_distribution.Other).toBe(2)
     expect(out.vote_distribution.EHOORT).toBeUndefined()
+  })
+
+  it('supports SAA three-answer questions with F options and three-letter votes', () => {
+    const out = transformQuestion(
+      {
+        id: 101,
+        correct_answer: ['F', 'C', 'A'],
+        vote_distribution: { FCE: 21, BDF: 9, u: 3, Other: 2 },
+        domain: 'Design Resilient Architectures',
+        en: {
+          question: 'EN q',
+          options: { A: 'a', B: 'b', C: 'c', D: 'd', E: 'e', F: 'f' },
+          explanation_md: 'x',
+        },
+        zh: {
+          question: 'ZH q',
+          options: { A: 'a', B: 'b', C: 'c', D: 'd', E: 'e', F: 'f' },
+          explanation_md: 'x',
+        },
+      },
+      'SAA-C03',
+    )
+
+    expect(out.type).toBe('multi')
+    if (out.type !== 'multi') throw new Error('narrowing failed')
+    expect(out.cert).toBe('SAA-C03')
+    expect(out.correct_answer).toEqual(['A', 'C', 'F'])
+    expect(out.answer_count).toBe(3)
+    expect(out.en.options.F).toBe('f')
+    expect(out.vote_distribution.CEF).toBe(21)
+    expect(out.vote_distribution.BDF).toBe(9)
+    expect(out.vote_distribution.Other).toBe(5)
+    expect(out.vote_distribution.u).toBeUndefined()
+  })
+
+  it('aggregates empty and repeated multi-answer vote keys into Other', () => {
+    const out = transformQuestion(
+      {
+        ...multi,
+        vote_distribution: { DB: 63, '': 5, AA: 4, AAB: 3, Other: 2 },
+      },
+      'SAA-C03',
+    )
+
+    expect(out.type).toBe('multi')
+    if (out.type !== 'multi') throw new Error('narrowing failed')
+    expect(out.vote_distribution.BD).toBe(63)
+    expect(out.vote_distribution.Other).toBe(14)
+    expect(out.vote_distribution['']).toBeUndefined()
+    expect(out.vote_distribution.AA).toBeUndefined()
+    expect(out.vote_distribution.AAB).toBeUndefined()
   })
 })

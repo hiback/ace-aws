@@ -9,4 +9,8 @@ export const MOCK_EXAM_DOMAIN_LABEL_KEYS: Partial<Record<string, StringKey>> = {
   'Security and Compliance': 'mockExamDomainSecurityCompliance',
   'Cloud Technology and Services': 'mockExamDomainCloudTechnologyServices',
   'Billing, Pricing, and Support': 'mockExamDomainBillingPricingSupport',
+  'Design Secure Architectures': 'mockExamDomainDesignSecureArchitectures',
+  'Design Resilient Architectures': 'mockExamDomainDesignResilientArchitectures',
+  'Design High-Performing Architectures': 'mockExamDomainDesignHighPerformingArchitectures',
+  'Design Cost-Optimized Architectures': 'mockExamDomainDesignCostOptimizedArchitectures',
 }

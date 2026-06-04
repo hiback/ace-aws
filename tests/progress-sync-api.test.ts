@@ -151,14 +151,42 @@ describe('Progress Sync API', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
   })
 
-  it('returns 404 for unknown certifications', async () => {
+  it('accepts SAA-C03 progress with F picks present in the question options', async () => {
     signIn()
 
-    const response = await postJson({ baseRevision: 0, progress: [] }, 'saa-c03')
+    const response = await postJson(
+      {
+        baseRevision: 0,
+        progress: [validAnswer({ qid: 450, lastPicks: ['C', 'E', 'F'] })],
+      },
+      'saa-c03',
+    )
 
-    expect(response.status).toBe(404)
-    expect(mocks.transaction).not.toHaveBeenCalled()
-    await expect(response.json()).resolves.toEqual({ error: 'Certification not found' })
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      cert: 'SAA-C03',
+      accepted: [validAnswer({ qid: 450, lastPicks: ['C', 'E', 'F'] })],
+      rejected: [],
+    })
+  })
+
+  it('rejects SAA-C03 progress picks that are absent from that question options', async () => {
+    signIn()
+
+    const response = await postJson(
+      {
+        baseRevision: 0,
+        progress: [validAnswer({ qid: 1, lastPicks: ['F'] })],
+      },
+      'saa-c03',
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      cert: 'SAA-C03',
+      accepted: [],
+      rejected: [{ index: 0, qid: 1, code: 'invalid_options' }],
+    })
   })
 
   it('requires JSON content and returns stable payload-level error codes', async () => {

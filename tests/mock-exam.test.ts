@@ -30,7 +30,7 @@ const LOCAL_MOCK_EXAM_STORAGE_KEY = 'ace-aws/mock-exam/local/v1'
 function makeQuestion(
   id: number,
   topic: string,
-  cert: 'DVA-C02' | 'CLF-C02' = 'DVA-C02',
+  cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03' = 'DVA-C02',
 ): Question {
   return {
     id,
@@ -48,6 +48,7 @@ describe('Mock Exam profile', () => {
   it('exposes certification-specific exam rules and explicit topic mappings', () => {
     const dva = getMockExamProfile('DVA-C02')
     const clf = getMockExamProfile('clf-c02')
+    const saa = getMockExamProfile('saa-c03')
 
     expect(dva).toMatchObject({
       cert: 'DVA-C02',
@@ -74,6 +75,19 @@ describe('Mock Exam profile', () => {
       ['Cloud Technology and Services', 34, ['Cloud Technology and Services']],
       ['Billing, Pricing, and Support', 12, ['Billing, Pricing, and Support']],
     ])
+
+    expect(saa).toMatchObject({
+      cert: 'SAA-C03',
+      questionCount: 65,
+      timeLimitMinutes: 130,
+      passingScore: 720,
+    })
+    expect(saa.domains.map((domain) => [domain.name, domain.weight, domain.bankTopics])).toEqual([
+      ['Design Secure Architectures', 30, ['Design Secure Architectures']],
+      ['Design Resilient Architectures', 26, ['Design Resilient Architectures']],
+      ['Design High-Performing Architectures', 24, ['Design High-Performing Architectures']],
+      ['Design Cost-Optimized Architectures', 20, ['Design Cost-Optimized Architectures']],
+    ])
   })
 
   it('allocates largest-remainder quotas that preserve the total question count', () => {
@@ -88,6 +102,12 @@ describe('Mock Exam profile', () => {
       'Security and Compliance': 19,
       'Cloud Technology and Services': 22,
       'Billing, Pricing, and Support': 8,
+    })
+    expect(getMockExamProfileDomainQuotas(getMockExamProfile('SAA-C03'))).toEqual({
+      'Design Secure Architectures': 19,
+      'Design Resilient Architectures': 17,
+      'Design High-Performing Architectures': 16,
+      'Design Cost-Optimized Architectures': 13,
     })
   })
 })
@@ -187,6 +207,31 @@ describe('Mock Exam attempt sampling', () => {
     expect(attempt.questions.some((question) => question.qid === 999)).toBe(false)
     expect(countByDomain(attempt.questions)['Development with AWS Services']).toBe(5)
   })
+
+  it('creates an SAA-C03 mock exam from SAA domain quotas', () => {
+    const bank = makeFullSaaBank()
+
+    const attempt = startMockExamAttempt({
+      bank,
+      cert: 'SAA-C03',
+      random: () => 0,
+      now: () => 1000,
+      id: () => 'attempt-saa',
+    })
+
+    expect(attempt).toMatchObject({
+      id: 'attempt-saa',
+      cert: 'SAA-C03',
+      questionCount: 65,
+      timeLimitSeconds: 130 * 60,
+    })
+    expect(countByDomain(attempt.questions)).toEqual({
+      'Design Secure Architectures': 19,
+      'Design Resilient Architectures': 17,
+      'Design High-Performing Architectures': 16,
+      'Design Cost-Optimized Architectures': 13,
+    })
+  })
 })
 
 describe('Local Mock Exam repository', () => {
@@ -221,12 +266,14 @@ describe('Local Mock Exam repository', () => {
     saveLocalMockExamSubmittedAttempt(makeSubmitted('old-dva', 'DVA-C02', 1000, 700))
     saveLocalMockExamSubmittedAttempt(makeSubmitted('new-clf', 'CLF-C02', 3000, 800))
     saveLocalMockExamSubmittedAttempt(makeSubmitted('new-dva', 'DVA-C02', 2000, 900))
+    saveLocalMockExamSubmittedAttempt(makeSubmitted('new-saa', 'SAA-C03', 4000, 850))
 
     expect(getLocalMockExamHistory('DVA-C02').map((attempt) => attempt.id)).toEqual([
       'new-dva',
       'old-dva',
     ])
     expect(getLocalMockExamHistory('CLF-C02').map((attempt) => attempt.id)).toEqual(['new-clf'])
+    expect(getLocalMockExamHistory('SAA-C03').map((attempt) => attempt.id)).toEqual(['new-saa'])
   })
 
   it('keeps submitted local history with the same attempt id separate per certification', () => {
@@ -318,7 +365,7 @@ describe('Mock Exam scoring and submission', () => {
     ])
   })
 
-  it('applies CLF-C02 and DVA-C02 passing thresholds at the boundary', () => {
+  it('applies certification-specific passing thresholds at the boundary', () => {
     const clfAttempt = makeAttempt('attempt-clf-threshold')
     clfAttempt.cert = 'CLF-C02'
     clfAttempt.questionCount = 3
@@ -339,8 +386,18 @@ describe('Mock Exam scoring and submission', () => {
       ),
     ]
 
+    const saaAttempt = makeAttempt('attempt-saa-threshold')
+    saaAttempt.cert = 'SAA-C03'
+    saaAttempt.questionCount = 45
+    saaAttempt.questions = dvaAttempt.questions.map((question) => ({
+      ...question,
+      domain: 'Design Secure Architectures',
+      topic: 'Design Secure Architectures',
+    }))
+
     const clfResult = scoreMockExamAttempt(clfAttempt, getMockExamProfile('CLF-C02'), 1000)
     const dvaResult = scoreMockExamAttempt(dvaAttempt, getMockExamProfile('DVA-C02'), 1000)
+    const saaResult = scoreMockExamAttempt(saaAttempt, getMockExamProfile('SAA-C03'), 1000)
 
     expect(clfResult).toMatchObject({ score: 700, passed: true })
     expect(
@@ -351,6 +408,7 @@ describe('Mock Exam scoring and submission', () => {
       ),
     ).toMatchObject({ score: 550, passed: false })
     expect(dvaResult).toMatchObject({ score: 720, passed: true })
+    expect(saaResult).toMatchObject({ score: 720, passed: true })
     expect(
       scoreMockExamAttempt(
         {
@@ -744,6 +802,23 @@ function makeFullDvaBank(): Question[] {
   ]
 }
 
+function makeFullSaaBank(): Question[] {
+  return [
+    ...Array.from({ length: 25 }, (_, index) =>
+      makeQuestion(index + 1, 'Design Secure Architectures', 'SAA-C03'),
+    ),
+    ...Array.from({ length: 20 }, (_, index) =>
+      makeQuestion(index + 101, 'Design Resilient Architectures', 'SAA-C03'),
+    ),
+    ...Array.from({ length: 18 }, (_, index) =>
+      makeQuestion(index + 201, 'Design High-Performing Architectures', 'SAA-C03'),
+    ),
+    ...Array.from({ length: 14 }, (_, index) =>
+      makeQuestion(index + 301, 'Design Cost-Optimized Architectures', 'SAA-C03'),
+    ),
+  ]
+}
+
 function range(start: number, end: number, step = 1): number[] {
   const values: number[] = []
   for (let value = start; step > 0 ? value <= end : value >= end; value += step) {
@@ -805,7 +880,7 @@ function makeSnapshot(
 
 function makeSubmitted(
   id: string,
-  cert: 'DVA-C02' | 'CLF-C02',
+  cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03',
   submittedAt: number,
   score: number,
 ) {

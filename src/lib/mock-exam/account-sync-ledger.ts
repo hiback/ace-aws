@@ -1,5 +1,5 @@
 import type { CertCode } from '@/data/types'
-import { READY_CERTS } from '@/lib/cert-catalog'
+import { isReadyCertCode, READY_CERTS } from '@/lib/cert-catalog'
 import {
   clearLocalMockExamImportCert,
   getLocalMockExamDraft,
@@ -604,8 +604,8 @@ function isMockExamAttemptLike(value: unknown): value is MockExamAttempt {
     !!value &&
     typeof value === 'object' &&
     typeof (value as { id?: unknown }).id === 'string' &&
-    ((value as { cert?: unknown }).cert === 'DVA-C02' ||
-      (value as { cert?: unknown }).cert === 'CLF-C02')
+    typeof (value as { cert?: unknown }).cert === 'string' &&
+    isReadyCertCode((value as { cert: string }).cert)
   )
 }
 
@@ -621,8 +621,8 @@ function isSubmittedAttemptLike(value: unknown): value is SubmittedMockExamAttem
     !!value &&
     typeof value === 'object' &&
     typeof (value as { id?: unknown }).id === 'string' &&
-    ((value as { cert?: unknown }).cert === 'DVA-C02' ||
-      (value as { cert?: unknown }).cert === 'CLF-C02')
+    typeof (value as { cert?: unknown }).cert === 'string' &&
+    isReadyCertCode((value as { cert: string }).cert)
   )
 }
 

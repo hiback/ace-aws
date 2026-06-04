@@ -29,12 +29,13 @@ export default function MockExamResultPage() {
   }
 
   const { summary } = submitted
+  const profile = getMockExamProfile(submitted.cert)
   const heroStyle = {
     backgroundImage: summary.passed
       ? 'linear-gradient(160deg, var(--color-success-hero-from), var(--color-success-hero-to))'
       : 'linear-gradient(160deg, var(--color-danger-hero-from), var(--color-danger-hero-to))',
   }
-  const domains = getMockExamProfile(submitted.cert).domains.map((profileDomain) => {
+  const domains = profile.domains.map((profileDomain) => {
     return (
       summary.domains.find((domain) => domain.name === profileDomain.name) ?? {
         name: profileDomain.name,
@@ -64,8 +65,7 @@ export default function MockExamResultPage() {
           {summary.score}
         </h1>
         <p className="relative mt-1 text-secondary opacity-85">
-          {t('mockExamOutOf1000')} · {t('mockExamPassScore')}{' '}
-          {submitted.cert === 'CLF-C02' ? 700 : 720}
+          {t('mockExamOutOf1000')} · {t('mockExamPassScore')} {profile.passingScore}
         </p>
       </section>
 

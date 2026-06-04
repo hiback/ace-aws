@@ -1,5 +1,5 @@
-export type CertCode = 'DVA-C02' | 'CLF-C02'
-export type Letter = 'A' | 'B' | 'C' | 'D' | 'E'
+export type CertCode = 'DVA-C02' | 'CLF-C02' | 'SAA-C03'
+export type Letter = 'A' | 'B' | 'C' | 'D' | 'E' | 'F'
 export type VoteKey = Letter | 'Other'
 export type Locale = 'zh' | 'en'
 export type Theme = 'light' | 'dark' | 'system'

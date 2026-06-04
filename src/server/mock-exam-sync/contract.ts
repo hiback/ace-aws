@@ -1,4 +1,5 @@
 import type { CertCode, Letter } from '@/data/types'
+import { isReadyCertCode } from '@/lib/cert-catalog'
 import type { MockExamAttempt, MockExamQuestionSnapshot } from '@/lib/mock-exam/start-attempt'
 import type { SubmittedMockExamAttempt } from '@/lib/mock-exam/submission'
 
@@ -41,7 +42,7 @@ const SUMMARY_KEYS = [
   'domains',
 ]
 const DOMAIN_SUMMARY_KEYS = ['name', 'correctCount', 'totalCount', 'accuracy', 'weight']
-const LETTERS = new Set(['A', 'B', 'C', 'D', 'E'])
+const LETTERS = new Set(['A', 'B', 'C', 'D', 'E', 'F'])
 
 export type MockExamSyncPayload = {
   cert: CertCode
@@ -133,7 +134,8 @@ function isMockExamAttempt(value: unknown): value is MockExamAttempt {
   return (
     typeof value.id === 'string' &&
     value.id.length > 0 &&
-    (value.cert === 'DVA-C02' || value.cert === 'CLF-C02') &&
+    typeof value.cert === 'string' &&
+    isReadyCertCode(value.cert) &&
     isNonNegativeInteger(value.currentIndex) &&
     isNonNegativeInteger(value.questionCount) &&
     isNonNegativeInteger(value.timeLimitSeconds) &&
@@ -168,7 +170,8 @@ function isSubmittedMockExamAttempt(value: unknown): value is SubmittedMockExamA
   return (
     typeof value.id === 'string' &&
     value.id.length > 0 &&
-    (value.cert === 'DVA-C02' || value.cert === 'CLF-C02') &&
+    typeof value.cert === 'string' &&
+    isReadyCertCode(value.cert) &&
     isNonNegativeInteger(value.submittedAt) &&
     Array.isArray(value.questions) &&
     value.questions.length > 0 &&

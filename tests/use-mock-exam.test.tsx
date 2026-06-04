@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProgressScopeProvider } from '../src/components/providers/progress-scope-provider'
-import type { ProgressScope } from '../src/data/types'
+import type { CertCode, ProgressScope } from '../src/data/types'
 import {
   useDeleteMockExamDraft,
   useMockExamDraft,
@@ -379,9 +379,7 @@ describe('useSubmittedMockExamAttempt', () => {
     client.setQueryData(['mock-exam', 'anonymous', 'history', 'CLF-C02'], [])
     const anonymousRepository = {
       getDraft: vi.fn(async () => null),
-      getHistory: vi.fn(async (cert: 'DVA-C02' | 'CLF-C02') =>
-        cert === 'DVA-C02' ? [submitted] : [],
-      ),
+      getHistory: vi.fn(async (cert: CertCode) => (cert === 'DVA-C02' ? [submitted] : [])),
     }
     const accountRepository = {
       getDraft: vi.fn(async () => null),
@@ -396,8 +394,9 @@ describe('useSubmittedMockExamAttempt', () => {
     expect(result.current.data).toBeNull()
     await waitFor(() => expect(result.current.data?.id).toBe('found-by-walk'))
 
-    expect(anonymousRepository.getHistory).toHaveBeenCalledTimes(2)
+    expect(anonymousRepository.getHistory).toHaveBeenCalledTimes(3)
     expect(anonymousRepository.getHistory).toHaveBeenCalledWith('CLF-C02')
+    expect(anonymousRepository.getHistory).toHaveBeenCalledWith('SAA-C03')
     expect(anonymousRepository.getHistory).toHaveBeenCalledWith('DVA-C02')
     expect(accountRepository.getHistory).not.toHaveBeenCalled()
   })
@@ -405,12 +404,12 @@ describe('useSubmittedMockExamAttempt', () => {
   it('returns null until the matching history resolves', async () => {
     const submitted = makeSubmitted('eventual-submitted', 'DVA-C02')
     const historyResolvers: Partial<
-      Record<'DVA-C02' | 'CLF-C02', (history: SubmittedMockExamAttempt[]) => void>
+      Record<CertCode, (history: SubmittedMockExamAttempt[]) => void>
     > = {}
     const anonymousRepository = {
       getDraft: vi.fn(async () => null),
       getHistory: vi.fn(
-        (cert: 'DVA-C02' | 'CLF-C02') =>
+        (cert: CertCode) =>
           new Promise<SubmittedMockExamAttempt[]>((resolve) => {
             historyResolvers[cert] = resolve
           }),
@@ -431,6 +430,7 @@ describe('useSubmittedMockExamAttempt', () => {
 
     act(() => {
       historyResolvers['CLF-C02']?.([])
+      historyResolvers['SAA-C03']?.([])
       historyResolvers['DVA-C02']?.([submitted])
     })
 

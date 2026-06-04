@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CertCode } from '../src/data/types'
 import { BrowserProgressModule } from '../src/lib/browser-progress-module'
+import { READY_CERTS } from '../src/lib/cert-catalog'
 import {
   getAccountMockExamSyncLedger,
   syncDirtyMockExam,
@@ -121,6 +122,36 @@ describe('Mock Exam Sync contract', () => {
       cert: 'DVA-C02',
       baseRevision: 0,
       draft: partialDraft,
+    })
+  })
+
+  it('accepts SAA-C03 draft payloads with F answer choices', () => {
+    const saaDraft = draft({
+      id: 'saa-draft-with-f',
+      cert: 'SAA-C03',
+      questions: [
+        snapshot({
+          qid: 450,
+          domain: 'Design Secure Architectures',
+          topic: 'Design Secure Architectures',
+          type: 'multi',
+          correctAnswer: ['C', 'E', 'F'],
+          userPicks: ['C', 'E', 'F'],
+          answered: true,
+          correct: true,
+        }),
+        snapshot({
+          qid: 336,
+          domain: 'Design Resilient Architectures',
+          topic: 'Design Resilient Architectures',
+        }),
+      ],
+    })
+
+    expect(parseMockExamSyncPayload('SAA-C03', { baseRevision: 0, draft: saaDraft })).toEqual({
+      cert: 'SAA-C03',
+      baseRevision: 0,
+      draft: saaDraft,
     })
   })
 
@@ -1140,7 +1171,7 @@ function makeQuestion(id: number, topic: string) {
 
 function createMockExamHelperAdapter(): ProgressSyncControllerAdapter {
   return {
-    readyCerts: ['DVA-C02', 'CLF-C02'],
+    readyCerts: READY_CERTS,
     accountProgress: {
       isOwner: () => true,
       clearScope: () => {},

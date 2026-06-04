@@ -73,14 +73,14 @@ describe('Progress Snapshot API', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
   })
 
-  it('returns 404 for unknown certifications', async () => {
+  it('returns an empty SAA-C03 progress snapshot for ready certification', async () => {
     mocks.getServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } })
+    mocks.txOrderBy.mockResolvedValueOnce([])
 
     const response = await snapshot('saa-c03')
 
-    expect(response.status).toBe(404)
-    expect(mocks.transaction).not.toHaveBeenCalled()
-    await expect(response.json()).resolves.toEqual({ error: 'Certification not found' })
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ cert: 'SAA-C03', revision: 0, progress: [] })
   })
 
   it('creates or reuses revision 0 and returns a sparse Progress Snapshot ordered by qid', async () => {

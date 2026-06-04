@@ -15,7 +15,7 @@ export type MockExamProfile = {
   domains: MockExamDomain[]
 }
 
-const PROFILES = {
+const PROFILES: Record<CertCode, MockExamProfile> = {
   'DVA-C02': {
     cert: 'DVA-C02',
     questionCount: 65,
@@ -52,10 +52,40 @@ const PROFILES = {
       },
     ],
   },
-} as const satisfies Record<CertCode, MockExamProfile>
+  'SAA-C03': {
+    cert: 'SAA-C03',
+    questionCount: 65,
+    timeLimitMinutes: 130,
+    passingScore: 720,
+    domains: [
+      {
+        name: 'Design Secure Architectures',
+        weight: 30,
+        bankTopics: ['Design Secure Architectures'],
+      },
+      {
+        name: 'Design Resilient Architectures',
+        weight: 26,
+        bankTopics: ['Design Resilient Architectures'],
+      },
+      {
+        name: 'Design High-Performing Architectures',
+        weight: 24,
+        bankTopics: ['Design High-Performing Architectures'],
+      },
+      {
+        name: 'Design Cost-Optimized Architectures',
+        weight: 20,
+        bankTopics: ['Design Cost-Optimized Architectures'],
+      },
+    ],
+  },
+}
 
 export function getMockExamProfile(cert: string): MockExamProfile {
-  return PROFILES[normalizeCert(cert)]
+  const profile = PROFILES[normalizeCert(cert)]
+  if (!profile) throw new Error(`Mock exam profile not available for cert: ${cert}`)
+  return profile
 }
 
 export function getMockExamProfileDomainQuotas(profile: MockExamProfile): Record<string, number> {

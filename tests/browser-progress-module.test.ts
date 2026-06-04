@@ -533,7 +533,7 @@ describe('BrowserProgressModule', () => {
           byUser: {
             'user-1': {
               'DVA-C02': { revision: 2, lastSyncedAt: 1_700_000_000_000 },
-              'SAA-C03': { revision: 9, lastSyncedAt: 1_700_000_000_000 },
+              'SAP-C02': { revision: 9, lastSyncedAt: 1_700_000_000_000 },
               'CLF-C02': { revision: '3', lastSyncedAt: 1_700_000_000_000 },
             },
           },
@@ -544,7 +544,7 @@ describe('BrowserProgressModule', () => {
         revision: 2,
         lastSyncedAt: 1_700_000_000_000,
       })
-      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'SAA-C03' as never)).toBeNull()
+      expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'SAP-C02' as never)).toBeNull()
       expect(BrowserProgressModule.getAccountSyncBaseline('user-1', 'CLF-C02')).toBeNull()
     })
 
@@ -652,9 +652,9 @@ describe('BrowserProgressModule', () => {
       )
 
       expect(BrowserProgressModule.summarizeAnonymousImport()).toEqual({
-        certs: ['CLF-C02', 'DVA-C02'],
-        certCount: 2,
-        recordCount: 2,
+        certs: ['CLF-C02', 'SAA-C03', 'DVA-C02'],
+        certCount: 3,
+        recordCount: 3,
       })
     })
 

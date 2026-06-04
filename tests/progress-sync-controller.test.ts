@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CertCode, QuestionProgress } from '../src/data/types'
 import type { ProgressSyncResult } from '../src/lib/account-progress-sync-client'
 import { BrowserProgressModule } from '../src/lib/browser-progress-module'
+import { READY_CERTS } from '../src/lib/cert-catalog'
 import {
   getAccountMockExamSyncLedger,
   syncDirtyMockExam,
@@ -124,7 +125,7 @@ function createAdapter() {
 
   const baselineKey = (userId: string, cert: CertCode) => `${userId}:${cert}`
   const adapter: ProgressSyncControllerAdapter = {
-    readyCerts: ['DVA-C02', 'CLF-C02'],
+    readyCerts: READY_CERTS,
     accountProgress: {
       isOwner: (userId) => owner.userId === userId,
       clearScope: vi.fn(),
@@ -462,6 +463,14 @@ describe('Progress Sync controller', () => {
   it('blocks on missing baseline until the current progress snapshot is installed', async () => {
     const ctx = createAdapter()
     ctx.snapshotResponses.set('DVA-C02', [progress(3)])
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 0,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.baselines.set(ctx.baselineKey('user-1', 'SAA-C03'), {
+      revision: 0,
+      lastSyncedAt: 1_700_000_000_000,
+    })
     const input = {
       authStatus: 'authenticated' as const,
       userId: 'user-1',
@@ -473,6 +482,8 @@ describe('Progress Sync controller', () => {
     expect(controller.getState()).toMatchObject({ view: 'blocking', status: 'syncing' })
 
     controller.update(input)
+    await flushPromises()
+    await flushPromises()
     await flushPromises()
     await flushPromises()
 

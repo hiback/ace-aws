@@ -1,3 +1,4 @@
+import { isReadyCertCode } from '@/lib/cert-catalog'
 import type { MockExamAttempt } from './start-attempt'
 import type { SubmittedMockExamAttempt } from './submission'
 
@@ -179,8 +180,8 @@ function isSubmittedAttemptLike(value: unknown): value is SubmittedMockExamAttem
     !!value &&
     typeof value === 'object' &&
     typeof (value as { id?: unknown }).id === 'string' &&
-    ((value as { cert?: unknown }).cert === 'DVA-C02' ||
-      (value as { cert?: unknown }).cert === 'CLF-C02')
+    typeof (value as { cert?: unknown }).cert === 'string' &&
+    isReadyCertCode((value as { cert: string }).cert)
   )
 }
 

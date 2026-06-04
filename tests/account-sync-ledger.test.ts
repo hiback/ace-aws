@@ -329,11 +329,12 @@ describe('Account Mock Exam sync ledger', () => {
     const ledger = getAccountMockExamSyncLedger()
     saveLocalMockExamAttempt(draft('anonymous-dva-draft', 'DVA-C02'))
     saveLocalMockExamSubmittedAttempt(submitted('anonymous-clf-history', 'CLF-C02', 4000))
+    saveLocalMockExamSubmittedAttempt(submitted('anonymous-saa-history', 'SAA-C03', 5000))
 
     expect(ledger.summarizeAnonymousImport()).toEqual({
-      certs: ['CLF-C02', 'DVA-C02'],
-      certCount: 2,
-      recordCount: 2,
+      certs: ['CLF-C02', 'SAA-C03', 'DVA-C02'],
+      certCount: 3,
+      recordCount: 3,
     })
   })
 

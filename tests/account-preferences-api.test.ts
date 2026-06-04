@@ -80,9 +80,19 @@ describe('account preferences API', () => {
     await expect(response.json()).resolves.toEqual({ currentCert: 'CLF-C02' })
   })
 
-  it('treats an invalid stored cert as absent', async () => {
+  it('returns a stored SAA-C03 ready cert', async () => {
     mocks.getServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } })
     mocks.selectLimit.mockResolvedValueOnce([{ currentCert: 'SAA-C03' }])
+
+    const response = await GET()
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ currentCert: 'SAA-C03' })
+  })
+
+  it('treats an invalid stored cert as absent', async () => {
+    mocks.getServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } })
+    mocks.selectLimit.mockResolvedValueOnce([{ currentCert: 'SAP-C02' }])
 
     const response = await GET()
 
@@ -102,7 +112,7 @@ describe('account preferences API', () => {
   it('rejects invalid PATCH bodies', async () => {
     mocks.getServerSession.mockResolvedValue({ user: { id: 'user-1' } })
 
-    for (const body of ['not-json', '{}', JSON.stringify({ currentCert: 'SAA-C03' })]) {
+    for (const body of ['not-json', '{}', JSON.stringify({ currentCert: 'SAP-C02' })]) {
       const response = await patch(body)
       expect(response.status).toBe(400)
       await expect(response.json()).resolves.toEqual({ error: 'Invalid currentCert' })
@@ -119,5 +129,16 @@ describe('account preferences API', () => {
     expect(mocks.insertValues).toHaveBeenCalledWith({ userId: 'user-1', currentCert: 'DVA-C02' })
     expect(mocks.onConflictDoUpdate).toHaveBeenCalledTimes(1)
     await expect(response.json()).resolves.toEqual({ currentCert: 'DVA-C02' })
+  })
+
+  it('upserts SAA-C03 for authenticated users', async () => {
+    mocks.getServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } })
+    mocks.returning.mockResolvedValueOnce([{ currentCert: 'SAA-C03' }])
+
+    const response = await patch(JSON.stringify({ currentCert: 'SAA-C03' }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.insertValues).toHaveBeenCalledWith({ userId: 'user-1', currentCert: 'SAA-C03' })
+    await expect(response.json()).resolves.toEqual({ currentCert: 'SAA-C03' })
   })
 })

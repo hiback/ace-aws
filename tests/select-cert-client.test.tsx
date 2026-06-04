@@ -46,7 +46,7 @@ beforeEach(() => {
   authMocks.session = null
   accountPreferenceMocks.saveCurrentCert.mockReset()
   accountPreferenceMocks.saveCurrentCert.mockImplementation(
-    async (cert: 'DVA-C02' | 'CLF-C02') => cert,
+    async (cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03') => cert,
   )
   usePrefsStore.setState({ locale: 'en', currentCert: null })
 })
@@ -161,6 +161,22 @@ describe('SelectCertClient', () => {
     })
   })
 
+  it('selects and confirms SAA', async () => {
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    const saa = screen.getByRole('button', { name: /Solutions Architect/ })
+    const cta = screen.getByRole('button', { name: 'Start practicing' }) as HTMLButtonElement
+
+    fireEvent.click(saa)
+    fireEvent.click(cta)
+
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(usePrefsStore.getState().currentCert).toBe('SAA-C03')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
+  })
+
   it('cancels the selected cert when clicked again', () => {
     render(<SelectCertClient requestedMode="onboarding" />)
 
@@ -180,7 +196,7 @@ describe('SelectCertClient', () => {
     render(<SelectCertClient requestedMode="switch" />)
 
     expect(screen.getByText('All certifications')).not.toBeNull()
-    expect(screen.getByText(/CLF-C02 and DVA-C02 banks are ready/)).not.toBeNull()
+    expect(screen.getByText(/CLF-C02, DVA-C02, and SAA-C03 banks are ready/)).not.toBeNull()
     expect(screen.getByText('Continue current certification')).not.toBeNull()
     expect(screen.getByRole('button', { name: /Developer/ }).getAttribute('aria-pressed')).toBe(
       'true',

@@ -1,7 +1,7 @@
 import type { CertCode, Letter } from '@/data/types'
 import type { QuestionBankIndex } from './question-bank-index'
 
-const LETTERS = new Set(['A', 'B', 'C', 'D', 'E'])
+const LETTERS = new Set(['A', 'B', 'C', 'D', 'E', 'F'])
 const TOP_LEVEL_KEYS = ['baseRevision', 'progress']
 const RECORD_KEYS = [
   'qid',

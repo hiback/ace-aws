@@ -80,6 +80,34 @@ const PROFILES: Record<CertCode, MockExamProfile> = {
       },
     ],
   },
+  'SAP-C02': {
+    cert: 'SAP-C02',
+    questionCount: 75,
+    timeLimitMinutes: 180,
+    passingScore: 750,
+    domains: [
+      {
+        name: 'Design Solutions for Organizational Complexity',
+        weight: 26,
+        bankTopics: ['Design Solutions for Organizational Complexity'],
+      },
+      {
+        name: 'Design for New Solutions',
+        weight: 29,
+        bankTopics: ['Design for New Solutions'],
+      },
+      {
+        name: 'Continuous Improvement for Existing Solutions',
+        weight: 25,
+        bankTopics: ['Continuous Improvement for Existing Solutions'],
+      },
+      {
+        name: 'Accelerate Workload Migration and Modernization',
+        weight: 20,
+        bankTopics: ['Accelerate Workload Migration and Modernization'],
+      },
+    ],
+  },
 }
 
 export function getMockExamProfile(cert: string): MockExamProfile {

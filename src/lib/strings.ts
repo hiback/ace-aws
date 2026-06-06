@@ -22,7 +22,7 @@ export const STRINGS = {
     certSoaTitle: 'SysOps 管理员',
     certDeaTitle: '数据工程师',
     certMlaTitle: '机器学习工程师',
-    certSapTitle: '解决方案架构师',
+    certSapTitle: '解决方案架构师专家级',
     certDopTitle: 'DevOps 工程师',
     certAnsTitle: '高级网络',
     certScsTitle: '安全',
@@ -42,7 +42,8 @@ export const STRINGS = {
     certSwitchOther: '其他认证',
     certSwitchBrowseAll: '查看全部认证',
     selectCertBrowseTitle: '全部认证',
-    selectCertBrowseSubtitle: '查看全部 AWS 认证。CLF-C02、DVA-C02 与 SAA-C03 题库已就绪。',
+    selectCertBrowseSubtitle:
+      '查看全部 AWS 认证。CLF-C02、DVA-C02、SAA-C03 与 SAP-C02 题库已就绪。',
     selectCertBrowseCta: '继续当前认证',
 
     homeContinue: '继续刷题',
@@ -148,6 +149,10 @@ export const STRINGS = {
     mockExamDomainDesignResilientArchitectures: '设计弹性架构',
     mockExamDomainDesignHighPerformingArchitectures: '设计高性能架构',
     mockExamDomainDesignCostOptimizedArchitectures: '设计成本优化架构',
+    mockExamDomainDesignSolutionsForOrganizationalComplexity: '设计组织复杂性解决方案',
+    mockExamDomainDesignForNewSolutions: '设计新解决方案',
+    mockExamDomainContinuousImprovementForExistingSolutions: '持续改进现有解决方案',
+    mockExamDomainAccelerateWorkloadMigrationAndModernization: '加速工作负载迁移与现代化',
 
     questionXofY: '第 {x} 题 / 共 {y} 题',
     badgeSingle: '单选',
@@ -164,6 +169,10 @@ export const STRINGS = {
     topicDesignResilientArchitectures: '设计弹性架构',
     topicDesignHighPerformingArchitectures: '设计高性能架构',
     topicDesignCostOptimizedArchitectures: '设计成本优化架构',
+    topicDesignSolutionsForOrganizationalComplexity: '设计组织复杂性解决方案',
+    topicDesignForNewSolutions: '设计新解决方案',
+    topicContinuousImprovementForExistingSolutions: '持续改进现有解决方案',
+    topicAccelerateWorkloadMigrationAndModernization: '加速工作负载迁移与现代化',
     practiceCountPrefix: '第',
     practiceCountMiddle: '题 / 共',
     practiceCountSuffix: '题',
@@ -328,7 +337,7 @@ export const STRINGS = {
     certSoaTitle: 'SysOps Administrator',
     certDeaTitle: 'Data Engineer',
     certMlaTitle: 'Machine Learning',
-    certSapTitle: 'Solutions Architect',
+    certSapTitle: 'Solutions Architect Professional',
     certDopTitle: 'DevOps Engineer',
     certAnsTitle: 'Advanced Networking',
     certScsTitle: 'Security',
@@ -349,7 +358,7 @@ export const STRINGS = {
     certSwitchBrowseAll: 'Browse all certifications',
     selectCertBrowseTitle: 'All certifications',
     selectCertBrowseSubtitle:
-      'Browse every AWS certification. CLF-C02, DVA-C02, and SAA-C03 banks are ready right now.',
+      'Browse every AWS certification. CLF-C02, DVA-C02, SAA-C03, and SAP-C02 banks are ready right now.',
     selectCertBrowseCta: 'Continue current certification',
 
     homeContinue: 'Continue',
@@ -457,6 +466,13 @@ export const STRINGS = {
     mockExamDomainDesignResilientArchitectures: 'Design Resilient Architectures',
     mockExamDomainDesignHighPerformingArchitectures: 'Design High-Performing Architectures',
     mockExamDomainDesignCostOptimizedArchitectures: 'Design Cost-Optimized Architectures',
+    mockExamDomainDesignSolutionsForOrganizationalComplexity:
+      'Design Solutions for Organizational Complexity',
+    mockExamDomainDesignForNewSolutions: 'Design for New Solutions',
+    mockExamDomainContinuousImprovementForExistingSolutions:
+      'Continuous Improvement for Existing Solutions',
+    mockExamDomainAccelerateWorkloadMigrationAndModernization:
+      'Accelerate Workload Migration and Modernization',
 
     questionXofY: 'Question {x} of {y}',
     badgeSingle: 'Single',
@@ -473,6 +489,12 @@ export const STRINGS = {
     topicDesignResilientArchitectures: 'Design Resilient Architectures',
     topicDesignHighPerformingArchitectures: 'Design High-Performing Architectures',
     topicDesignCostOptimizedArchitectures: 'Design Cost-Optimized Architectures',
+    topicDesignSolutionsForOrganizationalComplexity:
+      'Design Solutions for Organizational Complexity',
+    topicDesignForNewSolutions: 'Design for New Solutions',
+    topicContinuousImprovementForExistingSolutions: 'Continuous Improvement for Existing Solutions',
+    topicAccelerateWorkloadMigrationAndModernization:
+      'Accelerate Workload Migration and Modernization',
     practiceCountPrefix: 'Question',
     practiceCountMiddle: 'of',
     practiceCountSuffix: '',

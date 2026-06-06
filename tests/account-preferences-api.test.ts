@@ -90,9 +90,9 @@ describe('account preferences API', () => {
     await expect(response.json()).resolves.toEqual({ currentCert: 'SAA-C03' })
   })
 
-  it('treats an invalid stored cert as absent', async () => {
+  it('treats a non-ready stored cert as absent', async () => {
     mocks.getServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } })
-    mocks.selectLimit.mockResolvedValueOnce([{ currentCert: 'SAP-C02' }])
+    mocks.selectLimit.mockResolvedValueOnce([{ currentCert: 'AIF-C01' }])
 
     const response = await GET()
 
@@ -112,7 +112,7 @@ describe('account preferences API', () => {
   it('rejects invalid PATCH bodies', async () => {
     mocks.getServerSession.mockResolvedValue({ user: { id: 'user-1' } })
 
-    for (const body of ['not-json', '{}', JSON.stringify({ currentCert: 'SAP-C02' })]) {
+    for (const body of ['not-json', '{}', JSON.stringify({ currentCert: 'AIF-C01' })]) {
       const response = await patch(body)
       expect(response.status).toBe(400)
       await expect(response.json()).resolves.toEqual({ error: 'Invalid currentCert' })

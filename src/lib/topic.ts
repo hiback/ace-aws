@@ -13,4 +13,10 @@ export const TOPIC_KEYS: Record<string, StringKey> = {
   'Design Resilient Architectures': 'topicDesignResilientArchitectures',
   'Design High-Performing Architectures': 'topicDesignHighPerformingArchitectures',
   'Design Cost-Optimized Architectures': 'topicDesignCostOptimizedArchitectures',
+  'Design Solutions for Organizational Complexity':
+    'topicDesignSolutionsForOrganizationalComplexity',
+  'Design for New Solutions': 'topicDesignForNewSolutions',
+  'Continuous Improvement for Existing Solutions': 'topicContinuousImprovementForExistingSolutions',
+  'Accelerate Workload Migration and Modernization':
+    'topicAccelerateWorkloadMigrationAndModernization',
 }

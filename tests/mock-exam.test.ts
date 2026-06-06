@@ -30,7 +30,7 @@ const LOCAL_MOCK_EXAM_STORAGE_KEY = 'ace-aws/mock-exam/local/v1'
 function makeQuestion(
   id: number,
   topic: string,
-  cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03' = 'DVA-C02',
+  cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03' | 'SAP-C02' = 'DVA-C02',
 ): Question {
   return {
     id,
@@ -49,6 +49,7 @@ describe('Mock Exam profile', () => {
     const dva = getMockExamProfile('DVA-C02')
     const clf = getMockExamProfile('clf-c02')
     const saa = getMockExamProfile('saa-c03')
+    const sap = getMockExamProfile('sap-c02')
 
     expect(dva).toMatchObject({
       cert: 'DVA-C02',
@@ -88,6 +89,31 @@ describe('Mock Exam profile', () => {
       ['Design High-Performing Architectures', 24, ['Design High-Performing Architectures']],
       ['Design Cost-Optimized Architectures', 20, ['Design Cost-Optimized Architectures']],
     ])
+
+    expect(sap).toMatchObject({
+      cert: 'SAP-C02',
+      questionCount: 75,
+      timeLimitMinutes: 180,
+      passingScore: 750,
+    })
+    expect(sap.domains.map((domain) => [domain.name, domain.weight, domain.bankTopics])).toEqual([
+      [
+        'Design Solutions for Organizational Complexity',
+        26,
+        ['Design Solutions for Organizational Complexity'],
+      ],
+      ['Design for New Solutions', 29, ['Design for New Solutions']],
+      [
+        'Continuous Improvement for Existing Solutions',
+        25,
+        ['Continuous Improvement for Existing Solutions'],
+      ],
+      [
+        'Accelerate Workload Migration and Modernization',
+        20,
+        ['Accelerate Workload Migration and Modernization'],
+      ],
+    ])
   })
 
   it('allocates largest-remainder quotas that preserve the total question count', () => {
@@ -108,6 +134,12 @@ describe('Mock Exam profile', () => {
       'Design Resilient Architectures': 17,
       'Design High-Performing Architectures': 16,
       'Design Cost-Optimized Architectures': 13,
+    })
+    expect(getMockExamProfileDomainQuotas(getMockExamProfile('SAP-C02'))).toEqual({
+      'Design Solutions for Organizational Complexity': 19,
+      'Design for New Solutions': 22,
+      'Continuous Improvement for Existing Solutions': 19,
+      'Accelerate Workload Migration and Modernization': 15,
     })
   })
 })
@@ -230,6 +262,31 @@ describe('Mock Exam attempt sampling', () => {
       'Design Resilient Architectures': 17,
       'Design High-Performing Architectures': 16,
       'Design Cost-Optimized Architectures': 13,
+    })
+  })
+
+  it('creates a SAP-C02 mock exam from SAP domain quotas', () => {
+    const bank = makeFullSapBank()
+
+    const attempt = startMockExamAttempt({
+      bank,
+      cert: 'SAP-C02',
+      random: () => 0,
+      now: () => 1000,
+      id: () => 'attempt-sap',
+    })
+
+    expect(attempt).toMatchObject({
+      id: 'attempt-sap',
+      cert: 'SAP-C02',
+      questionCount: 75,
+      timeLimitSeconds: 180 * 60,
+    })
+    expect(countByDomain(attempt.questions)).toEqual({
+      'Design Solutions for Organizational Complexity': 19,
+      'Design for New Solutions': 22,
+      'Continuous Improvement for Existing Solutions': 19,
+      'Accelerate Workload Migration and Modernization': 15,
     })
   })
 })
@@ -819,6 +876,23 @@ function makeFullSaaBank(): Question[] {
   ]
 }
 
+function makeFullSapBank(): Question[] {
+  return [
+    ...Array.from({ length: 25 }, (_, index) =>
+      makeQuestion(index + 1, 'Design Solutions for Organizational Complexity', 'SAP-C02'),
+    ),
+    ...Array.from({ length: 25 }, (_, index) =>
+      makeQuestion(index + 101, 'Design for New Solutions', 'SAP-C02'),
+    ),
+    ...Array.from({ length: 25 }, (_, index) =>
+      makeQuestion(index + 201, 'Continuous Improvement for Existing Solutions', 'SAP-C02'),
+    ),
+    ...Array.from({ length: 25 }, (_, index) =>
+      makeQuestion(index + 301, 'Accelerate Workload Migration and Modernization', 'SAP-C02'),
+    ),
+  ]
+}
+
 function range(start: number, end: number, step = 1): number[] {
   const values: number[] = []
   for (let value = start; step > 0 ? value <= end : value >= end; value += step) {
@@ -880,7 +954,7 @@ function makeSnapshot(
 
 function makeSubmitted(
   id: string,
-  cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03',
+  cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03' | 'SAP-C02',
   submittedAt: number,
   score: number,
 ) {

@@ -13,4 +13,11 @@ export const MOCK_EXAM_DOMAIN_LABEL_KEYS: Partial<Record<string, StringKey>> = {
   'Design Resilient Architectures': 'mockExamDomainDesignResilientArchitectures',
   'Design High-Performing Architectures': 'mockExamDomainDesignHighPerformingArchitectures',
   'Design Cost-Optimized Architectures': 'mockExamDomainDesignCostOptimizedArchitectures',
+  'Design Solutions for Organizational Complexity':
+    'mockExamDomainDesignSolutionsForOrganizationalComplexity',
+  'Design for New Solutions': 'mockExamDomainDesignForNewSolutions',
+  'Continuous Improvement for Existing Solutions':
+    'mockExamDomainContinuousImprovementForExistingSolutions',
+  'Accelerate Workload Migration and Modernization':
+    'mockExamDomainAccelerateWorkloadMigrationAndModernization',
 }

@@ -394,9 +394,10 @@ describe('useSubmittedMockExamAttempt', () => {
     expect(result.current.data).toBeNull()
     await waitFor(() => expect(result.current.data?.id).toBe('found-by-walk'))
 
-    expect(anonymousRepository.getHistory).toHaveBeenCalledTimes(3)
+    expect(anonymousRepository.getHistory).toHaveBeenCalledTimes(4)
     expect(anonymousRepository.getHistory).toHaveBeenCalledWith('CLF-C02')
     expect(anonymousRepository.getHistory).toHaveBeenCalledWith('SAA-C03')
+    expect(anonymousRepository.getHistory).toHaveBeenCalledWith('SAP-C02')
     expect(anonymousRepository.getHistory).toHaveBeenCalledWith('DVA-C02')
     expect(accountRepository.getHistory).not.toHaveBeenCalled()
   })
@@ -431,6 +432,7 @@ describe('useSubmittedMockExamAttempt', () => {
     act(() => {
       historyResolvers['CLF-C02']?.([])
       historyResolvers['SAA-C03']?.([])
+      historyResolvers['SAP-C02']?.([])
       historyResolvers['DVA-C02']?.([submitted])
     })
 

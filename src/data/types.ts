@@ -1,4 +1,4 @@
-export type CertCode = 'DVA-C02' | 'CLF-C02' | 'SAA-C03'
+export type CertCode = 'DVA-C02' | 'CLF-C02' | 'SAA-C03' | 'SAP-C02'
 export type Letter = 'A' | 'B' | 'C' | 'D' | 'E' | 'F'
 export type VoteKey = Letter | 'Other'
 export type Locale = 'zh' | 'en'

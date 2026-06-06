@@ -43,7 +43,7 @@ export const CERT_GROUPS: CertGroup[] = [
   {
     labelKey: 'certGroupProfessional',
     certs: [
-      { code: 'SAP-C02', titleKey: 'certSapTitle' },
+      { code: 'SAP-C02', titleKey: 'certSapTitle', count: 529, ready: true, hot: true },
       { code: 'DOP-C02', titleKey: 'certDopTitle' },
     ],
   },

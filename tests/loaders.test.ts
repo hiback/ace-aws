@@ -24,6 +24,11 @@ describe('normalizeCert', () => {
     expect(READY_CERTS).toContain('SAA-C03')
   })
 
+  it('normalizes SAP cert input and marks it ready', () => {
+    expect(normalizeCert('sap-c02')).toBe('SAP-C02')
+    expect(READY_CERTS).toContain('SAP-C02')
+  })
+
   it('throws on unknown cert', () => {
     expect(() => normalizeCert('unknown')).toThrow(/Unknown cert/)
   })
@@ -62,5 +67,11 @@ describe('loadBank (integration with normalization)', () => {
           (q.correct_answer.includes('F') || Object.hasOwn(q.en.options, 'F')),
       ),
     ).toBe(true)
+  })
+
+  it('loads the SAP bank', async () => {
+    const bank = await loadBank('sap-c02')
+    expect(bank).toHaveLength(529)
+    expect(bank[0]?.cert).toBe('SAP-C02')
   })
 })

@@ -18,6 +18,7 @@
   <img alt="AWS CLF-C02" src="https://img.shields.io/badge/AWS-CLF--C02-5277c3?style=flat-square" />
   <img alt="AWS DVA-C02" src="https://img.shields.io/badge/AWS-DVA--C02-5277c3?style=flat-square" />
   <img alt="AWS SAA-C03" src="https://img.shields.io/badge/AWS-SAA--C03-5277c3?style=flat-square" />
+  <img alt="AWS SAP-C02" src="https://img.shields.io/badge/AWS-SAP--C02-5277c3?style=flat-square" />
   <img alt="English and Chinese" src="https://img.shields.io/badge/Language-English%20%2F%20Chinese-2d3748?style=flat-square" />
   <img alt="Docker ready" src="https://img.shields.io/badge/Deploy-Docker-2496ed?style=flat-square" />
 </p>
@@ -92,6 +93,7 @@ ace-aws 目前支持：
 - AWS Certified Cloud Practitioner: `CLF-C02`
 - AWS Certified Developer - Associate: `DVA-C02`
 - AWS Certified Solutions Architect - Associate: `SAA-C03`
+- AWS Certified Solutions Architect - Professional: `SAP-C02`
 - 中英文界面
 - 游客本地进度
 - GitHub 登录后的跨设备同步

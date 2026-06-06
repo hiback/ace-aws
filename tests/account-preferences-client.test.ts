@@ -27,10 +27,10 @@ describe('account preferences client', () => {
     await expect(fetchAccountPreferences()).resolves.toEqual({ currentCert: 'SAA-C03' })
   })
 
-  it('normalizes invalid response certs to null', async () => {
+  it('normalizes non-ready response certs to null', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(JSON.stringify({ currentCert: 'SAP-C02' }))),
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ currentCert: 'AIF-C01' }))),
     )
 
     await expect(fetchAccountPreferences()).resolves.toEqual({ currentCert: null })

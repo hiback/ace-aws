@@ -46,7 +46,7 @@ beforeEach(() => {
   authMocks.session = null
   accountPreferenceMocks.saveCurrentCert.mockReset()
   accountPreferenceMocks.saveCurrentCert.mockImplementation(
-    async (cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03') => cert,
+    async (cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03' | 'SAP-C02') => cert,
   )
   usePrefsStore.setState({ locale: 'en', currentCert: null })
 })
@@ -164,7 +164,7 @@ describe('SelectCertClient', () => {
   it('selects and confirms SAA', async () => {
     render(<SelectCertClient requestedMode="onboarding" />)
 
-    const saa = screen.getByRole('button', { name: /Solutions Architect/ })
+    const saa = screen.getByRole('button', { name: /SAA-C03/ })
     const cta = screen.getByRole('button', { name: 'Start practicing' }) as HTMLButtonElement
 
     fireEvent.click(saa)
@@ -173,6 +173,22 @@ describe('SelectCertClient', () => {
     await waitFor(() => {
       expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
       expect(usePrefsStore.getState().currentCert).toBe('SAA-C03')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
+  })
+
+  it('selects and confirms SAP', async () => {
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    const sap = screen.getByRole('button', { name: /Solutions Architect Professional/ })
+    const cta = screen.getByRole('button', { name: 'Start practicing' }) as HTMLButtonElement
+
+    fireEvent.click(sap)
+    fireEvent.click(cta)
+
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(usePrefsStore.getState().currentCert).toBe('SAP-C02')
       expect(routerMocks.replace).toHaveBeenCalledWith('/')
     })
   })
@@ -196,7 +212,9 @@ describe('SelectCertClient', () => {
     render(<SelectCertClient requestedMode="switch" />)
 
     expect(screen.getByText('All certifications')).not.toBeNull()
-    expect(screen.getByText(/CLF-C02, DVA-C02, and SAA-C03 banks are ready/)).not.toBeNull()
+    expect(
+      screen.getByText(/CLF-C02, DVA-C02, SAA-C03, and SAP-C02 banks are ready/),
+    ).not.toBeNull()
     expect(screen.getByText('Continue current certification')).not.toBeNull()
     expect(screen.getByRole('button', { name: /Developer/ }).getAttribute('aria-pressed')).toBe(
       'true',

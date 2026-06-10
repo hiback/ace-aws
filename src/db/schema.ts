@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import {
   boolean,
   check,
+  date,
   integer,
   jsonb,
   pgTable,
@@ -131,6 +132,28 @@ export const certProgressRevisions = pgTable(
   (revision) => [
     primaryKey({ columns: [revision.userId, revision.cert] }),
     check('cert_progress_revisions_revision_non_negative', sql`${revision.revision} >= 0`),
+  ],
+)
+
+export const dailyQuestionStats = pgTable(
+  'daily_question_stats',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cert: text('cert').notNull(),
+    localDate: date('local_date').notNull(),
+    sourceId: text('source_id').notNull(),
+    correctCount: integer('correct_count').notNull().default(0),
+    wrongCount: integer('wrong_count').notNull().default(0),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true }).notNull(),
+  },
+  (stats) => [
+    primaryKey({ columns: [stats.userId, stats.cert, stats.localDate, stats.sourceId] }),
+    check(
+      'daily_question_stats_counts_non_negative',
+      sql`${stats.correctCount} >= 0 AND ${stats.wrongCount} >= 0`,
+    ),
   ],
 )
 

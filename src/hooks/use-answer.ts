@@ -40,7 +40,6 @@ export function useRecordAnswer(cert: CertCode) {
       if (scope === 'anonymous') {
         qc.setQueryData(['progress', 'question', cert, qid], savedProgress)
       }
-      qc.invalidateQueries({ queryKey: ['progress', scope, 'question', cert, qid] })
       qc.invalidateQueries({ queryKey: ['progress', scope] })
       if (scope === 'account') enqueueDirtySync(cert)
     },

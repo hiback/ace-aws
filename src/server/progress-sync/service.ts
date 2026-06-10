@@ -1,8 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import type { CertCode } from '@/data/types'
 import { db } from '@/db'
-import { certProgressRevisions, questionProgress } from '@/db/schema'
-import type { ParsedSync, RecordReject, SyncRecord } from './contract'
+import { certProgressRevisions, dailyQuestionStats, questionProgress } from '@/db/schema'
+import type { ParsedSync, RecordReject, SyncDailyQuestionStats, SyncRecord } from './contract'
 import { type CanonicalQuestionProgress, mergeQuestionProgress } from './merge'
 
 type ProgressRow = {
@@ -22,6 +22,7 @@ type SyncResult = {
     cert: CertCode
     revision: number
     accepted: SyncRecord[]
+    dailyStats: SyncDailyQuestionStats[]
     rejected: RecordReject[]
     snapshotRequired: boolean
     error?: { code: 'revision_conflict'; message: string }
@@ -35,6 +36,7 @@ function revisionConflict(cert: CertCode, revision: number, rejected: RecordReje
       cert,
       revision,
       accepted: [],
+      dailyStats: [],
       rejected,
       snapshotRequired: true,
       error: {
@@ -79,6 +81,24 @@ function sameProgress(left: SyncRecord, right: SyncRecord) {
     left.lastPicks.length === right.lastPicks.length &&
     left.lastPicks.every((pick, index) => pick === right.lastPicks[index])
   )
+}
+
+function sameDailyStats(left: SyncDailyQuestionStats | undefined, right: SyncDailyQuestionStats) {
+  return (
+    left !== undefined &&
+    left.date === right.date &&
+    left.sourceId === right.sourceId &&
+    left.correctCount === right.correctCount &&
+    left.wrongCount === right.wrongCount &&
+    left.updatedAt === right.updatedAt
+  )
+}
+
+function isStaleDailyStats(
+  left: SyncDailyQuestionStats | undefined,
+  right: SyncDailyQuestionStats,
+) {
+  return left !== undefined && Date.parse(right.updatedAt) < Date.parse(left.updatedAt)
 }
 
 export async function syncAccountBackedProgress(
@@ -182,8 +202,64 @@ export async function syncAccountBackedProgress(
         })
     }
 
-    const revision = changed.length > 0 ? serverRevision + 1 : serverRevision
-    if (changed.length > 0) {
+    const rawDailyRows = await tx
+      .select({
+        date: dailyQuestionStats.localDate,
+        sourceId: dailyQuestionStats.sourceId,
+        correctCount: dailyQuestionStats.correctCount,
+        wrongCount: dailyQuestionStats.wrongCount,
+        updatedAt: dailyQuestionStats.updatedAt,
+      })
+      .from(dailyQuestionStats)
+      .where(and(eq(dailyQuestionStats.userId, userId), eq(dailyQuestionStats.cert, parsed.cert)))
+
+    const dailyRows = Array.isArray(rawDailyRows) ? rawDailyRows : []
+    const serverDailyStats = dailyRows.map((row) => ({
+      date: row.date,
+      sourceId: row.sourceId,
+      correctCount: row.correctCount,
+      wrongCount: row.wrongCount,
+      updatedAt: toIso(row.updatedAt) ?? updatedAt.toISOString(),
+    }))
+    const serverDailyByBucket = new Map(
+      serverDailyStats.map((row) => [`${row.date}:${row.sourceId}`, row]),
+    )
+    const changedDailyStats = parsed.dailyStats.filter((row) => {
+      const server = serverDailyByBucket.get(`${row.date}:${row.sourceId}`)
+      return !sameDailyStats(server, row) && !isStaleDailyStats(server, row)
+    })
+
+    for (const row of changedDailyStats) {
+      await tx
+        .insert(dailyQuestionStats)
+        .values({
+          userId,
+          cert: parsed.cert,
+          localDate: row.date,
+          sourceId: row.sourceId,
+          correctCount: row.correctCount,
+          wrongCount: row.wrongCount,
+          updatedAt: new Date(row.updatedAt),
+        })
+        .onConflictDoUpdate({
+          target: [
+            dailyQuestionStats.userId,
+            dailyQuestionStats.cert,
+            dailyQuestionStats.localDate,
+            dailyQuestionStats.sourceId,
+          ],
+          set: {
+            correctCount: row.correctCount,
+            wrongCount: row.wrongCount,
+            updatedAt: new Date(row.updatedAt),
+          },
+        })
+      serverDailyByBucket.set(`${row.date}:${row.sourceId}`, row)
+    }
+
+    const hasChanges = changed.length > 0 || changedDailyStats.length > 0
+    const revision = hasChanges ? serverRevision + 1 : serverRevision
+    if (hasChanges) {
       await tx
         .update(certProgressRevisions)
         .set({ revision, updatedAt })
@@ -201,6 +277,11 @@ export async function syncAccountBackedProgress(
         cert: parsed.cert,
         revision,
         accepted,
+        dailyStats: Array.from(serverDailyByBucket.values()).sort((left, right) =>
+          left.date === right.date
+            ? left.sourceId.localeCompare(right.sourceId)
+            : left.date.localeCompare(right.date),
+        ),
         rejected: parsed.rejected,
         snapshotRequired: parsed.baseRevision < serverRevision,
       },

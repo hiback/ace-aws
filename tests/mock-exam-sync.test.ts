@@ -1176,6 +1176,7 @@ function createMockExamHelperAdapter(): ProgressSyncControllerAdapter {
       isOwner: () => true,
       clearScope: () => {},
       listDirty: () => [],
+      listDirtyDailyStats: () => [],
       clearCert: () => {},
       replaceCertFromSnapshot: () => {},
       refreshCertFromSnapshotKeepingDirty: () => {},
@@ -1193,12 +1194,13 @@ function createMockExamHelperAdapter(): ProgressSyncControllerAdapter {
         cert,
         revision: baseRevision + 1,
         accepted: [],
+        dailyStats: [],
         rejected: [],
         snapshotRequired: false,
       }),
     },
     progressSnapshot: {
-      fetch: async (cert: CertCode) => ({ cert, revision: 1, progress: [] }),
+      fetch: async (cert: CertCode) => ({ cert, revision: 1, progress: [], dailyStats: [] }),
     },
     questionProgress: {
       invalidateAccountProgress: async () => {},
@@ -1207,6 +1209,7 @@ function createMockExamHelperAdapter(): ProgressSyncControllerAdapter {
     anonymousProgress: {
       summarizeImport: () => ({ certs: [], certCount: 0, recordCount: 0 }),
       listImportProgress: () => [],
+      listImportDailyStats: () => [],
       clearImportCert: () => {},
       hasDismissedImport: () => false,
       dismissImport: () => {},

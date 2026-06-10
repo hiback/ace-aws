@@ -1,4 +1,9 @@
 import type { CertCode, Letter, QuestionProgress } from '@/data/types'
+import type { DailyQuestionStats } from '@/lib/browser-progress-module'
+
+export interface DailyQuestionStatsSyncBucket extends DailyQuestionStats {
+  sourceId: string
+}
 
 interface ProgressSnapshotDto {
   cert: CertCode
@@ -13,12 +18,20 @@ interface ProgressSnapshotDto {
     bookmarked: boolean
     bookmarkUpdatedAt: string | null
   }>
+  dailyStats: Array<{
+    date: string
+    sourceId: string
+    correctCount: number
+    wrongCount: number
+    updatedAt: string
+  }>
 }
 
 interface ProgressSyncDto {
   cert: CertCode
   revision: number
   accepted: ProgressSnapshotDto['progress']
+  dailyStats: ProgressSnapshotDto['dailyStats']
   rejected: Array<{ index: number; qid?: number; code: string }>
   snapshotRequired: boolean
   error?: { code?: string; message?: string }
@@ -28,12 +41,14 @@ export interface ProgressSnapshot {
   cert: CertCode
   revision: number
   progress: QuestionProgress[]
+  dailyStats: DailyQuestionStatsSyncBucket[]
 }
 
 export interface ProgressSyncResult {
   cert: CertCode
   revision: number
   accepted: QuestionProgress[]
+  dailyStats?: DailyQuestionStatsSyncBucket[]
   rejected: Array<{ index: number; qid?: number; code: string }>
   snapshotRequired: boolean
   errorCode?: string
@@ -116,6 +131,18 @@ function fromDtoProgress(entry: ProgressSnapshotDto['progress'][number]): Questi
   }
 }
 
+function fromDtoDailyStats(
+  entry: ProgressSnapshotDto['dailyStats'][number],
+): DailyQuestionStatsSyncBucket {
+  return {
+    date: entry.date,
+    sourceId: entry.sourceId,
+    correctCount: entry.correctCount,
+    wrongCount: entry.wrongCount,
+    updatedAt: toEpoch(entry.updatedAt) ?? 0,
+  }
+}
+
 export async function fetchProgressSnapshot(cert: CertCode): Promise<ProgressSnapshot> {
   try {
     const response = await fetch(`/api/progress/${cert.toLowerCase()}/snapshot`, {
@@ -133,6 +160,7 @@ export async function fetchProgressSnapshot(cert: CertCode): Promise<ProgressSna
       cert: dto.cert,
       revision: dto.revision,
       progress: dto.progress.map(fromDtoProgress),
+      dailyStats: dto.dailyStats.map(fromDtoDailyStats),
     }
   } catch (error) {
     asTemporaryError(error, 'Invalid progress snapshot')
@@ -143,6 +171,7 @@ export async function postProgressSync(
   cert: CertCode,
   baseRevision: number,
   progress: QuestionProgress[],
+  dailyStats: DailyQuestionStatsSyncBucket[] = [],
 ): Promise<ProgressSyncResult> {
   try {
     const response = await fetch(`/api/progress/${cert.toLowerCase()}/sync`, {
@@ -162,6 +191,13 @@ export async function postProgressSync(
           bookmarked: entry.bookmarked,
           bookmarkUpdatedAt: toIso(entry.bookmarkUpdatedAt),
         })),
+        dailyStats: dailyStats.map((entry) => ({
+          date: entry.date,
+          sourceId: entry.sourceId,
+          correctCount: entry.correctCount,
+          wrongCount: entry.wrongCount,
+          updatedAt: toIso(entry.updatedAt),
+        })),
       }),
     })
     if (!response.ok && response.status !== 409) await throwForResponse(response)
@@ -175,6 +211,7 @@ export async function postProgressSync(
       cert: dto.cert,
       revision: dto.revision,
       accepted: dto.accepted.map(fromDtoProgress),
+      dailyStats: dto.dailyStats.map(fromDtoDailyStats),
       rejected: dto.rejected,
       snapshotRequired: dto.snapshotRequired,
       ...(dto.error?.code ? { errorCode: dto.error.code } : {}),

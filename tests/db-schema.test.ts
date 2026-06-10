@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   accounts,
   certProgressRevisions,
+  dailyQuestionStats,
   mockExamDrafts,
   mockExamRevisions,
   mockExamSubmittedAttempts,
@@ -21,7 +22,11 @@ function readGeneratedMigrationSql() {
     .filter((file) => file.endsWith('.sql'))
     .toSorted()
 
-  expect(sqlFiles).toEqual(['0000_sticky_magus.sql', '0001_wealthy_bloodstrike.sql'])
+  expect(sqlFiles).toEqual([
+    '0000_sticky_magus.sql',
+    '0001_wealthy_bloodstrike.sql',
+    '0002_daffy_titania.sql',
+  ])
 
   return sqlFiles.map((file) => readFileSync(join(drizzleDir, file), 'utf8')).join('\n')
 }
@@ -39,6 +44,7 @@ describe('database schema', () => {
     expect(getTableName(userPreferences)).toBe('user_preferences')
     expect(getTableName(questionProgress)).toBe('question_progress')
     expect(getTableName(certProgressRevisions)).toBe('cert_progress_revisions')
+    expect(getTableName(dailyQuestionStats)).toBe('daily_question_stats')
     expect(getTableName(mockExamDrafts)).toBe('mock_exam_drafts')
     expect(getTableName(mockExamSubmittedAttempts)).toBe('mock_exam_submitted_attempts')
     expect(getTableName(mockExamRevisions)).toBe('mock_exam_revisions')
@@ -56,6 +62,8 @@ describe('database schema', () => {
     expect(questionProgress.lastPicks).toBeDefined()
     expect(questionProgress.bookmarkUpdatedAt).toBeDefined()
     expect(certProgressRevisions.revision).toBeDefined()
+    expect(dailyQuestionStats.localDate).toBeDefined()
+    expect(dailyQuestionStats.sourceId).toBeDefined()
     expect(mockExamDrafts.attemptId).toBeDefined()
     expect(mockExamDrafts.detail).toBeDefined()
     expect(mockExamDrafts.updatedAt).toBeDefined()
@@ -92,6 +100,9 @@ describe('database schema', () => {
       'ALTER TABLE "cert_progress_revisions" ADD CONSTRAINT "cert_progress_revisions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
     )
     expect(sql).toContain(
+      'ALTER TABLE "daily_question_stats" ADD CONSTRAINT "daily_question_stats_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
+    )
+    expect(sql).toContain(
       'ALTER TABLE "mock_exam_drafts" ADD CONSTRAINT "mock_exam_drafts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade',
     )
     expect(sql).toContain(
@@ -105,6 +116,9 @@ describe('database schema', () => {
     )
     expect(sql).toContain(
       'CONSTRAINT "question_progress_user_id_cert_qid_pk" PRIMARY KEY("user_id","cert","qid")',
+    )
+    expect(sql).toContain(
+      'CONSTRAINT "daily_question_stats_user_id_cert_local_date_source_id_pk" PRIMARY KEY("user_id","cert","local_date","source_id")',
     )
     expect(sql).toContain(
       'CONSTRAINT "mock_exam_drafts_user_id_cert_pk" PRIMARY KEY("user_id","cert")',
@@ -132,6 +146,9 @@ describe('database schema', () => {
       'CONSTRAINT "cert_progress_revisions_revision_non_negative" CHECK ("revision" >= 0)',
     )
     expect(sql).toContain(
+      'CONSTRAINT "daily_question_stats_counts_non_negative" CHECK ("daily_question_stats"."correct_count" >= 0 AND "daily_question_stats"."wrong_count" >= 0)',
+    )
+    expect(sql).toContain(
       'CONSTRAINT "mock_exam_revisions_revision_non_negative" CHECK ("mock_exam_revisions"."revision" >= 0)',
     )
     expect(sql).not.toContain('question_progress_user_cert_qid_unique')
@@ -145,6 +162,7 @@ describe('database schema', () => {
       'user_preferences',
       'question_progress',
       'cert_progress_revisions',
+      'daily_question_stats',
       'mock_exam_drafts',
       'mock_exam_submitted_attempts',
       'mock_exam_revisions',

@@ -11,6 +11,17 @@ import type { MockExamDraftRepository } from '../src/lib/mock-exam/repository'
 import type { MockExamAttempt } from '../src/lib/mock-exam/start-attempt'
 import type { SubmittedMockExamAttempt } from '../src/lib/mock-exam/submission'
 
+const DAILY_STATS_NOW = new Date(2020, 0, 15, 12).getTime()
+const DAILY_STATS_DATE = localDateKey(DAILY_STATS_NOW)
+
+function localDateKey(timestamp: number): string {
+  const date = new Date(timestamp)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const routerMocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
@@ -23,6 +34,14 @@ const toastMocks = vi.hoisted(() => ({
 const progressScopeMocks = vi.hoisted(() => ({
   scope: 'anonymous' as ProgressScope,
   progress: null as unknown as BrowserProgressModule,
+}))
+
+const progressSyncMocks = vi.hoisted(() => ({
+  enqueueDirtySync: vi.fn(),
+}))
+
+const queryClientMocks = vi.hoisted(() => ({
+  invalidateQueries: vi.fn(),
 }))
 
 const repositoryMocks = vi.hoisted(() => ({
@@ -53,6 +72,14 @@ vi.mock('@/components/providers/progress-scope-provider', () => ({
   useProgressScope: () => progressScopeMocks,
 }))
 
+vi.mock('@/components/providers/account-progress-sync-provider', () => ({
+  useAccountProgressSync: () => progressSyncMocks,
+}))
+
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => queryClientMocks,
+}))
+
 vi.mock('@/lib/mock-exam/repository', () => ({
   getMockExamDraftRepository: repositoryMocks.getMockExamDraftRepository,
 }))
@@ -68,6 +95,8 @@ beforeEach(() => {
   routerMocks.push.mockReset()
   routerMocks.replace.mockReset()
   toastMocks.toast.mockReset()
+  progressSyncMocks.enqueueDirtySync.mockReset()
+  queryClientMocks.invalidateQueries.mockReset()
   mockExamHookMocks.saveDraft.mockReset()
   mockExamHookMocks.saveDraft.mockResolvedValue(undefined)
   mockExamHookMocks.deleteDraft.mockReset()
@@ -404,6 +433,16 @@ describe('useMockExamRuntime', () => {
     expect(mockExamHookMocks.submitAttempt).toHaveBeenCalledWith(
       expect.objectContaining({ id: attempt.id, cert: 'DVA-C02' }),
     )
+    expect(queryClientMocks.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['progress', 'anonymous'],
+    })
+    expect(queryClientMocks.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['progress', 'anonymous', 'question', 'DVA-C02', 101],
+    })
+    expect(queryClientMocks.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['progress', 'anonymous', 'daily-stats', 'DVA-C02'],
+    })
+    expect(progressSyncMocks.enqueueDirtySync).not.toHaveBeenCalled()
     expect(repositoryMocks.repository?.saveSubmittedAttempt).not.toHaveBeenCalled()
     expect(repositoryMocks.repository?.deleteDraft).not.toHaveBeenCalled()
     expect(routerMocks.replace).toHaveBeenCalledWith(`/mock-exam/attempt/${attempt.id}/result`)
@@ -459,8 +498,61 @@ describe('useMockExamRuntime', () => {
       correctCount: 1,
       wrongCount: 0,
     })
+    expect(queryClientMocks.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['progress', 'account'],
+    })
+    expect(queryClientMocks.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['progress', 'account', 'question', 'DVA-C02', 101],
+    })
+    expect(queryClientMocks.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['progress', 'account', 'daily-stats', 'DVA-C02'],
+    })
+    expect(progressSyncMocks.enqueueDirtySync).toHaveBeenCalledWith('DVA-C02')
     expect(mockExamHookMocks.submitAttempt).toHaveBeenCalledTimes(1)
     expect(repositoryMocks.repository?.saveSubmittedAttempt).not.toHaveBeenCalled()
+  })
+
+  it('does not double-count account progress or daily stats when runtime reapplies the same submitted attempt', async () => {
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(DAILY_STATS_NOW)
+    progressScopeMocks.scope = 'account'
+    progressScopeMocks.progress = new BrowserProgressModule('account')
+    const attempt = makeAttempt('attempt-runtime-account-submit-reapply-daily-stats', [
+      { qid: 101, userPicks: ['A'], answered: true, correct: true },
+      { qid: 102, userPicks: ['B'], answered: true, correct: false },
+    ])
+    setRepositoryAttempt(attempt)
+    let persistedSubmitted: SubmittedMockExamAttempt | null = null
+    vi.mocked(mockExamHookMocks.submitAttempt).mockImplementation(
+      async (submitted: SubmittedMockExamAttempt) => {
+        if (persistedSubmitted === null) persistedSubmitted = submitted
+        return persistedSubmitted
+      },
+    )
+
+    const first = renderHook(() => useMockExamRuntime(attempt.id))
+    await waitFor(() => expect(first.result.current.attempt?.id).toBe(attempt.id))
+    await act(async () => {
+      await first.result.current.submit()
+    })
+    first.unmount()
+
+    const second = renderHook(() => useMockExamRuntime(attempt.id))
+    await waitFor(() => expect(second.result.current.attempt?.id).toBe(attempt.id))
+    await act(async () => {
+      await second.result.current.submit()
+    })
+    second.unmount()
+
+    expect(progressScopeMocks.progress.getProgress(101, 'DVA-C02')).toMatchObject({
+      correctCount: 1,
+    })
+    expect(progressScopeMocks.progress.getProgress(102, 'DVA-C02')).toMatchObject({
+      wrongCount: 1,
+    })
+    expect(progressScopeMocks.progress.listDailyStats('DVA-C02')).toEqual([
+      { date: DAILY_STATS_DATE, correctCount: 1, wrongCount: 1, updatedAt: DAILY_STATS_NOW },
+    ])
+    dateNowSpy.mockRestore()
   })
 
   it('auto-submits exactly once when the timer reaches zero', async () => {

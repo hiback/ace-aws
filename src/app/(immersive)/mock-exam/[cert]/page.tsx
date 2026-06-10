@@ -1,22 +1,19 @@
 'use client'
-import { ChartBar, ChevronLeft, ChevronRight, Info, Trophy } from 'lucide-react'
+import { ChevronLeft, Info, Trophy } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { Button } from '@/components/primitives/button'
 import { Spinner } from '@/components/primitives/spinner'
 import { loadBank, normalizeCert } from '@/data/loaders'
-import type { Locale } from '@/data/types'
 import { useMockExamHistory, useSaveMockExamDraft } from '@/hooks/use-mock-exam'
 import { useT } from '@/hooks/use-t'
 import { getMockExamProfile } from '@/lib/mock-exam/profile'
 import { startMockExamAttempt } from '@/lib/mock-exam/start-attempt'
-import { usePrefsStore } from '@/stores/prefs-store'
 
 export default function MockExamIntroPage() {
   const params = useParams<{ cert: string }>()
   const router = useRouter()
   const t = useT()
-  const locale = usePrefsStore((s) => s.locale)
   const cert = normalizeCert(params.cert)
   const profile = getMockExamProfile(cert)
   const history = useMockExamHistory(cert).data
@@ -83,36 +80,7 @@ export default function MockExamIntroPage() {
           </div>
         </section>
 
-        {history === undefined ? null : history.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => router.push(`/mock-exam/${cert.toLowerCase()}/history`)}
-            className="mb-[18px] flex w-full items-center gap-3 rounded-[12px] border border-border bg-bg-alt px-3.5 py-3 text-left"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-border bg-surface text-ink-soft">
-              <ChartBar className="h-4.5 w-4.5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="mb-0.5 flex items-center gap-1.5">
-                <span className="text-secondary text-ink-mute">{t('mockExamHistory')}</span>
-                <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.05em] text-accent-deep">
-                  {t('mockExamAttemptsLabel', { count: history.length })}
-                </span>
-              </div>
-              <div className="text-card font-semibold text-ink">
-                <span className={history[0].summary.passed ? 'text-success' : 'text-danger'}>
-                  {history[0].summary.score}
-                </span>
-                <span className="text-secondary font-normal text-ink-mute"> / 1000</span>
-                <span className="ml-2 font-mono text-[11px] font-normal text-ink-mute">
-                  · {t('mockExamLatest')} ·{' '}
-                  {formatRelativeSubmittedAt(history[0].submittedAt, locale)}
-                </span>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-ink-mute" />
-          </button>
-        ) : (
+        {history === undefined || history.length > 0 ? null : (
           <section className="mb-[18px] rounded-[12px] border border-dashed border-accent/40 bg-accent-softer px-3.5 py-3">
             <div className="flex gap-2.5">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-deep">
@@ -186,23 +154,4 @@ function ExamStat({ value, unit }: { value: number; unit: string }) {
 
 function Divider() {
   return <div className="w-px self-stretch bg-white/25" />
-}
-
-function formatRelativeSubmittedAt(submittedAt: number, locale: Locale) {
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - submittedAt) / 1000))
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-    ['year', 60 * 60 * 24 * 365],
-    ['month', 60 * 60 * 24 * 30],
-    ['day', 60 * 60 * 24],
-    ['hour', 60 * 60],
-    ['minute', 60],
-  ]
-  const [unit, secondsPerUnit] =
-    units.find(([, secondsPerUnit]) => elapsedSeconds >= secondsPerUnit) ?? units[units.length - 1]
-  const value = Math.max(1, Math.floor(elapsedSeconds / secondsPerUnit))
-
-  return new Intl.RelativeTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', {
-    numeric: 'always',
-    style: 'narrow',
-  }).format(-value, unit)
 }

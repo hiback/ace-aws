@@ -92,6 +92,11 @@ export function recordSubmittedMockExamProgress(
       question.userPicks,
       question.correct === true,
       submitted.cert,
+      {
+        answeredAt: submitted.submittedAt,
+        progressDedupeKey: `mock-exam:${submitted.id}:${fingerprint}`,
+        dailyStatsDedupeKey: `mock-exam:${submitted.id}:${fingerprint}`,
+      },
     )
     if (useLocalIdempotency) markLocalMockExamSubmissionProgress(submitted.id, fingerprint)
     appliedFingerprints.add(fingerprint)

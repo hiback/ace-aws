@@ -15,6 +15,13 @@
       "when": 1779601585494,
       "tag": "0001_wealthy_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780919673264,
+      "tag": "0002_daffy_titania",
+      "breakpoints": true
     }
   ]
 }

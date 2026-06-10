@@ -9,7 +9,13 @@ import {
 import type { CertCode } from '../src/data/types'
 import { useQuestionProgress, useRecordAnswer } from '../src/hooks/use-answer'
 import { useMockExamDraft } from '../src/hooks/use-mock-exam'
-import { useWrongList, useWrongRedoCount } from '../src/hooks/use-progress-stats'
+import {
+  useDailyQuestionStats,
+  useStatsStreak,
+  useWeakAreaStats,
+  useWrongList,
+  useWrongRedoCount,
+} from '../src/hooks/use-progress-stats'
 import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 import type { MockExamAttempt } from '../src/lib/mock-exam/start-attempt'
 import { findNextInPracticeSet } from '../src/lib/practice-flow'
@@ -38,7 +44,11 @@ vi.mock('@/data/loaders', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/data/loaders')>()
   return {
     ...actual,
-    loadBank: vi.fn(async () => [{ id: 1 }, { id: 2 }, { id: 3 }]),
+    loadBank: vi.fn(async () => [
+      { id: 1, topic: 'Development' },
+      { id: 2, topic: 'Development' },
+      { id: 3, topic: 'Security' },
+    ]),
   }
 })
 
@@ -308,5 +318,106 @@ describe('progress hooks scope', () => {
     ).toEqual([1, 2])
     expect(wrongRedoQuestions.toSorted()).toEqual([1, 2])
     expect(progress.getProgress(1, 'DVA-C02')).toMatchObject({ wrongCount: 2, lastCorrect: false })
+  })
+
+  it('returns recent seven daily question stats and refreshes after an answer submission', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 0, 7, 12))
+
+    const progress = new BrowserProgressModule('anonymous')
+    progress.recordAnswer(1, ['A'], false, 'DVA-C02')
+
+    const { result } = renderHook(
+      () => ({
+        answer: useRecordAnswer('DVA-C02'),
+        dailyStats: useDailyQuestionStats('DVA-C02'),
+      }),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.dailyStats.data?.at(-1)?.answered).toBe(1))
+
+    result.current.answer.mutate({ qid: 2, picks: ['A'], correct: true })
+
+    await waitFor(() => expect(result.current.answer.isSuccess).toBe(true))
+    await waitFor(() =>
+      expect(result.current.dailyStats.data?.at(-1)).toMatchObject({
+        date: '2026-01-07',
+        correctCount: 1,
+        wrongCount: 1,
+        answered: 2,
+        isToday: true,
+      }),
+    )
+    expect(result.current.dailyStats.data).toHaveLength(7)
+    expect(result.current.dailyStats.data?.[0]).toMatchObject({
+      date: '2026-01-01',
+      correctCount: 0,
+      wrongCount: 0,
+      answered: 0,
+    })
+
+    vi.useRealTimers()
+  })
+
+  it('derives the stats streak from consecutive daily question stats buckets only', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 0, 7, 12))
+
+    const progress = new BrowserProgressModule('anonymous')
+    progress.recordAnswer(1, ['A'], true, 'DVA-C02', {
+      answeredAt: new Date(2026, 0, 5, 12).getTime(),
+    })
+    progress.recordAnswer(2, ['A'], false, 'DVA-C02', {
+      answeredAt: new Date(2026, 0, 6, 12).getTime(),
+    })
+    progress.recordAnswer(3, ['A'], true, 'DVA-C02', {
+      answeredAt: new Date(2026, 0, 7, 12).getTime(),
+    })
+
+    const { result } = renderHook(() => useStatsStreak('DVA-C02'), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toBe(3))
+    vi.useRealTimers()
+  })
+
+  it('does not fabricate a stats streak or recent activity from older question progress without daily stats', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 0, 7, 12))
+
+    const progress = new BrowserProgressModule('anonymous')
+    progress.recordAnswer(1, ['A'], true, 'DVA-C02', {
+      answeredAt: new Date(2026, 0, 7, 12).getTime(),
+      updateDailyStats: false,
+    })
+
+    const { result } = renderHook(
+      () => ({
+        streak: useStatsStreak('DVA-C02'),
+        dailyStats: useDailyQuestionStats('DVA-C02'),
+      }),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.streak.data).toBe(0))
+    await waitFor(() => expect(result.current.dailyStats.data).toHaveLength(7))
+    expect(result.current.dailyStats.data?.every((row) => row.answered === 0)).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('derives weak areas from current-bank answered question progress and ignores bookmark-only progress', async () => {
+    const progress = new BrowserProgressModule('anonymous')
+    progress.recordAnswer(1, ['A'], false, 'DVA-C02')
+    progress.recordAnswer(2, ['A'], true, 'DVA-C02')
+    progress.recordAnswer(3, ['A'], true, 'DVA-C02')
+    progress.toggleBookmark(999_999, 'DVA-C02')
+
+    const { result } = renderHook(() => useWeakAreaStats('DVA-C02'), { wrapper })
+
+    await waitFor(() =>
+      expect(result.current.data).toEqual([
+        { topic: 'Development', answered: 2, correct: 1, wrong: 1, accuracy: 50 },
+      ]),
+    )
   })
 })

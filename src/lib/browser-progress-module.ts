@@ -8,15 +8,45 @@ const PROGRESS_KEYS: Record<ProgressScope, string> = {
 
 const ACCOUNT_PROGRESS_OWNER_KEY = 'ace-aws/account-owner/v1'
 const ACCOUNT_PROGRESS_SYNC_KEY = 'ace-aws/account-progress-sync/v1'
+const ACCOUNT_PROGRESS_CLIENT_ID_KEY = 'ace-aws/account-progress-client-id/v1'
 
 interface StoredQuestionProgress extends QuestionProgress {
   dirtySince?: number
+  dedupeKeys?: Record<string, true>
+}
+
+export interface DailyQuestionStats {
+  date: string
+  correctCount: number
+  wrongCount: number
+  updatedAt: number
+}
+
+type SourceDailyQuestionStats = DailyQuestionStats & { sourceId?: string }
+
+interface StoredDailyQuestionStats extends DailyQuestionStats {
+  dirtySince?: number
+  sourceBuckets?: Record<string, { correctCount: number; wrongCount: number; updatedAt: number }>
+  dedupeKeys?: Record<string, true>
+}
+
+interface RecordAnswerOptions {
+  updateDailyStats?: boolean
+  answeredAt?: number
+  progressDedupeKey?: string
+  dailyStatsDedupeKey?: string
 }
 
 export interface BrowserQuestionProgressModule {
   getScope?(): ProgressScope
   getProgress(qid: number, cert: CertCode): QuestionProgress | null
-  recordAnswer(qid: number, picks: Letter[], correct: boolean, cert: CertCode): void
+  recordAnswer(
+    qid: number,
+    picks: Letter[],
+    correct: boolean,
+    cert: CertCode,
+    options?: RecordAnswerOptions,
+  ): void
   listProgress(cert: CertCode): QuestionProgress[]
   listAnswered(cert: CertCode): QuestionProgress[]
   listWrong(cert: CertCode): QuestionProgress[]
@@ -26,6 +56,7 @@ export interface BrowserQuestionProgressModule {
   listBookmarks(cert: CertCode): number[]
 
   getStats(cert: CertCode): { answered: number; correct: number; total: number }
+  listDailyStats(cert: CertCode): DailyQuestionStats[]
 }
 
 export interface AccountSyncBaseline {
@@ -49,9 +80,10 @@ export interface AnonymousImportSummary {
 
 interface CertProgressData {
   progress: Record<number, StoredQuestionProgress>
+  dailyStats: Record<string, StoredDailyQuestionStats>
 }
 
-const EMPTY_CERT_PROGRESS: CertProgressData = { progress: {} }
+const EMPTY_CERT_PROGRESS: CertProgressData = { progress: {}, dailyStats: {} }
 const EMPTY: ProgressData = { byCert: {} }
 
 function normalizeAccountSyncData(value: unknown): AccountSyncData {
@@ -105,7 +137,14 @@ function writeAccountSyncData(data: AccountSyncData): void {
 }
 
 function emptyCertProgress(): CertProgressData {
-  return { progress: {} }
+  return { progress: {}, dailyStats: {} }
+}
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function createProgress(qid: number): StoredQuestionProgress {
@@ -134,6 +173,15 @@ function toQuestionProgress(progress: QuestionProgress): QuestionProgress {
   }
 }
 
+function toDailyQuestionStats(stats: DailyQuestionStats): DailyQuestionStats {
+  return {
+    date: stats.date,
+    correctCount: stats.correctCount,
+    wrongCount: stats.wrongCount,
+    updatedAt: stats.updatedAt,
+  }
+}
+
 function hasProgressContent(progress: QuestionProgress): boolean {
   return (
     progress.correctCount > 0 ||
@@ -159,7 +207,139 @@ function sameCanonicalProgress(a: QuestionProgress | undefined, b: QuestionProgr
   )
 }
 
+function sameDailyStats(a: DailyQuestionStats | undefined, b: DailyQuestionStats): boolean {
+  return (
+    a !== undefined &&
+    a.date === b.date &&
+    a.correctCount === b.correctCount &&
+    a.wrongCount === b.wrongCount &&
+    a.updatedAt === b.updatedAt
+  )
+}
+
+function uploadedDailyStatsForSource(
+  stats: StoredDailyQuestionStats,
+  sourceId: string,
+): DailyQuestionStats {
+  const bucket = stats.sourceBuckets?.[sourceId]
+  return {
+    date: stats.date,
+    correctCount: bucket?.correctCount ?? stats.correctCount,
+    wrongCount: bucket?.wrongCount ?? stats.wrongCount,
+    updatedAt: bucket?.updatedAt ?? stats.updatedAt,
+  }
+}
+
+function dailyStatsSourceKey(date: string, sourceId: string): string {
+  return `${date}\u0000${sourceId}`
+}
+
+function uploadedDailyStatsMapForSource(
+  entries: SourceDailyQuestionStats[],
+  defaultSourceId: string,
+): Map<string, SourceDailyQuestionStats> {
+  return new Map(
+    entries.map((entry) => [
+      dailyStatsSourceKey(entry.date, entry.sourceId ?? defaultSourceId),
+      entry,
+    ]),
+  )
+}
+
+function mergeDirtyDailyStatsSourceBucket(
+  dailyStats: Record<string, StoredDailyQuestionStats>,
+  entry: StoredDailyQuestionStats,
+  sourceId: string,
+): void {
+  const bucket = entry.sourceBuckets?.[sourceId] ?? {
+    correctCount: entry.correctCount,
+    wrongCount: entry.wrongCount,
+    updatedAt: entry.updatedAt,
+  }
+  const existing = dailyStats[entry.date]
+  if (!existing) {
+    dailyStats[entry.date] = {
+      date: entry.date,
+      correctCount: bucket.correctCount,
+      wrongCount: bucket.wrongCount,
+      updatedAt: bucket.updatedAt,
+      dirtySince: entry.dirtySince,
+      sourceBuckets: { [sourceId]: { ...bucket } },
+      ...(entry.dedupeKeys ? { dedupeKeys: { ...entry.dedupeKeys } } : {}),
+    }
+    return
+  }
+
+  const previousBucket = existing.sourceBuckets?.[sourceId]
+  if (previousBucket && bucket.updatedAt < previousBucket.updatedAt) return
+  existing.sourceBuckets ??= {}
+  existing.sourceBuckets[sourceId] = { ...bucket }
+  existing.correctCount += bucket.correctCount - (previousBucket?.correctCount ?? 0)
+  existing.wrongCount += bucket.wrongCount - (previousBucket?.wrongCount ?? 0)
+  existing.updatedAt = Math.max(existing.updatedAt, bucket.updatedAt)
+  existing.dirtySince = entry.dirtySince
+  if (entry.dedupeKeys) existing.dedupeKeys = { ...existing.dedupeKeys, ...entry.dedupeKeys }
+}
+
+function attachSourceBuckets(
+  dailyStats: Record<string, StoredDailyQuestionStats>,
+  uploadedDailyStats: SourceDailyQuestionStats[],
+): void {
+  for (const entry of uploadedDailyStats) {
+    if (!entry.sourceId) continue
+    const stats = dailyStats[entry.date]
+    if (!stats) continue
+    stats.sourceBuckets ??= {}
+    const existing = stats.sourceBuckets[entry.sourceId]
+    if (existing && entry.updatedAt < existing.updatedAt) continue
+    stats.sourceBuckets[entry.sourceId] = {
+      correctCount: entry.correctCount,
+      wrongCount: entry.wrongCount,
+      updatedAt: entry.updatedAt,
+    }
+  }
+}
+
+function dailyStatsMapFromSnapshot(
+  entries: SourceDailyQuestionStats[],
+): Record<string, StoredDailyQuestionStats> {
+  const dailyStats: Record<string, StoredDailyQuestionStats> = {}
+  for (const entry of entries) {
+    const existing = dailyStats[entry.date]
+    if (!existing) {
+      dailyStats[entry.date] = toDailyQuestionStats(entry)
+    } else {
+      existing.correctCount += entry.correctCount
+      existing.wrongCount += entry.wrongCount
+      existing.updatedAt = Math.max(existing.updatedAt, entry.updatedAt)
+    }
+  }
+  attachSourceBuckets(dailyStats, entries)
+  return dailyStats
+}
+
+function preserveDailyStatsDedupeKeys(
+  dailyStats: Record<string, StoredDailyQuestionStats>,
+  previousDailyStats: Record<string, StoredDailyQuestionStats>,
+): void {
+  for (const [date, previous] of Object.entries(previousDailyStats)) {
+    if (!previous.dedupeKeys) continue
+    const current = dailyStats[date]
+    if (!current) continue
+    current.dedupeKeys = { ...previous.dedupeKeys, ...current.dedupeKeys }
+  }
+}
+
 function normalizeProgress(qid: number, value: Record<string, unknown>): StoredQuestionProgress {
+  const dedupeKeys =
+    value.dedupeKeys && typeof value.dedupeKeys === 'object'
+      ? Object.fromEntries(
+          Object.entries(value.dedupeKeys).filter((entry): entry is [string, true] => {
+            const [key, applied] = entry
+            return key.length > 0 && applied === true
+          }),
+        )
+      : undefined
   return {
     qid,
     correctCount: typeof value.correctCount === 'number' ? value.correctCount : 0,
@@ -170,6 +350,7 @@ function normalizeProgress(qid: number, value: Record<string, unknown>): StoredQ
     bookmarked: typeof value.bookmarked === 'boolean' ? value.bookmarked : false,
     bookmarkUpdatedAt: typeof value.bookmarkUpdatedAt === 'number' ? value.bookmarkUpdatedAt : null,
     ...(typeof value.dirtySince === 'number' ? { dirtySince: value.dirtySince } : {}),
+    ...(dedupeKeys && Object.keys(dedupeKeys).length > 0 ? { dedupeKeys } : {}),
   }
 }
 
@@ -190,6 +371,83 @@ function normalizeProgressMap(value: unknown): Record<number, StoredQuestionProg
   )
 }
 
+function normalizeNonNegativeNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function normalizeDailyStatsMap(value: unknown): Record<string, StoredDailyQuestionStats> {
+  if (!value || typeof value !== 'object') return {}
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([date, stats]) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !stats || typeof stats !== 'object') {
+          return null
+        }
+        const { correctCount, wrongCount, updatedAt, sourceBuckets, dedupeKeys } = stats as Record<
+          string,
+          unknown
+        >
+        return [
+          date,
+          {
+            date,
+            correctCount: normalizeNonNegativeNumber(correctCount),
+            wrongCount: normalizeNonNegativeNumber(wrongCount),
+            updatedAt: normalizeNonNegativeNumber(updatedAt),
+            ...(sourceBuckets && typeof sourceBuckets === 'object'
+              ? {
+                  sourceBuckets: Object.fromEntries(
+                    Object.entries(sourceBuckets)
+                      .map(([sourceId, bucket]) => {
+                        if (!bucket || typeof bucket !== 'object') return null
+                        const bucketRecord = bucket as Record<string, unknown>
+                        if (
+                          typeof bucketRecord.correctCount !== 'number' ||
+                          typeof bucketRecord.wrongCount !== 'number' ||
+                          typeof bucketRecord.updatedAt !== 'number'
+                        ) {
+                          return null
+                        }
+                        return [
+                          sourceId,
+                          {
+                            correctCount: normalizeNonNegativeNumber(bucketRecord.correctCount),
+                            wrongCount: normalizeNonNegativeNumber(bucketRecord.wrongCount),
+                            updatedAt: normalizeNonNegativeNumber(bucketRecord.updatedAt),
+                          },
+                        ]
+                      })
+                      .filter(
+                        (
+                          entry,
+                        ): entry is [
+                          string,
+                          NonNullable<StoredDailyQuestionStats['sourceBuckets']>[string],
+                        ] => entry !== null,
+                      ),
+                  ),
+                }
+              : {}),
+            ...(dedupeKeys && typeof dedupeKeys === 'object'
+              ? {
+                  dedupeKeys: Object.fromEntries(
+                    Object.entries(dedupeKeys).filter((entry): entry is [string, true] => {
+                      return entry[1] === true
+                    }),
+                  ),
+                }
+              : {}),
+            ...(typeof (stats as Record<string, unknown>).dirtySince === 'number'
+              ? { dirtySince: (stats as Record<string, unknown>).dirtySince as number }
+              : {}),
+          },
+        ] as [string, StoredDailyQuestionStats]
+      })
+      .filter((entry): entry is [string, StoredDailyQuestionStats] => entry !== null),
+  )
+}
+
 function normalizeProgressData(value: unknown): ProgressData {
   if (!value || typeof value !== 'object' || !('byCert' in value)) return { byCert: {} }
 
@@ -205,7 +463,10 @@ function normalizeProgressData(value: unknown): ProgressData {
 
         return [
           cert,
-          { progress: normalizeProgressMap((certData as { progress: unknown }).progress) },
+          {
+            progress: normalizeProgressMap((certData as { progress: unknown }).progress),
+            dailyStats: normalizeDailyStatsMap((certData as { dailyStats?: unknown }).dailyStats),
+          },
         ]
       }),
     ) as ProgressData['byCert'],
@@ -248,9 +509,12 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
     cert: CertCode,
     revision: number,
     progress: QuestionProgress[],
+    dailyStats: SourceDailyQuestionStats[] = [],
   ): void {
     const repo = new BrowserProgressModule('account')
     const data = repo.read()
+    const nextDailyStats = dailyStatsMapFromSnapshot(dailyStats)
+    preserveDailyStatsDedupeKeys(nextDailyStats, data.byCert[cert]?.dailyStats ?? {})
     data.byCert[cert] = {
       progress: Object.fromEntries(
         progress.map((entry) => [
@@ -258,6 +522,7 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
           normalizeProgress(entry.qid, entry as unknown as Record<string, unknown>),
         ]),
       ),
+      dailyStats: nextDailyStats,
     }
     repo.write(data)
 
@@ -274,9 +539,12 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
     cert: CertCode,
     revision: number,
     progress: QuestionProgress[],
-    uploaded: QuestionProgress[],
+    dailyStats: SourceDailyQuestionStats[] = [],
+    uploaded?: QuestionProgress[],
+    uploadedDailyStats: SourceDailyQuestionStats[] = [],
     preserveUploaded = false,
   ): void {
+    uploaded ??= []
     const uploadedByQid = new Map(uploaded.map((entry) => [entry.qid, entry]))
     const laterDirty = BrowserProgressModule.listStoredDirtyAccountProgress(cert).filter(
       (current) => {
@@ -284,15 +552,42 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
         return preserveUploaded || !uploadedEntry || !sameCanonicalProgress(current, uploadedEntry)
       },
     )
+    const dailyStatsSourceId = BrowserProgressModule.accountClientSourceId()
+    const uploadedDailyBySource = uploadedDailyStatsMapForSource(
+      uploadedDailyStats,
+      dailyStatsSourceId,
+    )
+    const laterDirtyDailyStats = Object.values(
+      new BrowserProgressModule('account').readCert(cert).dailyStats,
+    ).filter((current) => {
+      if (current.dirtySince === undefined) return false
+      const uploadedEntry = uploadedDailyBySource.get(
+        dailyStatsSourceKey(current.date, dailyStatsSourceId),
+      )
+      return (
+        preserveUploaded ||
+        !uploadedEntry ||
+        !sameDailyStats(uploadedDailyStatsForSource(current, dailyStatsSourceId), uploadedEntry)
+      )
+    })
 
-    BrowserProgressModule.replaceAccountCertFromSnapshot(userId, cert, revision, progress)
+    BrowserProgressModule.replaceAccountCertFromSnapshot(
+      userId,
+      cert,
+      revision,
+      progress,
+      dailyStats,
+    )
 
-    if (laterDirty.length === 0) return
+    if (laterDirty.length === 0 && laterDirtyDailyStats.length === 0) return
     const repo = new BrowserProgressModule('account')
     const data = repo.read()
     const certData = repo.certData(data, cert)
     for (const entry of laterDirty) {
       certData.progress[entry.qid] = entry
+    }
+    for (const entry of laterDirtyDailyStats) {
+      mergeDirtyDailyStatsSourceBucket(certData.dailyStats, entry, dailyStatsSourceId)
     }
     repo.write(data)
   }
@@ -327,6 +622,33 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
     return BrowserProgressModule.listStoredDirtyAccountProgress(cert).map(toQuestionProgress)
   }
 
+  static listDirtyAccountDailyStats(
+    cert: CertCode,
+  ): Array<DailyQuestionStats & { sourceId: string }> {
+    const sourceId = BrowserProgressModule.accountClientSourceId()
+    return Object.values(new BrowserProgressModule('account').readCert(cert).dailyStats)
+      .filter((stats) => stats.dirtySince !== undefined)
+      .map((stats) => {
+        const bucket = stats.sourceBuckets?.[sourceId]
+        return {
+          date: stats.date,
+          sourceId,
+          correctCount: bucket?.correctCount ?? stats.correctCount,
+          wrongCount: bucket?.wrongCount ?? stats.wrongCount,
+          updatedAt: bucket?.updatedAt ?? stats.updatedAt,
+        }
+      })
+  }
+
+  private static accountClientSourceId(): string {
+    if (typeof window === 'undefined') return 'client:server'
+    const existing = window.localStorage.getItem(ACCOUNT_PROGRESS_CLIENT_ID_KEY)
+    if (existing) return `client:${existing}`
+    const id = crypto.randomUUID()
+    window.localStorage.setItem(ACCOUNT_PROGRESS_CLIENT_ID_KEY, id)
+    return `client:${id}`
+  }
+
   private static listStoredDirtyAccountProgress(cert: CertCode): StoredQuestionProgress[] {
     return Object.values(new BrowserProgressModule('account').readCert(cert).progress).filter(
       (progress) => progress.dirtySince !== undefined && hasProgressContent(progress),
@@ -340,9 +662,10 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
 
     for (const cert of READY_CERTS) {
       const records = repo.listProgress(cert).filter(hasProgressContent)
-      if (records.length === 0) continue
+      const dailyStats = repo.listDailyStats(cert)
+      if (records.length === 0 && dailyStats.length === 0) continue
       certs.push(cert)
-      recordCount += records.length
+      recordCount += records.length + dailyStats.length
     }
 
     return { certs, certCount: certs.length, recordCount }
@@ -350,6 +673,24 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
 
   static listAnonymousImportProgress(cert: CertCode): QuestionProgress[] {
     return new BrowserProgressModule('anonymous').listProgress(cert).filter(hasProgressContent)
+  }
+
+  static listAnonymousImportDailyStats(
+    cert: CertCode,
+  ): Array<DailyQuestionStats & { sourceId: string }> {
+    const sourceId = BrowserProgressModule.anonymousImportSourceId()
+    return new BrowserProgressModule('anonymous')
+      .listDailyStats(cert)
+      .map((stats) => ({ ...stats, sourceId }))
+  }
+
+  private static anonymousImportSourceId(): string {
+    if (typeof window === 'undefined') return 'anon-import:server'
+    const existing = window.localStorage.getItem(ACCOUNT_PROGRESS_CLIENT_ID_KEY)
+    if (existing) return `anon-import:${existing}`
+    const id = crypto.randomUUID()
+    window.localStorage.setItem(ACCOUNT_PROGRESS_CLIENT_ID_KEY, id)
+    return `anon-import:${id}`
   }
 
   static clearAnonymousImportCert(cert: CertCode): void {
@@ -366,6 +707,8 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
     revision: number,
     accepted: QuestionProgress[],
     uploaded: QuestionProgress[] = accepted,
+    dailyStats: DailyQuestionStats[] = [],
+    uploadedDailyStats: SourceDailyQuestionStats[] = dailyStats,
   ): void {
     const repo = new BrowserProgressModule('account')
     const data = repo.read()
@@ -381,6 +724,28 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
         entry as unknown as Record<string, unknown>,
       )
       delete certData.progress[entry.qid].dirtySince
+    }
+    const dailyStatsSourceId = BrowserProgressModule.accountClientSourceId()
+    const uploadedDailyBySource = uploadedDailyStatsMapForSource(
+      uploadedDailyStats,
+      dailyStatsSourceId,
+    )
+    const laterDirtyDailyStats = Object.values(certData.dailyStats).filter((current) => {
+      if (current.dirtySince === undefined) return false
+      const uploadedEntry = uploadedDailyBySource.get(
+        dailyStatsSourceKey(current.date, dailyStatsSourceId),
+      )
+      return (
+        !uploadedEntry ||
+        !sameDailyStats(uploadedDailyStatsForSource(current, dailyStatsSourceId), uploadedEntry)
+      )
+    })
+    const nextDailyStats = dailyStatsMapFromSnapshot(dailyStats)
+    preserveDailyStatsDedupeKeys(nextDailyStats, certData.dailyStats)
+    certData.dailyStats = nextDailyStats
+    attachSourceBuckets(certData.dailyStats, uploadedDailyStats)
+    for (const entry of laterDirtyDailyStats) {
+      mergeDirtyDailyStatsSourceBucket(certData.dailyStats, entry, dailyStatsSourceId)
     }
     repo.write(data)
 
@@ -398,6 +763,8 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
     revision: number,
     accepted: QuestionProgress[],
     uploaded: QuestionProgress[] = accepted,
+    dailyStats: DailyQuestionStats[] = [],
+    uploadedDailyStats: SourceDailyQuestionStats[] = dailyStats,
   ): void {
     const repo = new BrowserProgressModule('account')
     const data = repo.read()
@@ -418,6 +785,28 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
         entry as unknown as Record<string, unknown>,
       )
       delete certData.progress[entry.qid].dirtySince
+    }
+    const dailyStatsSourceId = BrowserProgressModule.accountClientSourceId()
+    const uploadedDailyBySource = uploadedDailyStatsMapForSource(
+      uploadedDailyStats,
+      dailyStatsSourceId,
+    )
+    const laterDirtyDailyStats = Object.values(certData.dailyStats).filter((current) => {
+      if (current.dirtySince === undefined) return false
+      const uploadedEntry = uploadedDailyBySource.get(
+        dailyStatsSourceKey(current.date, dailyStatsSourceId),
+      )
+      return (
+        !uploadedEntry ||
+        !sameDailyStats(uploadedDailyStatsForSource(current, dailyStatsSourceId), uploadedEntry)
+      )
+    })
+    const nextDailyStats = dailyStatsMapFromSnapshot(dailyStats)
+    preserveDailyStatsDedupeKeys(nextDailyStats, certData.dailyStats)
+    certData.dailyStats = nextDailyStats
+    attachSourceBuckets(certData.dailyStats, uploadedDailyStats)
+    for (const entry of laterDirtyDailyStats) {
+      mergeDirtyDailyStatsSourceBucket(certData.dailyStats, entry, dailyStatsSourceId)
     }
     repo.write(data)
 
@@ -483,22 +872,94 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
     }
   }
 
+  private markDailyStatsDirty(stats: StoredDailyQuestionStats): void {
+    if (this.scope === 'account' && stats.dirtySince === undefined) {
+      stats.dirtySince = Date.now()
+    }
+  }
+
+  private recordDailyStatsSourceBucket(
+    stats: StoredDailyQuestionStats,
+    correct: boolean,
+    now: number,
+  ): void {
+    if (this.scope !== 'account') return
+    const sourceId = BrowserProgressModule.accountClientSourceId()
+    stats.sourceBuckets ??= {}
+    const bucket = stats.sourceBuckets[sourceId] ?? {
+      correctCount: 0,
+      wrongCount: 0,
+      updatedAt: 0,
+    }
+    if (correct) bucket.correctCount += 1
+    else bucket.wrongCount += 1
+    bucket.updatedAt = now
+    stats.sourceBuckets[sourceId] = bucket
+  }
+
+  private dailyStatsFor(certData: CertProgressData, date: string): StoredDailyQuestionStats {
+    const existing = certData.dailyStats[date]
+    if (existing) return existing
+    const next = { date, correctCount: 0, wrongCount: 0, updatedAt: 0 }
+    certData.dailyStats[date] = next
+    return next
+  }
+
   getProgress(qid: number, cert: CertCode): QuestionProgress | null {
     const progress = this.readCert(cert).progress[qid]
     return progress ? toQuestionProgress(progress) : null
   }
 
-  recordAnswer(qid: number, picks: Letter[], correct: boolean, cert: CertCode): void {
+  recordAnswer(
+    qid: number,
+    picks: Letter[],
+    correct: boolean,
+    cert: CertCode,
+    options: RecordAnswerOptions = {},
+  ): void {
     const data = this.read()
-    const progress = this.progressFor(this.certData(data, cert), qid)
+    const certData = this.certData(data, cert)
+    const progress = this.progressFor(certData, qid)
+    const now = options.answeredAt ?? Date.now()
+    const progressDedupeKey = options.progressDedupeKey
+    const dailyStatsDate = localDateKey(new Date(now))
+    const existingDailyStats = certData.dailyStats[dailyStatsDate]
+
+    if (
+      progressDedupeKey &&
+      (progress.dedupeKeys?.[progressDedupeKey] ||
+        existingDailyStats?.dedupeKeys?.[progressDedupeKey])
+    ) {
+      return
+    }
 
     if (correct) progress.correctCount += 1
     else progress.wrongCount += 1
 
     progress.lastPicks = [...picks].sort() as Letter[]
     progress.lastCorrect = correct
-    progress.lastAnsweredAt = Date.now()
+    progress.lastAnsweredAt = now
+    if (progressDedupeKey) {
+      progress.dedupeKeys ??= {}
+      progress.dedupeKeys[progressDedupeKey] = true
+    }
     this.markDirty(progress)
+
+    if (options.updateDailyStats !== false) {
+      const dailyStats = this.dailyStatsFor(certData, dailyStatsDate)
+      const dedupeKey = options.dailyStatsDedupeKey
+      if (!dedupeKey || !dailyStats.dedupeKeys?.[dedupeKey]) {
+        if (correct) dailyStats.correctCount += 1
+        else dailyStats.wrongCount += 1
+        dailyStats.updatedAt = now
+        this.recordDailyStatsSourceBucket(dailyStats, correct, now)
+        if (dedupeKey) {
+          dailyStats.dedupeKeys ??= {}
+          dailyStats.dedupeKeys[dedupeKey] = true
+        }
+        this.markDailyStatsDirty(dailyStats)
+      }
+    }
 
     this.write(data)
   }
@@ -543,6 +1004,12 @@ export class BrowserProgressModule implements BrowserQuestionProgressModule {
       correct: answered.filter((progress) => progress.lastCorrect === true).length,
       total: 0,
     }
+  }
+
+  listDailyStats(cert: CertCode): DailyQuestionStats[] {
+    return Object.values(this.readCert(cert).dailyStats)
+      .map(toDailyQuestionStats)
+      .sort((a, b) => a.date.localeCompare(b.date))
   }
 }
 

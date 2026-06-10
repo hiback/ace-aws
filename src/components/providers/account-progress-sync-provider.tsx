@@ -199,30 +199,81 @@ function createProviderAdapter(
       isOwner: (userId) => BrowserProgressModule.isAccountOwner(userId),
       clearScope: () => BrowserProgressModule.clearScope('account'),
       listDirty: (cert) => BrowserProgressModule.listDirtyAccountProgress(cert),
+      listDirtyDailyStats: (cert) => BrowserProgressModule.listDirtyAccountDailyStats(cert),
       clearCert: (userId, cert) => BrowserProgressModule.clearAccountCert(userId, cert),
-      replaceCertFromSnapshot: (userId, cert, revision, progress) =>
-        BrowserProgressModule.replaceAccountCertFromSnapshot(userId, cert, revision, progress),
-      refreshCertFromSnapshotKeepingDirty: (userId, cert, revision, progress) =>
+      replaceCertFromSnapshot: (userId, cert, revision, progress, dailyStats) =>
+        BrowserProgressModule.replaceAccountCertFromSnapshot(
+          userId,
+          cert,
+          revision,
+          progress,
+          dailyStats,
+        ),
+      refreshCertFromSnapshotKeepingDirty: (userId, cert, revision, progress, dailyStats) =>
         BrowserProgressModule.replaceAccountCertFromSnapshotPreservingDirty(
           userId,
           cert,
           revision,
           progress,
+          dailyStats,
+          [],
           [],
           true,
         ),
-      recoverCertFromSnapshotAfterSync: (userId, cert, revision, progress, uploaded) =>
+      recoverCertFromSnapshotAfterSync: (
+        userId,
+        cert,
+        revision,
+        progress,
+        dailyStats,
+        uploaded,
+        uploadedDailyStats,
+      ) =>
         BrowserProgressModule.replaceAccountCertFromSnapshotPreservingDirty(
           userId,
           cert,
           revision,
           progress,
+          dailyStats,
           uploaded,
+          uploadedDailyStats,
         ),
-      applyAcceptedSync: (userId, cert, revision, accepted, uploaded) =>
-        BrowserProgressModule.applyAcceptedAccountSync(userId, cert, revision, accepted, uploaded),
-      applyImportedSync: (userId, cert, revision, accepted, uploaded) =>
-        BrowserProgressModule.applyImportedAccountSync(userId, cert, revision, accepted, uploaded),
+      applyAcceptedSync: (
+        userId,
+        cert,
+        revision,
+        accepted,
+        uploaded,
+        dailyStats,
+        uploadedDailyStats,
+      ) =>
+        BrowserProgressModule.applyAcceptedAccountSync(
+          userId,
+          cert,
+          revision,
+          accepted,
+          uploaded,
+          dailyStats,
+          uploadedDailyStats,
+        ),
+      applyImportedSync: (
+        userId,
+        cert,
+        revision,
+        accepted,
+        uploaded,
+        dailyStats,
+        uploadedDailyStats,
+      ) =>
+        BrowserProgressModule.applyImportedAccountSync(
+          userId,
+          cert,
+          revision,
+          accepted,
+          uploaded,
+          dailyStats,
+          uploadedDailyStats,
+        ),
     },
     progressRevision: {
       getBaseline: (userId, cert) => BrowserProgressModule.getAccountSyncBaseline(userId, cert),
@@ -231,9 +282,9 @@ function createProviderAdapter(
         BrowserProgressModule.markAccountSyncBaselineChecked(userId, cert, revision),
     },
     progressSync: {
-      post: async (cert, baseRevision, progress) => {
+      post: async (cert, baseRevision, progress, dailyStats) => {
         try {
-          return await postProgressSync(cert, baseRevision, progress)
+          return await postProgressSync(cert, baseRevision, progress, dailyStats)
         } catch (error) {
           throwControllerError(error)
         }
@@ -261,6 +312,7 @@ function createProviderAdapter(
     anonymousProgress: {
       summarizeImport: () => BrowserProgressModule.summarizeAnonymousImport(),
       listImportProgress: (cert) => BrowserProgressModule.listAnonymousImportProgress(cert),
+      listImportDailyStats: (cert) => BrowserProgressModule.listAnonymousImportDailyStats(cert),
       clearImportCert: (cert) => BrowserProgressModule.clearAnonymousImportCert(cert),
       hasDismissedImport: hasDismissedAnonymousImport,
       dismissImport: dismissAnonymousImport,

@@ -23,9 +23,22 @@ import { getMockExamProfile, getMockExamProfileDomainQuotas } from '../src/lib/m
 import { getMockExamReviewOptionState } from '../src/lib/mock-exam/review'
 import { scoreMockExamAttempt } from '../src/lib/mock-exam/scoring'
 import { type MockExamAttempt, startMockExamAttempt } from '../src/lib/mock-exam/start-attempt'
-import { submitMockExamAttempt } from '../src/lib/mock-exam/submission'
+import {
+  recordSubmittedMockExamProgress,
+  submitMockExamAttempt,
+} from '../src/lib/mock-exam/submission'
 
 const LOCAL_MOCK_EXAM_STORAGE_KEY = 'ace-aws/mock-exam/local/v1'
+const DAILY_STATS_NOW = new Date(2020, 0, 15, 12).getTime()
+const DAILY_STATS_DATE = localDateKey(DAILY_STATS_NOW)
+
+function localDateKey(timestamp: number): string {
+  const date = new Date(timestamp)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 function makeQuestion(
   id: number,
@@ -480,8 +493,8 @@ describe('Mock Exam scoring and submission', () => {
     ).toMatchObject({ score: 700, passed: false })
   })
 
-  it('stores an immutable submitted attempt and records only answered questions as progress', () => {
-    vi.setSystemTime(2000)
+  it('stores an immutable submitted attempt and records only answered questions as progress and daily stats', () => {
+    vi.setSystemTime(DAILY_STATS_NOW)
     const progress = new BrowserProgressModule('anonymous')
     const attempt = makeAttempt('attempt-submit')
     attempt.questionCount = 3
@@ -493,7 +506,7 @@ describe('Mock Exam scoring and submission', () => {
 
     const submitted = submitMockExamAttempt(attempt, {
       progress,
-      now: () => 2000,
+      now: () => DAILY_STATS_NOW,
     })
 
     expect(submitted.summary).toMatchObject({ score: 400, passed: false, unansweredCount: 1 })
@@ -506,20 +519,26 @@ describe('Mock Exam scoring and submission', () => {
       wrongCount: 0,
       lastPicks: ['A'],
       lastCorrect: true,
-      lastAnsweredAt: 2000,
+      lastAnsweredAt: DAILY_STATS_NOW,
     })
     expect(progress.getProgress(2, 'DVA-C02')).toMatchObject({
       correctCount: 0,
       wrongCount: 1,
       lastPicks: ['B'],
       lastCorrect: false,
-      lastAnsweredAt: 2000,
+      lastAnsweredAt: DAILY_STATS_NOW,
     })
     expect(progress.getProgress(3, 'DVA-C02')).toBeNull()
+    expect(progress.listDailyStats('DVA-C02')).toEqual([
+      { date: DAILY_STATS_DATE, correctCount: 1, wrongCount: 1, updatedAt: DAILY_STATS_NOW },
+    ])
 
-    submitMockExamAttempt(attempt, { progress, now: () => 3000 })
+    submitMockExamAttempt(attempt, { progress, now: () => DAILY_STATS_NOW + 1000 })
     expect(progress.getProgress(1, 'DVA-C02')).toMatchObject({ correctCount: 1, wrongCount: 0 })
     expect(progress.getProgress(2, 'DVA-C02')).toMatchObject({ correctCount: 0, wrongCount: 1 })
+    expect(progress.listDailyStats('DVA-C02')).toEqual([
+      { date: DAILY_STATS_DATE, correctCount: 1, wrongCount: 1, updatedAt: DAILY_STATS_NOW },
+    ])
   })
 
   it('submits a deselected answer as unanswered without recording question progress', () => {
@@ -547,6 +566,123 @@ describe('Mock Exam scoring and submission', () => {
       accuracy: 0,
     })
     expect(progress.getProgress(999, 'DVA-C02')).toBeNull()
+  })
+
+  it('records account-backed submitted answers as dirty daily stats for sync', () => {
+    vi.setSystemTime(DAILY_STATS_NOW)
+    const progress = new BrowserProgressModule('account')
+    const attempt = makeAttempt('attempt-submit-account-daily-stats')
+    attempt.questionCount = 3
+    attempt.questions = [
+      makeSnapshot(1, 'Development with AWS Services', ['A'], true),
+      makeSnapshot(2, 'Security', ['B'], false),
+      makeSnapshot(3, 'Security', [], null),
+    ]
+
+    submitMockExamAttempt(attempt, { progress, now: () => DAILY_STATS_NOW })
+
+    expect(progress.listDailyStats('DVA-C02')).toEqual([
+      { date: DAILY_STATS_DATE, correctCount: 1, wrongCount: 1, updatedAt: DAILY_STATS_NOW },
+    ])
+    expect(BrowserProgressModule.listDirtyAccountDailyStats('DVA-C02')).toEqual([
+      expect.objectContaining({
+        date: DAILY_STATS_DATE,
+        correctCount: 1,
+        wrongCount: 1,
+        updatedAt: DAILY_STATS_NOW,
+      }),
+    ])
+  })
+
+  it('does not double-count account-backed progress or daily stats when runtime reapplies a submitted attempt', () => {
+    localStorage.clear()
+    vi.setSystemTime(DAILY_STATS_NOW)
+    const progress = new BrowserProgressModule('account')
+    const attempt = makeAttempt('attempt-submit-account-daily-stats-reapply')
+    attempt.questionCount = 2
+    attempt.questions = [
+      makeSnapshot(1, 'Development with AWS Services', ['A'], true),
+      makeSnapshot(2, 'Security', ['B'], false),
+    ]
+    const submitted = submitMockExamAttempt(attempt, {
+      progress,
+      now: () => DAILY_STATS_NOW,
+      persistLocalHistory: false,
+      applyProgress: false,
+    })
+
+    recordSubmittedMockExamProgress(submitted, progress, false)
+    recordSubmittedMockExamProgress(submitted, progress, false)
+
+    expect(progress.getProgress(1, 'DVA-C02')).toMatchObject({ correctCount: 1 })
+    expect(progress.getProgress(2, 'DVA-C02')).toMatchObject({ wrongCount: 1 })
+    expect(progress.listDailyStats('DVA-C02')).toEqual([
+      { date: DAILY_STATS_DATE, correctCount: 1, wrongCount: 1, updatedAt: DAILY_STATS_NOW },
+    ])
+    expect(BrowserProgressModule.listDirtyAccountDailyStats('DVA-C02')).toEqual([
+      expect.objectContaining({ correctCount: 1, wrongCount: 1, updatedAt: DAILY_STATS_NOW }),
+    ])
+  })
+
+  it('does not double-count account-backed progress or daily stats after accepted sync rebuilds daily stats', () => {
+    localStorage.clear()
+    vi.setSystemTime(DAILY_STATS_NOW)
+    const progress = new BrowserProgressModule('account')
+    const attempt = makeAttempt('attempt-submit-account-daily-stats-sync-reapply')
+    attempt.questionCount = 2
+    attempt.questions = [
+      makeSnapshot(1, 'Development with AWS Services', ['A'], true),
+      makeSnapshot(2, 'Security', ['B'], false),
+    ]
+    const submitted = submitMockExamAttempt(attempt, {
+      progress,
+      now: () => DAILY_STATS_NOW,
+      persistLocalHistory: false,
+      applyProgress: false,
+    })
+
+    recordSubmittedMockExamProgress(submitted, progress, false)
+    const acceptedProgress = progress.listProgress('DVA-C02')
+    const acceptedDailyStats = progress.listDailyStats('DVA-C02')
+    const uploadedDailyStats = BrowserProgressModule.listDirtyAccountDailyStats('DVA-C02')
+    BrowserProgressModule.applyAcceptedAccountSync(
+      'user-1',
+      'DVA-C02',
+      1,
+      acceptedProgress,
+      acceptedProgress,
+      acceptedDailyStats,
+      uploadedDailyStats,
+    )
+
+    recordSubmittedMockExamProgress(submitted, progress, false)
+
+    expect(progress.getProgress(1, 'DVA-C02')).toMatchObject({ correctCount: 1 })
+    expect(progress.getProgress(2, 'DVA-C02')).toMatchObject({ wrongCount: 1 })
+    expect(progress.listDailyStats('DVA-C02')).toEqual([
+      { date: DAILY_STATS_DATE, correctCount: 1, wrongCount: 1, updatedAt: DAILY_STATS_NOW },
+    ])
+  })
+
+  it('uses the submission local date when recording submitted answers in daily stats', () => {
+    localStorage.clear()
+    vi.useFakeTimers()
+    try {
+      const submittedAt = new Date(2020, 0, 1, 12).getTime()
+      vi.setSystemTime(new Date(2020, 0, 2, 12))
+      const progress = new BrowserProgressModule('anonymous')
+      const attempt = makeAttempt('attempt-submit-daily-stats-submitted-date')
+      attempt.questionCount = 1
+      attempt.questions = [makeSnapshot(1, 'Development with AWS Services', ['A'], true)]
+
+      submitMockExamAttempt(attempt, { progress, now: () => submittedAt })
+
+      expect(progress.listDailyStats('DVA-C02')).toEqual([
+        { date: '2020-01-01', correctCount: 1, wrongCount: 0, updatedAt: submittedAt },
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('records when a submitted attempt was auto-submitted after time expired', () => {

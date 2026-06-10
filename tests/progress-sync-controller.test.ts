@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CertCode, QuestionProgress } from '../src/data/types'
-import type { ProgressSyncResult } from '../src/lib/account-progress-sync-client'
-import { BrowserProgressModule } from '../src/lib/browser-progress-module'
+import type {
+  DailyQuestionStatsSyncBucket,
+  ProgressSyncResult,
+} from '../src/lib/account-progress-sync-client'
+import { BrowserProgressModule, type DailyQuestionStats } from '../src/lib/browser-progress-module'
 import { READY_CERTS } from '../src/lib/cert-catalog'
 import {
   getAccountMockExamSyncLedger,
@@ -83,9 +86,12 @@ function mockExamSubmitted(
 function createAdapter() {
   const baselines = new Map<string, { revision: number; lastSyncedAt: number }>()
   const dirty = new Map<CertCode, QuestionProgress[]>()
+  const dirtyDailyStats = new Map<CertCode, DailyQuestionStatsSyncBucket[]>()
   const accountProgress = new Map<CertCode, QuestionProgress[]>()
+  const accountDailyStats = new Map<CertCode, DailyQuestionStats[]>()
   const dismissedImports = new Set<string>()
   const anonymous = new Map<CertCode, QuestionProgress[]>()
+  const anonymousDailyStats = new Map<CertCode, DailyQuestionStatsSyncBucket[]>()
   const anonymousMockExam = new Set<CertCode>()
   const dirtyMockExam = new Set<CertCode>()
   const owner = { userId: 'user-1' }
@@ -97,6 +103,7 @@ function createAdapter() {
         cert: CertCode,
         baseRevision: number,
         records: QuestionProgress[],
+        dailyStats?: DailyQuestionStatsSyncBucket[],
       ) => ProgressSyncResult | Promise<ProgressSyncResult>)
   > = []
   const snapshotErrors: Error[] = []
@@ -104,6 +111,11 @@ function createAdapter() {
   const notices: ProgressSyncNotice[] = []
   const syncCalls: Array<{ cert: CertCode; baseRevision: number; progress: QuestionProgress[] }> =
     []
+  const dailySyncCalls: Array<{
+    cert: CertCode
+    baseRevision: number
+    dailyStats: DailyQuestionStatsSyncBucket[]
+  }> = []
   const mockExamImportCalls: CertCode[] = []
   const mockExamSyncCalls: CertCode[] = []
   const mockExamInvalidations: string[] = []
@@ -130,16 +142,20 @@ function createAdapter() {
       isOwner: (userId) => owner.userId === userId,
       clearScope: vi.fn(),
       listDirty: (cert) => dirty.get(cert) ?? [],
+      listDirtyDailyStats: (cert) => dirtyDailyStats.get(cert) ?? [],
       clearCert: (userId, cert) => {
         accountProgress.delete(cert)
+        accountDailyStats.delete(cert)
         baselines.delete(baselineKey(userId, cert))
       },
-      replaceCertFromSnapshot: (userId, cert, revision, records) => {
+      replaceCertFromSnapshot: (userId, cert, revision, records, dailyStats) => {
         accountProgress.set(cert, records)
+        accountDailyStats.set(cert, dailyStats)
         baselines.set(baselineKey(userId, cert), { revision, lastSyncedAt: Date.now() })
         dirty.delete(cert)
+        dirtyDailyStats.delete(cert)
       },
-      refreshCertFromSnapshotKeepingDirty: (userId, cert, revision, records) => {
+      refreshCertFromSnapshotKeepingDirty: (userId, cert, revision, records, dailyStats) => {
         keepingDirtySnapshotCalls.push({
           userId,
           cert,
@@ -147,9 +163,10 @@ function createAdapter() {
           progress: records,
         })
         accountProgress.set(cert, records)
+        accountDailyStats.set(cert, dailyStats)
         baselines.set(baselineKey(userId, cert), { revision, lastSyncedAt: Date.now() })
       },
-      recoverCertFromSnapshotAfterSync: (userId, cert, revision, records, uploaded) => {
+      recoverCertFromSnapshotAfterSync: (userId, cert, revision, records, dailyStats, uploaded) => {
         afterSyncSnapshotCalls.push({
           userId,
           cert,
@@ -158,15 +175,19 @@ function createAdapter() {
           uploaded,
         })
         accountProgress.set(cert, records)
+        accountDailyStats.set(cert, dailyStats)
         baselines.set(baselineKey(userId, cert), { revision, lastSyncedAt: Date.now() })
       },
-      applyAcceptedSync: (userId, cert, revision, accepted) => {
+      applyAcceptedSync: (userId, cert, revision, accepted, _uploaded, dailyStats = []) => {
         accountProgress.set(cert, accepted)
+        accountDailyStats.set(cert, dailyStats)
         baselines.set(baselineKey(userId, cert), { revision, lastSyncedAt: Date.now() })
         dirty.delete(cert)
+        dirtyDailyStats.delete(cert)
       },
-      applyImportedSync: (userId, cert, revision, accepted) => {
+      applyImportedSync: (userId, cert, revision, accepted, _uploaded, dailyStats = []) => {
         accountProgress.set(cert, accepted)
+        accountDailyStats.set(cert, dailyStats)
         baselines.set(baselineKey(userId, cert), { revision, lastSyncedAt: Date.now() })
       },
     },
@@ -178,16 +199,18 @@ function createAdapter() {
       },
     },
     progressSync: {
-      post: async (cert, baseRevision, records) => {
+      post: async (cert, baseRevision, records, dailyStats = []) => {
         syncCalls.push({ cert, baseRevision, progress: records })
+        dailySyncCalls.push({ cert, baseRevision, dailyStats })
         const next = syncResponses.shift()
         if (next instanceof Error) throw next
-        if (typeof next === 'function') return next(cert, baseRevision, records)
+        if (typeof next === 'function') return next(cert, baseRevision, records, dailyStats)
         if (next) return next
         return {
           cert,
           revision: baseRevision + 1,
           accepted: records,
+          dailyStats: [],
           rejected: [],
           snapshotRequired: false,
         }
@@ -198,7 +221,12 @@ function createAdapter() {
         snapshotCalls.push(cert)
         const error = snapshotErrors.shift()
         if (error) throw error
-        return { cert, revision: 10, progress: snapshotResponses.get(cert) ?? [progress(99)] }
+        return {
+          cert,
+          revision: 10,
+          progress: snapshotResponses.get(cert) ?? [progress(99)],
+          dailyStats: [],
+        }
       },
     },
     questionProgress: {
@@ -209,17 +237,28 @@ function createAdapter() {
     },
     anonymousProgress: {
       summarizeImport: () => {
-        const certs = Array.from(anonymous.entries())
-          .filter(([, records]) => records.length > 0)
-          .map(([cert]) => cert)
+        const certs = Array.from(
+          new Set([...anonymous.keys(), ...anonymousDailyStats.keys()]),
+        ).filter(
+          (cert) =>
+            (anonymous.get(cert)?.length ?? 0) > 0 ||
+            (anonymousDailyStats.get(cert)?.length ?? 0) > 0,
+        )
         const recordCount = certs.reduce(
-          (total, cert) => total + (anonymous.get(cert)?.length ?? 0),
+          (total, cert) =>
+            total +
+            (anonymous.get(cert)?.length ?? 0) +
+            (anonymousDailyStats.get(cert)?.length ?? 0),
           0,
         )
         return { certs, certCount: certs.length, recordCount }
       },
       listImportProgress: (cert) => anonymous.get(cert) ?? [],
-      clearImportCert: (cert) => anonymous.delete(cert),
+      listImportDailyStats: (cert) => anonymousDailyStats.get(cert) ?? [],
+      clearImportCert: (cert) => {
+        anonymous.delete(cert)
+        anonymousDailyStats.delete(cert)
+      },
       hasDismissedImport: (userId) => dismissedImports.has(userId),
       dismissImport: (userId) => {
         dismissedImports.add(userId)
@@ -262,8 +301,11 @@ function createAdapter() {
     adapter,
     baselines,
     dirty,
+    dirtyDailyStats,
     accountProgress,
+    accountDailyStats,
     anonymous,
+    anonymousDailyStats,
     anonymousMockExam,
     dirtyMockExam,
     syncResponses,
@@ -272,6 +314,7 @@ function createAdapter() {
     owner,
     notices,
     syncCalls,
+    dailySyncCalls,
     mockExamImportCalls,
     mockExamSyncCalls,
     mockExamInvalidations,
@@ -390,6 +433,36 @@ describe('Progress Sync controller', () => {
     expect(ctx.dirty.get('CLF-C02')).toEqual([otherDirty])
     expect(ctx.snapshotCalls).toEqual(['DVA-C02'])
     expect(ctx.notices).toEqual(['manual-success'])
+  })
+
+  it('manual sync uploads dirty daily question stats even when question progress is clean', async () => {
+    const ctx = createAdapter()
+    const dailyStats: DailyQuestionStatsSyncBucket = {
+      date: '2026-01-01',
+      sourceId: 'client:device-1',
+      correctCount: 2,
+      wrongCount: 1,
+      updatedAt: 1_767_225_600_000,
+    }
+    ctx.baselines.set(ctx.baselineKey('user-1', 'DVA-C02'), {
+      revision: 3,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.dirtyDailyStats.set('DVA-C02', [dailyStats])
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: 'DVA-C02',
+      scope: 'account',
+    })
+
+    expect(controller.getState().status).toBe('dirty')
+    await expect(controller.sync('manual')).resolves.toEqual({ ok: true })
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'DVA-C02', baseRevision: 3, progress: [] }])
+    expect(ctx.dailySyncCalls).toEqual([
+      { cert: 'DVA-C02', baseRevision: 3, dailyStats: [dailyStats] },
+    ])
   })
 
   it('manual sync without a current cert is a silent no-op', async () => {
@@ -1154,6 +1227,36 @@ describe('Progress Sync controller', () => {
       [anonymousProgress],
     ])
     expect(ctx.anonymous.get('CLF-C02')).toBeUndefined()
+  })
+
+  it('imports anonymous daily question stats even when that cert has no question progress', async () => {
+    const ctx = createAdapter()
+    const dailyStats: DailyQuestionStatsSyncBucket = {
+      date: '2026-01-01',
+      sourceId: 'anon-import:device-1',
+      correctCount: 2,
+      wrongCount: 1,
+      updatedAt: 1_767_225_600_000,
+    }
+    ctx.baselines.set(ctx.baselineKey('user-1', 'CLF-C02'), {
+      revision: 2,
+      lastSyncedAt: 1_700_000_000_000,
+    })
+    ctx.anonymousDailyStats.set('CLF-C02', [dailyStats])
+    const controller = createProgressSyncController(ctx.adapter, {
+      authStatus: 'authenticated',
+      userId: 'user-1',
+      currentCert: null,
+      scope: 'account',
+    })
+
+    await expect(controller.importAnonymousProgress()).resolves.toEqual({ ok: true })
+
+    expect(ctx.syncCalls).toEqual([{ cert: 'CLF-C02', baseRevision: 2, progress: [] }])
+    expect(ctx.dailySyncCalls).toEqual([
+      { cert: 'CLF-C02', baseRevision: 2, dailyStats: [dailyStats] },
+    ])
+    expect(ctx.anonymousDailyStats.get('CLF-C02')).toBeUndefined()
   })
 
   it('imports anonymous mock exam data after flushing dirty account mock exam state for that cert', async () => {

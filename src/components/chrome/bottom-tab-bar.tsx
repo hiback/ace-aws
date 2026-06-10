@@ -1,11 +1,12 @@
 'use client'
-import { Home, Settings } from 'lucide-react'
+import { BarChart3, Home, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useT } from '@/hooks/use-t'
 
 const tabs = [
   { href: '/', label: 'tabHome' as const, Icon: Home },
+  { href: '/stats', label: 'tabStats' as const, Icon: BarChart3 },
   { href: '/settings', label: 'tabSettings' as const, Icon: Settings },
 ]
 

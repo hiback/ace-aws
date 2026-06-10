@@ -82,10 +82,14 @@ function signIn() {
 }
 
 function postJson(body: unknown, cert = 'dva-c02') {
+  const payload =
+    body && typeof body === 'object' && !Array.isArray(body) && 'progress' in body
+      ? { dailyStats: [], ...body }
+      : body
   return sync(cert, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   })
 }
 
@@ -245,6 +249,7 @@ describe('Progress Sync API', () => {
       cert: 'DVA-C02',
       revision: 1,
       accepted: [validAnswer()],
+      dailyStats: [],
       rejected: [{ index: 1, code: 'invalid_shape' }],
       snapshotRequired: false,
     })
@@ -262,6 +267,7 @@ describe('Progress Sync API', () => {
       cert: 'DVA-C02',
       revision: 7,
       accepted: [],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: true,
     })
@@ -288,6 +294,7 @@ describe('Progress Sync API', () => {
       cert: 'DVA-C02',
       revision: 2,
       accepted: [],
+      dailyStats: [],
       rejected: [
         { index: 0, code: 'invalid_shape' },
         { index: 1, qid: 9999, code: 'invalid_qid' },
@@ -315,6 +322,7 @@ describe('Progress Sync API', () => {
       cert: 'DVA-C02',
       revision: 0,
       accepted: [],
+      dailyStats: [],
       rejected: [{ index: 0, qid: 1, code: 'invalid_shape' }],
       snapshotRequired: false,
     })
@@ -357,6 +365,7 @@ describe('Progress Sync API', () => {
         validBookmark(),
         validTombstone(),
       ],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: false,
     })
@@ -410,6 +419,7 @@ describe('Progress Sync API', () => {
         },
         validBookmark({ qid: 2 }),
       ],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: true,
     })
@@ -431,6 +441,7 @@ describe('Progress Sync API', () => {
       cert: 'DVA-C02',
       revision: 5,
       accepted: [],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: true,
       error: {
@@ -456,6 +467,7 @@ describe('Progress Sync API', () => {
       cert: 'DVA-C02',
       revision: 0,
       accepted: [],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: true,
       error: {
@@ -490,8 +502,114 @@ describe('Progress Sync API', () => {
       cert: 'DVA-C02',
       revision: 8,
       accepted: [validAnswer()],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: false,
+    })
+  })
+
+  it('upserts changed Daily Question Stats buckets and advances the shared Progress Revision', async () => {
+    signIn()
+    mocks.txFor.mockResolvedValueOnce([{ revision: 2 }])
+
+    const response = await postJson({
+      baseRevision: 2,
+      progress: [],
+      dailyStats: [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: pastIso,
+        },
+      ],
+    })
+
+    expect(response.status).toBe(200)
+    expect(mocks.txOnConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({ correctCount: 2, wrongCount: 1 }),
+      }),
+    )
+    expect(mocks.txUpdate).toHaveBeenCalled()
+    await expect(response.json()).resolves.toMatchObject({
+      cert: 'DVA-C02',
+      revision: 3,
+      accepted: [],
+      dailyStats: [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: pastIso,
+        },
+      ],
+      rejected: [],
+      snapshotRequired: false,
+    })
+  })
+
+  it('keeps a newer same-source Daily Question Stats bucket when a stale retry arrives', async () => {
+    signIn()
+    mocks.txFor.mockResolvedValueOnce([{ revision: 4 }])
+    mocks.txWhere.mockReturnValueOnce({ for: mocks.txFor }).mockResolvedValueOnce([
+      {
+        date: '2026-01-01',
+        sourceId: 'client:device-1',
+        correctCount: 5,
+        wrongCount: 2,
+        updatedAt: new Date('2025-12-31T00:00:00.000Z'),
+      },
+      {
+        date: '2026-01-01',
+        sourceId: 'client:device-2',
+        correctCount: 1,
+        wrongCount: 0,
+        updatedAt: new Date('2025-12-30T00:00:00.000Z'),
+      },
+    ])
+
+    const response = await postJson({
+      baseRevision: 3,
+      progress: [],
+      dailyStats: [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: '2025-12-30T12:00:00.000Z',
+        },
+      ],
+    })
+
+    expect(response.status).toBe(200)
+    expect(mocks.txOnConflictDoUpdate).not.toHaveBeenCalled()
+    expect(mocks.txUpdate).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toEqual({
+      cert: 'DVA-C02',
+      revision: 4,
+      accepted: [],
+      dailyStats: [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 5,
+          wrongCount: 2,
+          updatedAt: '2025-12-31T00:00:00.000Z',
+        },
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-2',
+          correctCount: 1,
+          wrongCount: 0,
+          updatedAt: '2025-12-30T00:00:00.000Z',
+        },
+      ],
+      rejected: [],
+      snapshotRequired: true,
     })
   })
 })

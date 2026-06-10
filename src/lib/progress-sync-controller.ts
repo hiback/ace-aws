@@ -1,6 +1,14 @@
 import type { CertCode, ProgressScope, QuestionProgress } from '@/data/types'
-import type { ProgressSnapshot, ProgressSyncResult } from '@/lib/account-progress-sync-client'
-import type { AccountSyncBaseline, AnonymousImportSummary } from '@/lib/browser-progress-module'
+import type {
+  DailyQuestionStatsSyncBucket,
+  ProgressSnapshot,
+  ProgressSyncResult,
+} from '@/lib/account-progress-sync-client'
+import type {
+  AccountSyncBaseline,
+  AnonymousImportSummary,
+  DailyQuestionStats,
+} from '@/lib/browser-progress-module'
 
 type GateState = 'syncing' | 'ready' | 'error'
 type FlushCertResult = 'clean' | 'synced' | 'temporary-failure' | 'fatal-failure' | 'auth-signout'
@@ -66,25 +74,30 @@ export interface ProgressSyncControllerAdapter {
     isOwner(userId: string): boolean
     clearScope(): void
     listDirty(cert: CertCode): QuestionProgress[]
+    listDirtyDailyStats(cert: CertCode): DailyQuestionStatsSyncBucket[]
     clearCert(userId: string, cert: CertCode): void
     replaceCertFromSnapshot(
       userId: string,
       cert: CertCode,
       revision: number,
       progress: QuestionProgress[],
+      dailyStats: DailyQuestionStats[],
     ): void
     refreshCertFromSnapshotKeepingDirty(
       userId: string,
       cert: CertCode,
       revision: number,
       progress: QuestionProgress[],
+      dailyStats: DailyQuestionStats[],
     ): void
     recoverCertFromSnapshotAfterSync(
       userId: string,
       cert: CertCode,
       revision: number,
       progress: QuestionProgress[],
+      dailyStats: DailyQuestionStats[],
       uploaded: QuestionProgress[],
+      uploadedDailyStats: DailyQuestionStatsSyncBucket[],
     ): void
     applyAcceptedSync(
       userId: string,
@@ -92,6 +105,8 @@ export interface ProgressSyncControllerAdapter {
       revision: number,
       accepted: QuestionProgress[],
       uploaded?: QuestionProgress[],
+      dailyStats?: DailyQuestionStats[],
+      uploadedDailyStats?: DailyQuestionStatsSyncBucket[],
     ): void
     applyImportedSync(
       userId: string,
@@ -99,6 +114,8 @@ export interface ProgressSyncControllerAdapter {
       revision: number,
       accepted: QuestionProgress[],
       uploaded?: QuestionProgress[],
+      dailyStats?: DailyQuestionStats[],
+      uploadedDailyStats?: DailyQuestionStatsSyncBucket[],
     ): void
   }
   progressRevision: {
@@ -111,6 +128,7 @@ export interface ProgressSyncControllerAdapter {
       cert: CertCode,
       baseRevision: number,
       progress: QuestionProgress[],
+      dailyStats?: DailyQuestionStatsSyncBucket[],
     ): Promise<ProgressSyncResult>
   }
   progressSnapshot: {
@@ -123,6 +141,7 @@ export interface ProgressSyncControllerAdapter {
   anonymousProgress: {
     summarizeImport(): AnonymousImportSummary
     listImportProgress(cert: CertCode): QuestionProgress[]
+    listImportDailyStats(cert: CertCode): DailyQuestionStatsSyncBucket[]
     clearImportCert(cert: CertCode): void
     hasDismissedImport(userId: string): boolean
     dismissImport(userId: string): void
@@ -320,6 +339,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           snapshot.cert,
           snapshot.revision,
           snapshot.progress,
+          snapshot.dailyStats,
         )
         await this.adapter.questionProgress.invalidateAccountProgress()
       }
@@ -373,13 +393,15 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
         }
 
         const records = this.adapter.anonymousProgress.listImportProgress(cert)
-        if (records.length === 0) continue
+        const importDailyStats = this.adapter.anonymousProgress.listImportDailyStats(cert)
+        if (records.length === 0 && importDailyStats.length === 0) continue
         try {
           const baseline = this.adapter.progressRevision.getBaseline(accountUserId, cert)
           const result = await this.adapter.progressSync.post(
             cert,
             baseline?.revision ?? 0,
             records,
+            importDailyStats,
           )
           if (!this.isCurrentAccount(accountUserId)) return { ok: false, reason: 'temporary' }
           const revisionConflict = result.errorCode === 'revision_conflict'
@@ -392,7 +414,9 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
               snapshot.cert,
               snapshot.revision,
               snapshot.progress,
+              snapshot.dailyStats,
               records,
+              importDailyStats,
             )
           } else if (result.rejected.length === 0) {
             this.adapter.accountProgress.applyImportedSync(
@@ -401,6 +425,8 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
               result.revision,
               result.accepted,
               records,
+              result.dailyStats ?? [],
+              importDailyStats,
             )
           }
           if (!revisionConflict && result.rejected.length === 0) {
@@ -494,7 +520,8 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       return null
     }
     const hasDirtyProgress =
-      this.adapter.accountProgress.listDirty(previousInput.currentCert).length > 0
+      this.adapter.accountProgress.listDirty(previousInput.currentCert).length > 0 ||
+      this.adapter.accountProgress.listDirtyDailyStats(previousInput.currentCert).length > 0
     const hasDirtyMockExam = this.adapter.mockExam?.hasDirty(previousInput.currentCert) ?? false
     return hasDirtyProgress || hasDirtyMockExam ? previousInput.currentCert : null
   }
@@ -547,6 +574,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
       userId !== null &&
       currentCert !== null &&
       (this.adapter.accountProgress.listDirty(currentCert).length > 0 ||
+        this.adapter.accountProgress.listDirtyDailyStats(currentCert).length > 0 ||
         !!this.adapter.mockExam?.hasDirty(currentCert))
     const lastSyncedAt =
       authStatus === 'authenticated' && userId !== null && currentCert !== null
@@ -716,8 +744,9 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
   private async syncBaseline(accountUserId: string, cert: CertCode, runKey: string): Promise<void> {
     try {
       const dirty = this.adapter.accountProgress.listDirty(cert)
-      if (dirty.length > 0) {
-        const result = await this.adapter.progressSync.post(cert, 0, dirty)
+      const dirtyDailyStats = this.adapter.accountProgress.listDirtyDailyStats(cert)
+      if (dirty.length > 0 || dirtyDailyStats.length > 0) {
+        const result = await this.adapter.progressSync.post(cert, 0, dirty, dirtyDailyStats)
         if (!this.isActiveBaselineRun(runKey, accountUserId, cert)) return
         if (!this.isCurrentAccount(accountUserId)) {
           this.markBaselineError()
@@ -733,6 +762,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             snapshot.cert,
             snapshot.revision,
             snapshot.progress,
+            snapshot.dailyStats,
           )
         } else if (result.snapshotRequired || result.rejected.length > 0) {
           this.adapter.progressRevision.clearBaseline(accountUserId, cert)
@@ -744,6 +774,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             snapshot.cert,
             snapshot.revision,
             snapshot.progress,
+            snapshot.dailyStats,
           )
         } else {
           this.adapter.accountProgress.applyAcceptedSync(
@@ -752,6 +783,8 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             result.revision,
             result.accepted,
             dirty,
+            result.dailyStats ?? [],
+            dirtyDailyStats,
           )
         }
         await this.adapter.questionProgress.invalidateAccountProgress()
@@ -775,6 +808,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
         snapshot.cert,
         snapshot.revision,
         snapshot.progress,
+        snapshot.dailyStats,
       )
       await this.adapter.questionProgress.invalidateAccountProgress()
       this.setGateState('ready')
@@ -855,14 +889,20 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     if (!this.isCurrentAccount(accountUserId)) return 'clean'
     if (this.fatalCerts.has(cert)) return 'fatal-failure'
     const dirty = this.adapter.accountProgress.listDirty(cert)
+    const dirtyDailyStats = this.adapter.accountProgress.listDirtyDailyStats(cert)
     const hasDirtyMockExam = this.adapter.mockExam?.hasDirty(cert) ?? false
-    if (dirty.length === 0 && !hasDirtyMockExam) return 'clean'
+    if (dirty.length === 0 && dirtyDailyStats.length === 0 && !hasDirtyMockExam) return 'clean'
     this.inFlightCerts.add(cert)
     this.emitState()
     try {
-      if (dirty.length > 0) {
+      if (dirty.length > 0 || dirtyDailyStats.length > 0) {
         const baseline = this.adapter.progressRevision.getBaseline(accountUserId, cert)
-        const result = await this.adapter.progressSync.post(cert, baseline?.revision ?? 0, dirty)
+        const result = await this.adapter.progressSync.post(
+          cert,
+          baseline?.revision ?? 0,
+          dirty,
+          dirtyDailyStats,
+        )
         if (!this.isCurrentAccount(accountUserId)) return 'clean'
         this.dirtyFailureCounts.delete(cert)
         if (result.errorCode === 'revision_conflict') {
@@ -890,6 +930,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             snapshot.cert,
             snapshot.revision,
             snapshot.progress,
+            snapshot.dailyStats,
           )
           this.conflictRecoveryCerts.delete(cert)
           if (cert === this.input.currentCert) this.setGateState('ready')
@@ -904,6 +945,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
               snapshot.cert,
               snapshot.revision,
               snapshot.progress,
+              snapshot.dailyStats,
             )
           } else {
             this.adapter.accountProgress.recoverCertFromSnapshotAfterSync(
@@ -911,7 +953,9 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
               snapshot.cert,
               snapshot.revision,
               snapshot.progress,
+              snapshot.dailyStats,
               dirty,
+              dirtyDailyStats,
             )
           }
         } else {
@@ -921,6 +965,8 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
             result.revision,
             result.accepted,
             dirty,
+            result.dailyStats ?? [],
+            dirtyDailyStats,
           )
         }
         await this.adapter.questionProgress.invalidateAccountProgress()
@@ -1057,6 +1103,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
     const checkedKey = this.revisionCheckedKey(accountUserId, cert)
     if (!this.pendingRevisionChecksAfterDirty.has(checkedKey)) return
     if (this.adapter.accountProgress.listDirty(cert).length > 0) return
+    if (this.adapter.accountProgress.listDirtyDailyStats(cert).length > 0) return
     if (this.adapter.mockExam?.hasDirty(cert)) return
     this.pendingRevisionChecksAfterDirty.delete(checkedKey)
     this.enqueueRevisionCheck(cert)
@@ -1090,14 +1137,16 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
           if (currentBaseline === null) return
 
           const dirty = this.adapter.accountProgress.listDirty(cert)
+          const dirtyDailyStats = this.adapter.accountProgress.listDirtyDailyStats(cert)
           const hasDirtyMockExam = this.adapter.mockExam?.hasDirty(cert) ?? false
-          if (dirty.length > 0 || hasDirtyMockExam) {
+          if (dirty.length > 0 || dirtyDailyStats.length > 0 || hasDirtyMockExam) {
             const result = await this.flushCert(userId, cert)
-            if (dirty.length > 0) {
+            if (dirty.length > 0 || dirtyDailyStats.length > 0) {
               if (
                 result === 'synced' ||
                 (result === 'clean' &&
                   this.adapter.accountProgress.listDirty(cert).length === 0 &&
+                  this.adapter.accountProgress.listDirtyDailyStats(cert).length === 0 &&
                   !this.adapter.mockExam?.hasDirty(cert))
               ) {
                 this.revisionCheckedCerts.add(checkedKey)
@@ -1135,6 +1184,7 @@ class ProgressSyncControllerImpl implements ProgressSyncController {
                 snapshot.cert,
                 snapshot.revision,
                 snapshot.progress,
+                snapshot.dailyStats,
               )
             } else {
               this.adapter.progressRevision.markChecked(userId, cert, currentBaseline.revision)

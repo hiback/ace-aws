@@ -11,6 +11,13 @@ const ANONYMOUS_PROGRESS_KEY = 'ace-aws/progress/v1'
 const ACCOUNT_PROGRESS_OWNER_KEY = 'ace-aws/account-owner/v1'
 const ACCOUNT_PROGRESS_SYNC_KEY = 'ace-aws/account-progress-sync/v1'
 
+function localDateKey(timestamp: number): string {
+  const date = new Date(timestamp)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`
+}
+
 describe('BrowserProgressModule', () => {
   let progress: BrowserProgressModule
 
@@ -155,6 +162,113 @@ describe('BrowserProgressModule', () => {
 
       expect(progress.getStats(CERT)).toEqual({ answered: 3, correct: 2, total: 0 })
     })
+
+    it('tracks daily question stats by local date and answer attempt', () => {
+      progress.recordAnswer(1, ['D', 'B'], true, CERT)
+      progress.recordAnswer(1, ['A'], false, CERT)
+
+      expect(progress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 1,
+          wrongCount: 1,
+          updatedAt: 1_700_000_000_000,
+        },
+      ])
+    })
+
+    it('does not update daily question stats for bookmark-only changes', () => {
+      progress.toggleBookmark(1, CERT)
+      progress.toggleBookmark(1, CERT)
+      progress.recordAnswer(2, ['A'], true, CERT)
+      progress.toggleBookmark(2, CERT)
+
+      expect(progress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 1,
+          wrongCount: 0,
+          updatedAt: 1_700_000_000_000,
+        },
+      ])
+    })
+
+    it('loads older persisted progress without daily question stats as empty stats', () => {
+      localStorage.setItem(
+        ANONYMOUS_PROGRESS_KEY,
+        JSON.stringify({
+          byCert: {
+            [CERT]: {
+              progress: {
+                1: {
+                  qid: 1,
+                  correctCount: 1,
+                  wrongCount: 0,
+                  lastPicks: ['A'],
+                  lastCorrect: true,
+                  lastAnsweredAt: 1_700_000_000_000,
+                  bookmarked: false,
+                  bookmarkUpdatedAt: null,
+                },
+              },
+            },
+          },
+        }),
+      )
+
+      expect(progress.listDailyStats(CERT)).toEqual([])
+    })
+
+    it('normalizes damaged negative daily question stats to zero', () => {
+      localStorage.setItem(
+        ANONYMOUS_PROGRESS_KEY,
+        JSON.stringify({
+          byCert: {
+            [CERT]: {
+              progress: {},
+              dailyStats: {
+                '2026-01-02': {
+                  date: '2026-01-02',
+                  correctCount: -2,
+                  wrongCount: -1,
+                  updatedAt: -100,
+                },
+              },
+            },
+          },
+        }),
+      )
+
+      expect(progress.listDailyStats(CERT)).toEqual([
+        {
+          date: '2026-01-02',
+          correctCount: 0,
+          wrongCount: 0,
+          updatedAt: 0,
+        },
+      ])
+    })
+
+    it('isolates daily question stats by cert and progress scope', () => {
+      progress.recordAnswer(1, ['A'], true, 'DVA-C02')
+      progress.recordAnswer(1, ['A'], false, 'CLF-C02')
+
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, 'DVA-C02')
+
+      expect(progress.listDailyStats('DVA-C02')[0]).toMatchObject({
+        correctCount: 1,
+        wrongCount: 0,
+      })
+      expect(progress.listDailyStats('CLF-C02')[0]).toMatchObject({
+        correctCount: 0,
+        wrongCount: 1,
+      })
+      expect(accountProgress.listDailyStats('DVA-C02')[0]).toMatchObject({
+        correctCount: 0,
+        wrongCount: 1,
+      })
+    })
   })
 
   describe('storage scopes', () => {
@@ -187,6 +301,22 @@ describe('BrowserProgressModule', () => {
       })
       expect(accountProgress.getProgress(2, CERT)).not.toHaveProperty('dirtySince')
       expect(BrowserProgressModule.listDirtyAccountProgress(CERT).map((p) => p.qid)).toEqual([1, 2])
+    })
+
+    it('lists dirty account daily question stats with a client source id', () => {
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], true, CERT)
+      accountProgress.recordAnswer(2, ['B'], false, CERT)
+
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: expect.stringMatching(/^client:/),
+          correctCount: 1,
+          wrongCount: 1,
+          updatedAt: 1_700_000_000_000,
+        },
+      ])
     })
 
     it('keeps account progress dirty across repeated account writes', () => {
@@ -352,6 +482,146 @@ describe('BrowserProgressModule', () => {
       })
     })
 
+    it('merges accepted daily stats by source while preserving newer local dirty buckets', () => {
+      localStorage.setItem('ace-aws/account-progress-client-id/v1', 'this')
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const uploadedDailyStats = BrowserProgressModule.listDirtyAccountDailyStats(CERT)
+      vi.setSystemTime(1_700_000_005_000)
+      accountProgress.recordAnswer(2, ['B'], true, CERT)
+      vi.setSystemTime(1_700_000_020_000)
+
+      BrowserProgressModule.applyAcceptedAccountSync(
+        'user-1',
+        CERT,
+        9,
+        [],
+        [],
+        [
+          {
+            date: localDateKey(1_700_000_000_000),
+            sourceId: 'anon-import:other',
+            correctCount: 2,
+            wrongCount: 0,
+            updatedAt: 1_700_000_001_000,
+          },
+          ...uploadedDailyStats,
+        ],
+        uploadedDailyStats,
+      )
+
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 3,
+          wrongCount: 1,
+          updatedAt: 1_700_000_005_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: 'client:this',
+          correctCount: 1,
+          wrongCount: 1,
+          updatedAt: 1_700_000_005_000,
+        },
+      ])
+    })
+
+    it('keeps newer server source buckets after an accepted stale daily stats retry', () => {
+      localStorage.setItem('ace-aws/account-progress-client-id/v1', 'this')
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const uploadedDailyStats = BrowserProgressModule.listDirtyAccountDailyStats(CERT)
+      vi.setSystemTime(1_700_000_020_000)
+      const serverDailyStats = [
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: 'client:this',
+          correctCount: 5,
+          wrongCount: 2,
+          updatedAt: 1_700_000_010_000,
+        },
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: 'anon-import:other',
+          correctCount: 1,
+          wrongCount: 0,
+          updatedAt: 1_700_000_005_000,
+        },
+      ]
+
+      BrowserProgressModule.applyAcceptedAccountSync(
+        'user-1',
+        CERT,
+        9,
+        [],
+        [],
+        serverDailyStats,
+        uploadedDailyStats,
+      )
+
+      accountProgress.recordAnswer(2, ['B'], true, CERT)
+
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 7,
+          wrongCount: 2,
+          updatedAt: 1_700_000_020_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: 'client:this',
+          correctCount: 6,
+          wrongCount: 2,
+          updatedAt: 1_700_000_020_000,
+        },
+      ])
+    })
+
+    it('does not let accepted sync merge an older dirty source bucket over a newer server bucket', () => {
+      localStorage.setItem('ace-aws/account-progress-client-id/v1', 'this')
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const uploadedDailyStats = BrowserProgressModule.listDirtyAccountDailyStats(CERT)
+      vi.setSystemTime(1_700_000_001_500)
+      accountProgress.recordAnswer(2, ['B'], true, CERT)
+      vi.setSystemTime(1_700_000_003_000)
+      const serverDailyStats = [
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: 'client:this',
+          correctCount: 5,
+          wrongCount: 2,
+          updatedAt: 1_700_000_002_000,
+        },
+      ]
+
+      BrowserProgressModule.applyAcceptedAccountSync(
+        'user-1',
+        CERT,
+        9,
+        [],
+        [],
+        serverDailyStats,
+        uploadedDailyStats,
+      )
+
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 5,
+          wrongCount: 2,
+          updatedAt: 1_700_000_002_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([])
+    })
+
     it('applies a required snapshot while preserving dirty changes made after the upload', () => {
       const accountProgress = new BrowserProgressModule('account')
       accountProgress.recordAnswer(1, ['A'], false, CERT)
@@ -387,6 +657,7 @@ describe('BrowserProgressModule', () => {
             bookmarkUpdatedAt: null,
           },
         ],
+        [],
         uploaded,
       )
 
@@ -411,6 +682,44 @@ describe('BrowserProgressModule', () => {
         revision: 10,
         lastSyncedAt: 1_700_000_020_000,
       })
+    })
+
+    it('does not let snapshot recovery merge an older dirty source bucket over a newer server bucket', () => {
+      localStorage.setItem('ace-aws/account-progress-client-id/v1', 'this')
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const uploadedDailyStats = BrowserProgressModule.listDirtyAccountDailyStats(CERT)
+      vi.setSystemTime(1_700_000_001_500)
+      accountProgress.recordAnswer(2, ['B'], true, CERT)
+      vi.setSystemTime(1_700_000_003_000)
+
+      BrowserProgressModule.replaceAccountCertFromSnapshotPreservingDirty(
+        'user-1',
+        CERT,
+        10,
+        [],
+        [
+          {
+            date: localDateKey(1_700_000_000_000),
+            sourceId: 'client:this',
+            correctCount: 5,
+            wrongCount: 2,
+            updatedAt: 1_700_000_002_000,
+          },
+        ],
+        [],
+        uploadedDailyStats,
+      )
+
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 5,
+          wrongCount: 2,
+          updatedAt: 1_700_000_002_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([])
     })
 
     it('survives across new module instances in the same scope', () => {
@@ -482,18 +791,31 @@ describe('BrowserProgressModule', () => {
       accountProgress.recordAnswer(9, ['B'], false, 'CLF-C02')
       vi.setSystemTime(1_700_000_010_000)
 
-      BrowserProgressModule.replaceAccountCertFromSnapshot('user-1', CERT, 7, [
-        {
-          qid: 2,
-          correctCount: 2,
-          wrongCount: 1,
-          lastPicks: ['D', 'B'],
-          lastCorrect: true,
-          lastAnsweredAt: 1_700_000_001_000,
-          bookmarked: true,
-          bookmarkUpdatedAt: 1_700_000_002_000,
-        },
-      ])
+      BrowserProgressModule.replaceAccountCertFromSnapshot(
+        'user-1',
+        CERT,
+        7,
+        [
+          {
+            qid: 2,
+            correctCount: 2,
+            wrongCount: 1,
+            lastPicks: ['D', 'B'],
+            lastCorrect: true,
+            lastAnsweredAt: 1_700_000_001_000,
+            bookmarked: true,
+            bookmarkUpdatedAt: 1_700_000_002_000,
+          },
+        ],
+        [
+          {
+            date: '2023-11-14',
+            correctCount: 2,
+            wrongCount: 1,
+            updatedAt: 1_700_000_001_000,
+          },
+        ],
+      )
 
       expect(accountProgress.getProgress(1, CERT)).toBeNull()
       expect(accountProgress.getProgress(2, CERT)).toMatchObject({
@@ -507,10 +829,193 @@ describe('BrowserProgressModule', () => {
         bookmarkUpdatedAt: 1_700_000_002_000,
       })
       expect(accountProgress.getProgress(9, 'CLF-C02')?.lastPicks).toEqual(['B'])
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: '2023-11-14',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: 1_700_000_001_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([])
       expect(BrowserProgressModule.getAccountSyncBaseline('user-1', CERT)).toEqual({
         revision: 7,
         lastSyncedAt: 1_700_000_010_000,
       })
+    })
+
+    it('uploads only the current client source bucket after a remote aggregate snapshot', () => {
+      const accountProgress = new BrowserProgressModule('account')
+      BrowserProgressModule.replaceAccountCertFromSnapshot(
+        'user-1',
+        CERT,
+        7,
+        [],
+        [
+          {
+            date: localDateKey(1_700_000_000_000),
+            correctCount: 2,
+            wrongCount: 0,
+            updatedAt: 1_700_000_000_000,
+          },
+        ],
+      )
+      vi.setSystemTime(1_700_000_005_000)
+
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: 1_700_000_005_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: expect.stringMatching(/^client:/),
+          correctCount: 0,
+          wrongCount: 1,
+          updatedAt: 1_700_000_005_000,
+        },
+      ])
+    })
+
+    it('preserves same-client source buckets from account snapshots before adding local answers', () => {
+      const accountProgress = new BrowserProgressModule('account')
+      localStorage.setItem('ace-aws/account-progress-client-id/v1', 'device-1')
+      BrowserProgressModule.replaceAccountCertFromSnapshot(
+        'user-1',
+        CERT,
+        7,
+        [],
+        [
+          {
+            date: localDateKey(1_700_000_000_000),
+            sourceId: 'client:device-1',
+            correctCount: 2,
+            wrongCount: 0,
+            updatedAt: 1_700_000_000_000,
+          },
+          {
+            date: localDateKey(1_700_000_000_000),
+            sourceId: 'anon-import:device-2',
+            correctCount: 0,
+            wrongCount: 1,
+            updatedAt: 1_700_000_001_000,
+          },
+        ],
+      )
+      vi.setSystemTime(1_700_000_005_000)
+
+      accountProgress.recordAnswer(1, ['A'], true, CERT)
+
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 3,
+          wrongCount: 1,
+          updatedAt: 1_700_000_005_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: 'client:device-1',
+          correctCount: 3,
+          wrongCount: 0,
+          updatedAt: 1_700_000_005_000,
+        },
+      ])
+    })
+
+    it('preserves account daily stats dirtied during anonymous import for dates not in the import upload', () => {
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const dirtyDailyStats = BrowserProgressModule.listDirtyAccountDailyStats(CERT)
+      vi.setSystemTime(1_700_000_020_000)
+
+      BrowserProgressModule.applyImportedAccountSync(
+        'user-1',
+        CERT,
+        9,
+        [],
+        [],
+        [
+          {
+            date: '2023-11-14',
+            correctCount: 2,
+            wrongCount: 0,
+            updatedAt: 1_699_000_000_000,
+          },
+        ],
+        [
+          {
+            date: '2023-11-14',
+            sourceId: 'anon-import:device-1',
+            correctCount: 2,
+            wrongCount: 0,
+            updatedAt: 1_699_000_000_000,
+          },
+        ],
+      )
+
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual(dirtyDailyStats)
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: '2023-11-14',
+          correctCount: 2,
+          wrongCount: 0,
+          updatedAt: 1_699_000_000_000,
+        },
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 0,
+          wrongCount: 1,
+          updatedAt: 1_700_000_000_000,
+        },
+      ])
+    })
+
+    it('does not let anonymous import recovery merge an older dirty source bucket over a newer server bucket', () => {
+      localStorage.setItem('ace-aws/account-progress-client-id/v1', 'this')
+      const accountProgress = new BrowserProgressModule('account')
+      accountProgress.recordAnswer(1, ['A'], false, CERT)
+      const uploadedDailyStats = BrowserProgressModule.listDirtyAccountDailyStats(CERT)
+      vi.setSystemTime(1_700_000_001_500)
+      accountProgress.recordAnswer(2, ['B'], true, CERT)
+      vi.setSystemTime(1_700_000_003_000)
+      const serverDailyStats = [
+        {
+          date: localDateKey(1_700_000_000_000),
+          sourceId: 'client:this',
+          correctCount: 5,
+          wrongCount: 2,
+          updatedAt: 1_700_000_002_000,
+        },
+      ]
+
+      BrowserProgressModule.applyImportedAccountSync(
+        'user-1',
+        CERT,
+        9,
+        [],
+        [],
+        serverDailyStats,
+        uploadedDailyStats,
+      )
+
+      expect(accountProgress.listDailyStats(CERT)).toEqual([
+        {
+          date: localDateKey(1_700_000_000_000),
+          correctCount: 5,
+          wrongCount: 2,
+          updatedAt: 1_700_000_002_000,
+        },
+      ])
+      expect(BrowserProgressModule.listDirtyAccountDailyStats(CERT)).toEqual([])
     })
 
     it('clears account sync metadata with account mirror on owner change while preserving anonymous progress', () => {

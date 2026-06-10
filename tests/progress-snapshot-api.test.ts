@@ -47,7 +47,8 @@ beforeEach(() => {
   mocks.txFrom.mockReturnValue({ where: mocks.txWhere })
   mocks.txWhere
     .mockReturnValueOnce({ for: mocks.txFor })
-    .mockReturnValue({ orderBy: mocks.txOrderBy })
+    .mockReturnValueOnce({ orderBy: mocks.txOrderBy })
+    .mockResolvedValue([])
   mocks.txFor.mockResolvedValue([{ revision: 0 }])
   mocks.transaction.mockImplementation((callback) =>
     callback({
@@ -80,7 +81,12 @@ describe('Progress Snapshot API', () => {
     const response = await snapshot('saa-c03')
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ cert: 'SAA-C03', revision: 0, progress: [] })
+    await expect(response.json()).resolves.toEqual({
+      cert: 'SAA-C03',
+      revision: 0,
+      progress: [],
+      dailyStats: [],
+    })
   })
 
   it('creates or reuses revision 0 and returns a sparse Progress Snapshot ordered by qid', async () => {
@@ -122,6 +128,22 @@ describe('Progress Snapshot API', () => {
         lastAnsweredAt: null,
         bookmarked: true,
         bookmarkUpdatedAt: bookmarkAt,
+      },
+    ])
+    mocks.txWhere.mockResolvedValueOnce([
+      {
+        date: '2026-01-01',
+        sourceId: 'client:device-1',
+        correctCount: 2,
+        wrongCount: 1,
+        updatedAt: answeredAt,
+      },
+      {
+        date: '2026-01-01',
+        sourceId: 'client:device-2',
+        correctCount: 1,
+        wrongCount: 3,
+        updatedAt: bookmarkAt,
       },
     ])
 
@@ -168,6 +190,22 @@ describe('Progress Snapshot API', () => {
           lastAnsweredAt: null,
           bookmarked: false,
           bookmarkUpdatedAt: '2026-01-03T00:00:00.000Z',
+        },
+      ],
+      dailyStats: [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-2',
+          correctCount: 1,
+          wrongCount: 3,
+          updatedAt: '2026-01-02T00:00:00.000Z',
         },
       ],
     })

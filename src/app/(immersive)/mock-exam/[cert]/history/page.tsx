@@ -1,6 +1,7 @@
 'use client'
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
+import { MockExamScoreChart } from '@/components/mock-exam/score-chart'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { normalizeCert } from '@/data/loaders'
 import { useMockExamHistory } from '@/hooks/use-mock-exam'
@@ -41,9 +42,7 @@ export default function MockExamHistoryPage() {
       <main className="flex-1 overflow-auto px-5 pt-[18px] pb-5">
         {historyQuery.isError ? (
           <EmptyState title={t('mockExamHistoryLoadError')} />
-        ) : history === undefined ? null : history.length === 0 ? (
-          <EmptyState title={t('mockExamFirstTimeTitle')} />
-        ) : (
+        ) : history === undefined || history.length === 0 ? null : (
           <section>
             <div className="mb-4 grid grid-cols-3 gap-2">
               <HistorySummaryCell
@@ -72,18 +71,28 @@ export default function MockExamHistoryPage() {
 
             <div className="mb-4 rounded-[14px] border border-border bg-surface px-4 py-3">
               <div className="mb-3 flex items-baseline justify-between gap-2">
-                <h2 className="text-secondary font-bold text-ink">{t('mockExamScoreTrend')}</h2>
+                <h2 className="text-secondary font-bold text-ink">
+                  {history.length === 1 ? t('statsMockExamScoreTitle') : t('mockExamScoreTrend')}
+                </h2>
                 <span className="font-mono text-[10px] tracking-[0.03em] text-ink-mute">
                   {t('mockExamAttemptsLabel', { count: history.length })}
                 </span>
               </div>
-              <ScoreTrend
+              <MockExamScoreChart
                 scores={history
                   .slice()
                   .reverse()
                   .map((attempt) => attempt.summary.score)}
                 passScore={profile.passingScore}
                 label={t('mockExamScoreTrend')}
+                gaugeLabel={t('mockExamScoreGaugeAria', {
+                  score: history[0].summary.score,
+                  passScore: profile.passingScore,
+                  status: history[0].summary.passed ? t('mockExamPassed') : t('mockExamFailed'),
+                })}
+                passLineLabel={t('statsMockExamPassLineLabel')}
+                passLineDeltaLabel={t('statsMockExamPassLineDeltaLabel')}
+                passLineDeltaUnit={t('statsMockExamPassLineDeltaUnit')}
               />
             </div>
 
@@ -202,98 +211,6 @@ function deriveScoreDelta(history: SubmittedMockExamAttempt[], index: number) {
   const previousAttempt = history[index + 1]
   if (!previousAttempt) return null
   return history[index].summary.score - previousAttempt.summary.score
-}
-
-function ScoreTrend({
-  scores,
-  passScore,
-  label,
-}: {
-  scores: number[]
-  passScore: number
-  label: string
-}) {
-  const width = 280
-  const height = 70
-  const pad = 6
-  const min = Math.min(...scores, passScore) - 30
-  const max = Math.max(...scores, passScore) + 30
-  const range = Math.max(max - min, 1)
-  const xStep = scores.length > 1 ? (width - 2 * pad) / (scores.length - 1) : 0
-  const points = scores.map((score, index) => ({
-    x: scores.length > 1 ? pad + index * xStep : width / 2,
-    y: height - pad - ((score - min) / range) * (height - 2 * pad),
-    score,
-  }))
-  const passY = height - pad - ((passScore - min) / range) * (height - 2 * pad)
-  const path = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
-    .join(' ')
-  const areaPath = points.length
-    ? `${path} L ${points.at(-1)?.x.toFixed(1)} ${height - pad} L ${points[0].x.toFixed(1)} ${height - pad} Z`
-    : ''
-
-  return (
-    <svg
-      data-testid="mock-exam-score-trend"
-      viewBox={`0 0 ${width} ${height}`}
-      width="100%"
-      height={height}
-      role="img"
-      aria-label={label}
-      className="block"
-    >
-      <defs>
-        <linearGradient id="mock-exam-spark-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <line
-        x1={pad}
-        y1={passY}
-        x2={width - pad}
-        y2={passY}
-        className="stroke-success"
-        strokeWidth="1"
-        strokeDasharray="3 3"
-        opacity="0.7"
-      />
-      <text
-        x={width - pad}
-        y={passY - 4}
-        textAnchor="end"
-        className="fill-success font-mono font-bold"
-        fontSize="9"
-      >
-        {passScore}
-      </text>
-      {areaPath ? (
-        <path d={areaPath} fill="url(#mock-exam-spark-fill)" className="text-accent" />
-      ) : null}
-      {path ? (
-        <path
-          d={path}
-          fill="none"
-          className="stroke-accent"
-          strokeWidth="2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      ) : null}
-      {points.map((point, index) => (
-        <circle
-          key={`${point.x}-${point.y}-${point.score}`}
-          cx={point.x}
-          cy={point.y}
-          r={index === points.length - 1 ? 4 : 2.6}
-          className={point.score >= passScore ? 'fill-success' : 'fill-danger'}
-          stroke="var(--color-surface)"
-          strokeWidth={index === points.length - 1 ? 2 : 1.2}
-        />
-      ))}
-    </svg>
-  )
 }
 
 function formatRelativeDate(timestamp: number, locale: 'zh' | 'en') {

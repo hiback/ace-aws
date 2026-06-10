@@ -2,7 +2,7 @@ import type { CertCode, Letter } from '@/data/types'
 import type { QuestionBankIndex } from './question-bank-index'
 
 const LETTERS = new Set(['A', 'B', 'C', 'D', 'E', 'F'])
-const TOP_LEVEL_KEYS = ['baseRevision', 'progress']
+const TOP_LEVEL_KEYS = ['baseRevision', 'progress', 'dailyStats']
 const RECORD_KEYS = [
   'qid',
   'correctCount',
@@ -13,8 +13,13 @@ const RECORD_KEYS = [
   'bookmarked',
   'bookmarkUpdatedAt',
 ]
+const DAILY_STATS_KEYS = ['date', 'sourceId', 'correctCount', 'wrongCount', 'updatedAt']
 const FUTURE_GRACE_MS = 5 * 60 * 1000
+const MAX_DAILY_STATS_BUCKETS = 400
+const MAX_SOURCE_ID_LENGTH = 64
 const PG_INT_MAX = 2_147_483_647
+const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const SOURCE_ID_RE = /^(client|anon-import):.+$/
 
 export type SyncRecord = {
   qid: number
@@ -25,6 +30,14 @@ export type SyncRecord = {
   lastAnsweredAt: string | null
   bookmarked: boolean
   bookmarkUpdatedAt: string | null
+}
+
+export type SyncDailyQuestionStats = {
+  date: string
+  sourceId: string
+  correctCount: number
+  wrongCount: number
+  updatedAt: string
 }
 
 export type RecordReject = {
@@ -42,6 +55,7 @@ export type ParsedSync = {
   cert: CertCode
   baseRevision: number
   accepted: SyncRecord[]
+  dailyStats: SyncDailyQuestionStats[]
   rejected: RecordReject[]
 }
 
@@ -49,12 +63,65 @@ export type PayloadErrorCode =
   | 'invalid_base_revision'
   | 'invalid_top_level_payload'
   | 'duplicate_qid'
+  | 'duplicate_daily_stats_bucket'
+  | 'invalid_daily_stats'
   | 'payload_too_large'
 
 export type PayloadError = { code: PayloadErrorCode; message: string }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function validateDailyStats(value: unknown, now: number): SyncDailyQuestionStats | null {
+  if (!isRecord(value) || !hasExactKeys(value, DAILY_STATS_KEYS)) return null
+  const updatedAt = isoOrNull(value.updatedAt)
+  if (
+    typeof value.date !== 'string' ||
+    !LOCAL_DATE_RE.test(value.date) ||
+    !isRealLocalDate(value.date) ||
+    typeof value.sourceId !== 'string' ||
+    value.sourceId.length > MAX_SOURCE_ID_LENGTH ||
+    !SOURCE_ID_RE.test(value.sourceId) ||
+    !isInteger(value.correctCount) ||
+    !isInteger(value.wrongCount) ||
+    updatedAt === undefined ||
+    updatedAt === null
+  ) {
+    return null
+  }
+
+  const correctCount = value.correctCount as number
+  const wrongCount = value.wrongCount as number
+  if (
+    correctCount < 0 ||
+    wrongCount < 0 ||
+    correctCount > PG_INT_MAX ||
+    wrongCount > PG_INT_MAX ||
+    isFuture(updatedAt, now)
+  ) {
+    return null
+  }
+
+  return {
+    date: value.date,
+    sourceId: value.sourceId,
+    correctCount,
+    wrongCount,
+    updatedAt,
+  }
+}
+
+function isRealLocalDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  )
 }
 
 function hasExactKeys(value: Record<string, unknown>, keys: string[]) {
@@ -184,7 +251,8 @@ export function parseProgressSyncPayload(
   if (
     !isRecord(payload) ||
     !hasExactKeys(payload, TOP_LEVEL_KEYS) ||
-    !Array.isArray(payload.progress)
+    !Array.isArray(payload.progress) ||
+    !Array.isArray(payload.dailyStats)
   ) {
     return { error: { code: 'invalid_top_level_payload', message: 'Invalid top-level payload' } }
   }
@@ -198,6 +266,30 @@ export function parseProgressSyncPayload(
         message: 'Progress payload is larger than the question bank',
       },
     }
+  }
+  if (payload.dailyStats.length > MAX_DAILY_STATS_BUCKETS) {
+    return {
+      error: {
+        code: 'payload_too_large',
+        message: 'Daily stats payload is too large',
+      },
+    }
+  }
+
+  const dailyStats = payload.dailyStats.map((bucket) => validateDailyStats(bucket, now))
+  if (dailyStats.some((bucket) => bucket === null)) {
+    return { error: { code: 'invalid_daily_stats', message: 'Invalid daily question stats' } }
+  }
+  const seenDailyStats = new Set<string>()
+  for (const bucket of dailyStats) {
+    if (bucket === null) continue
+    const key = `${bucket.date}:${bucket.sourceId}`
+    if (seenDailyStats.has(key)) {
+      return {
+        error: { code: 'duplicate_daily_stats_bucket', message: 'Duplicate daily stats bucket' },
+      }
+    }
+    seenDailyStats.add(key)
   }
 
   const accepted: SyncRecord[] = []
@@ -214,5 +306,11 @@ export function parseProgressSyncPayload(
     seen.add(record.qid)
   }
 
-  return { cert, baseRevision: payload.baseRevision as number, accepted, rejected }
+  return {
+    cert,
+    baseRevision: payload.baseRevision as number,
+    accepted,
+    dailyStats: dailyStats as SyncDailyQuestionStats[],
+    rejected,
+  }
 }

@@ -1,7 +1,9 @@
 'use client'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAccountProgressSync } from '@/components/providers/account-progress-sync-provider'
 import { useProgressScope } from '@/components/providers/progress-scope-provider'
 import type { Letter } from '@/data/types'
 import {
@@ -48,7 +50,9 @@ export type MockExamRuntime = {
 
 export function useMockExamRuntime(attemptId: string): MockExamRuntime {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { scope, progress } = useProgressScope()
+  const { enqueueDirtySync } = useAccountProgressSync()
   const t = useT()
   const { toast } = useToast()
   const [attempt, setAttempt] = useState<MockExamAttempt | null | undefined>(undefined)
@@ -217,6 +221,8 @@ export function useMockExamRuntime(attemptId: string): MockExamRuntime {
       }
       try {
         recordSubmittedMockExamProgress(persistedSubmitted, progress, scope !== 'account')
+        queryClient.invalidateQueries({ queryKey: ['progress', scope] })
+        if (scope === 'account') enqueueDirtySync(persistedSubmitted.cert)
       } catch {
         // Submitted history is already persisted; later retries should use that immutable snapshot.
       }
@@ -225,7 +231,17 @@ export function useMockExamRuntime(attemptId: string): MockExamRuntime {
       setLastError(null)
       router.replace(`/mock-exam/attempt/${persistedSubmitted.id}/result`)
     },
-    [attempt, progress, router, scope, submitMockExamAttemptMutation, t, toast],
+    [
+      attempt,
+      enqueueDirtySync,
+      progress,
+      queryClient,
+      router,
+      scope,
+      submitMockExamAttemptMutation,
+      t,
+      toast,
+    ],
   )
 
   const submit = useCallback(async () => {

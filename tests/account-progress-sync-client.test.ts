@@ -7,7 +7,7 @@ beforeEach(() => {
     'fetch',
     vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ cert: 'DVA-C02', revision: 1, progress: [] }),
+      json: async () => ({ cert: 'DVA-C02', revision: 1, progress: [], dailyStats: [] }),
     }),
   )
 })
@@ -68,7 +68,7 @@ describe('fetchProgressSnapshot', () => {
   it('rejects a snapshot for a different certification than requested', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ cert: 'CLF-C02', revision: 1, progress: [] }),
+      json: async () => ({ cert: 'CLF-C02', revision: 1, progress: [], dailyStats: [] }),
     } as Response)
 
     await expect(fetchProgressSnapshot('DVA-C02')).rejects.toThrow('Invalid progress snapshot')
@@ -96,6 +96,38 @@ describe('fetchProgressSnapshot', () => {
     } as Response)
 
     await expect(fetchProgressSnapshot('DVA-C02')).rejects.toThrow('Invalid progress snapshot')
+  })
+
+  it('preserves source ids from account progress snapshots', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        cert: 'DVA-C02',
+        revision: 1,
+        progress: [],
+        dailyStats: [
+          {
+            date: '2026-01-01',
+            sourceId: 'client:device-1',
+            correctCount: 2,
+            wrongCount: 1,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    } as Response)
+
+    await expect(fetchProgressSnapshot('DVA-C02')).resolves.toMatchObject({
+      dailyStats: [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: Date.parse('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    })
   })
 })
 
@@ -155,22 +187,44 @@ describe('postProgressSync', () => {
           },
         ],
         rejected: [],
+        dailyStats: [
+          {
+            date: '2026-01-01',
+            sourceId: 'client:device-1',
+            correctCount: 2,
+            wrongCount: 1,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
         snapshotRequired: false,
       }),
     } as Response)
 
-    const result = await postProgressSync('DVA-C02', 3, [
-      {
-        qid: 1,
-        correctCount: 2,
-        wrongCount: 1,
-        lastPicks: ['A', 'B'],
-        lastCorrect: true,
-        lastAnsweredAt: Date.parse('2026-01-01T00:00:00.000Z'),
-        bookmarked: false,
-        bookmarkUpdatedAt: null,
-      },
-    ])
+    const result = await postProgressSync(
+      'DVA-C02',
+      3,
+      [
+        {
+          qid: 1,
+          correctCount: 2,
+          wrongCount: 1,
+          lastPicks: ['A', 'B'],
+          lastCorrect: true,
+          lastAnsweredAt: Date.parse('2026-01-01T00:00:00.000Z'),
+          bookmarked: false,
+          bookmarkUpdatedAt: null,
+        },
+      ],
+      [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: Date.parse('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    )
 
     expect(fetch).toHaveBeenCalledWith('/api/progress/dva-c02/sync', {
       method: 'POST',
@@ -191,8 +245,20 @@ describe('postProgressSync', () => {
             bookmarkUpdatedAt: null,
           },
         ],
+        dailyStats: [
+          {
+            date: '2026-01-01',
+            sourceId: 'client:device-1',
+            correctCount: 2,
+            wrongCount: 1,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
       }),
     })
+    expect(
+      JSON.parse(vi.mocked(fetch).mock.calls[0]?.[1]?.body as string).dailyStats[0],
+    ).not.toHaveProperty('answeredCount')
     expect(result).toEqual({
       cert: 'DVA-C02',
       revision: 4,
@@ -209,6 +275,15 @@ describe('postProgressSync', () => {
         },
       ],
       rejected: [],
+      dailyStats: [
+        {
+          date: '2026-01-01',
+          sourceId: 'client:device-1',
+          correctCount: 2,
+          wrongCount: 1,
+          updatedAt: Date.parse('2026-01-01T00:00:00.000Z'),
+        },
+      ],
       snapshotRequired: false,
     })
   })
@@ -221,6 +296,7 @@ describe('postProgressSync', () => {
         cert: 'DVA-C02',
         revision: 7,
         accepted: [],
+        dailyStats: [],
         rejected: [],
         snapshotRequired: true,
         error: {
@@ -234,6 +310,7 @@ describe('postProgressSync', () => {
       cert: 'DVA-C02',
       revision: 7,
       accepted: [],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: true,
       errorCode: 'revision_conflict',

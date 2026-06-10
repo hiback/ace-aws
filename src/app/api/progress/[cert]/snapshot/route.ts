@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/auth/options'
 import { normalizeCert } from '@/data/loaders'
 import { db } from '@/db'
-import { certProgressRevisions, questionProgress } from '@/db/schema'
+import { certProgressRevisions, dailyQuestionStats, questionProgress } from '@/db/schema'
 import { isReadyCertCode } from '@/lib/cert-catalog'
 
 export const runtime = 'nodejs'
@@ -75,6 +75,17 @@ export async function GET(_request: Request, context: RouteContext) {
       .where(and(eq(questionProgress.userId, userId), eq(questionProgress.cert, cert)))
       .orderBy(asc(questionProgress.qid))
 
+    const dailyRows = await tx
+      .select({
+        date: dailyQuestionStats.localDate,
+        sourceId: dailyQuestionStats.sourceId,
+        correctCount: dailyQuestionStats.correctCount,
+        wrongCount: dailyQuestionStats.wrongCount,
+        updatedAt: dailyQuestionStats.updatedAt,
+      })
+      .from(dailyQuestionStats)
+      .where(and(eq(dailyQuestionStats.userId, userId), eq(dailyQuestionStats.cert, cert)))
+
     return {
       revision: revisionRows[0]?.revision ?? 0,
       progress: rows
@@ -89,8 +100,26 @@ export async function GET(_request: Request, context: RouteContext) {
           bookmarked: row.bookmarked,
           bookmarkUpdatedAt: toIso(row.bookmarkUpdatedAt),
         })),
+      dailyStats: (Array.isArray(dailyRows) ? dailyRows : [])
+        .toSorted((left, right) =>
+          left.date === right.date
+            ? left.sourceId.localeCompare(right.sourceId)
+            : left.date.localeCompare(right.date),
+        )
+        .map((row) => ({
+          date: row.date,
+          sourceId: row.sourceId,
+          correctCount: row.correctCount,
+          wrongCount: row.wrongCount,
+          updatedAt: row.updatedAt.toISOString(),
+        })),
     }
   })
 
-  return json({ cert, revision: snapshot.revision, progress: snapshot.progress })
+  return json({
+    cert,
+    revision: snapshot.revision,
+    progress: snapshot.progress,
+    dailyStats: snapshot.dailyStats,
+  })
 }

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MockExamHistoryPage from '../src/app/(immersive)/mock-exam/[cert]/history/page'
 import MockExamIntroPage from '../src/app/(immersive)/mock-exam/[cert]/page'
@@ -108,7 +108,7 @@ afterEach(() => {
 })
 
 describe('Mock Exam intro page render layer', () => {
-  it('renders the history card from the mock exam history query cache', async () => {
+  it('does not expose the mock exam history entry from the prep screen', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const submitted = makeSubmittedAttempt('intro-history-cache')
     client.setQueryData(['mock-exam', 'anonymous', 'history', 'DVA-C02'], [submitted])
@@ -125,15 +125,91 @@ describe('Mock Exam intro page render layer', () => {
       </QueryClientProvider>,
     )
 
-    expect(await screen.findByRole('button', { name: /Exam history/i })).toBeTruthy()
-    expect(screen.getByText('1 attempts')).toBeTruthy()
-    expect(screen.getByText('850')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Begin exam' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Exam history/i })).toBeNull()
+    expect(screen.queryByText('1 attempts')).toBeNull()
     expect(screen.queryByText('Your first mock exam')).toBeNull()
     expect(repositoryMocks.getDraft).not.toHaveBeenCalled()
   })
 })
 
 describe('Mock Exam history page render layer', () => {
+  it('does not render a zero-attempt special state after empty history loads', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    let resolveHistory!: (history: SubmittedMockExamAttempt[]) => void
+    repositoryMocks.getHistory.mockImplementation(
+      () =>
+        new Promise<SubmittedMockExamAttempt[]>((resolve) => {
+          resolveHistory = resolve
+        }),
+    )
+    paramsMock.value = { cert: 'dva-c02' }
+
+    render(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamHistoryPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    await act(async () => {
+      resolveHistory([])
+    })
+    await waitFor(() =>
+      expect(client.getQueryData(['mock-exam', 'anonymous', 'history', 'DVA-C02'])).toEqual([]),
+    )
+
+    expect(screen.getByText('Exam history')).toBeTruthy()
+    expect(screen.queryByText('Your first mock exam')).toBeNull()
+    expect(screen.queryByText('Score trend')).toBeNull()
+    expect(screen.queryByText('All attempts')).toBeNull()
+  })
+
+  it('shows one submitted attempt as a single-score pass-line gauge', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    repositoryMocks.getHistory.mockResolvedValue([
+      makeSubmittedAttempt('single-history-attempt', 650, false),
+    ])
+    paramsMock.value = { cert: 'dva-c02' }
+
+    render(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamHistoryPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(
+      await screen.findByRole('img', {
+        name: 'Mock exam score gauge: 650, pass score 720, Failed',
+      }),
+    ).toBeTruthy()
+    expect(screen.queryByTestId('mock-exam-score-trend')).toBeNull()
+  })
+
+  it('shows multiple submitted attempts as a score trend line', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    repositoryMocks.getHistory.mockResolvedValue([
+      makeSubmittedAttempt('latest-history-attempt', 850, true),
+      makeSubmittedAttempt('previous-history-attempt', 810, true),
+    ])
+    paramsMock.value = { cert: 'dva-c02' }
+
+    render(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamHistoryPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByTestId('mock-exam-score-trend')).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Score trend' })).toBeTruthy()
+    expect(screen.queryByRole('img', { name: /Mock exam score gauge/ })).toBeNull()
+  })
+
   it('shows a load error instead of the first-time empty state when history fails', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     repositoryMocks.getHistory.mockRejectedValue(new Error('history failed'))
@@ -492,15 +568,15 @@ function makeAttempt(id: string, qids: number[]): MockExamAttempt {
   }
 }
 
-function makeSubmittedAttempt(id: string): SubmittedMockExamAttempt {
+function makeSubmittedAttempt(id: string, score = 850, passed = true): SubmittedMockExamAttempt {
   return {
     id,
     cert: 'DVA-C02',
     submittedAt: Date.now() - 60_000,
     questions: makeAttempt(`${id}-draft`, [901]).questions,
     summary: {
-      score: 850,
-      passed: true,
+      score,
+      passed,
       correctCount: 1,
       totalCount: 1,
       unansweredCount: 0,

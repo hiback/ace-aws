@@ -72,6 +72,7 @@ function syncResponse(cert: CertCode, revision: number, qid = 1): Response {
       cert,
       revision,
       accepted: [progressDto(qid)],
+      dailyStats: [],
       rejected: [],
       snapshotRequired: false,
     }),
@@ -85,6 +86,7 @@ function snapshotResponse(cert: CertCode, revision: number, qid = 2): Response {
       cert,
       revision,
       progress: [progressDto(qid)],
+      dailyStats: [],
     }),
   } as Response
 }
@@ -181,7 +183,7 @@ describe('AccountProgressSyncProvider', () => {
 
     await waitFor(() => expect(screen.getByText('Import Anonymous Progress')).not.toBeNull())
     expect(
-      screen.getByText('Certifications: 1; progress records: 1 on this browser.'),
+      screen.getByText('Certifications: 1; progress records: 2 on this browser.'),
     ).not.toBeNull()
     expect(screen.queryByText('Choose certification')).toBeNull()
     expect(fetch).not.toHaveBeenCalled()

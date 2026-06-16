@@ -229,22 +229,66 @@ describe('Mock Exam history page render layer', () => {
 })
 
 describe('Mock Exam attempt question render layer', () => {
-  it('renders the current question from the runtime snapshot and loads bank text separately', async () => {
+  it('renders the current question from the shared bank cache without page-level loading', async () => {
     const attempt = makeAttempt('attempt-question-render', [901, 902])
     setMockExamRuntime({ attempt })
-    vi.mocked(loadBank).mockResolvedValue([
-      makeQuestion(901, 'Development'),
-      makeQuestion(902, 'Development'),
-    ])
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    vi.mocked(loadBank).mockImplementation(() => new Promise(() => {}))
     paramsMock.value = { attemptId: attempt.id, index: '0' }
 
-    render(<MockExamAttemptQuestionPage />)
+    renderMockExamAttemptQuestionPage(client)
 
-    expect(await screen.findByText('02:10:00')).toBeTruthy()
+    expect(screen.getByText('02:10:00')).toBeTruthy()
     expect(screen.getByText(byTextContent('Question 1 of 2'))).toBeTruthy()
     expect(screen.getByText('Question 901')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
     expect(screen.getByRole('button', { name: 'Prev' }).getAttribute('disabled')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Next' }).getAttribute('disabled')).toBeNull()
+  })
+
+  it('shows a structured timed-question skeleton when primary data is unavailable', () => {
+    setMockExamRuntime({ attempt: undefined })
+    paramsMock.value = { attemptId: 'attempt-loading-ui', index: '0' }
+
+    renderMockExamAttemptQuestionPage()
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(document.querySelector('header[aria-busy="true"]')).toBeTruthy()
+    expect(document.querySelector('main')).toBeTruthy()
+    expect(document.querySelector('footer')).toBeTruthy()
+  })
+
+  it('renders the route-indexed question while runtime catches up to browser history navigation', async () => {
+    const attempt = makeAttempt('attempt-question-transition-render', [901, 902])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    vi.mocked(loadBank).mockImplementation(() => new Promise(() => {}))
+    const runtime = setMockExamRuntime({ attempt })
+    paramsMock.value = { attemptId: attempt.id, index: '0' }
+    const view = renderMockExamAttemptQuestionPage(client)
+
+    expect(screen.getByText('Question 901')).toBeTruthy()
+
+    paramsMock.value = { attemptId: attempt.id, index: '1' }
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <MockExamAttemptQuestionPage />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('02:10:00')).toBeTruthy()
+    expect(screen.getByText(byTextContent('Question 2 of 2'))).toBeTruthy()
+    expect(screen.getByText('Question 902')).toBeTruthy()
+    expect(screen.queryByText('Question 901')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+    await waitFor(() => expect(runtime.navigate).toHaveBeenCalledWith(1))
   })
 
   it('switches the visible multi-pick hint and action disabled states from fake runtime state', async () => {
@@ -261,7 +305,7 @@ describe('Mock Exam attempt question render layer', () => {
     ])
     paramsMock.value = { attemptId: attempt.id, index: '0' }
 
-    const view = render(<MockExamAttemptQuestionPage />)
+    const view = renderMockExamAttemptQuestionPage()
 
     expect(await screen.findByText('2 more needed')).toBeTruthy()
     expect(screen.getByText('Multi · 2')).toBeTruthy()
@@ -279,7 +323,11 @@ describe('Mock Exam attempt question render layer', () => {
       requiredPickCount: 2,
       multiSelectionComplete: true,
     })
-    view.rerender(<MockExamAttemptQuestionPage />)
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <MockExamAttemptQuestionPage />
+      </QueryClientProvider>,
+    )
 
     expect(await screen.findByText('Selected 2/2')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Next' }).getAttribute('disabled')).toBeNull()
@@ -302,7 +350,7 @@ describe('Mock Exam attempt question render layer', () => {
     vi.mocked(loadBank).mockResolvedValue([makeQuestion(900, 'Development', 'multi')])
     paramsMock.value = { attemptId: attempt.id, index: '0' }
 
-    render(<MockExamAttemptQuestionPage />)
+    renderMockExamAttemptQuestionPage()
 
     const selectedCount = await screen.findByText('Selected 2/2')
 
@@ -317,7 +365,7 @@ describe('Mock Exam attempt question render layer', () => {
     vi.mocked(loadBank).mockResolvedValue([makeQuestion(901, 'Development')])
     paramsMock.value = { attemptId: attempt.id, index: '0' }
 
-    render(<MockExamAttemptQuestionPage />)
+    renderMockExamAttemptQuestionPage()
 
     const flagButton = await screen.findByRole('button', { name: 'Flagged' })
     expect(flagButton.getAttribute('aria-pressed')).toBe('true')
@@ -344,7 +392,7 @@ describe('Mock Exam attempt question render layer', () => {
     ])
     paramsMock.value = { attemptId: attempt.id, index: '0' }
 
-    render(<MockExamAttemptQuestionPage />)
+    renderMockExamAttemptQuestionPage()
 
     const timer = await screen.findByText('00:09:59')
     expect(timer.closest('div')?.className).toContain('text-danger-deep')
@@ -379,7 +427,7 @@ describe('Mock Exam attempt question render layer', () => {
     ])
     paramsMock.value = { attemptId: attempt.id, index: '0' }
 
-    render(<MockExamAttemptQuestionPage />)
+    renderMockExamAttemptQuestionPage()
     await screen.findByText('Question 901')
 
     fireEvent.click(screen.getByRole('button', { name: 'Question grid' }))
@@ -397,7 +445,7 @@ describe('Mock Exam attempt question render layer', () => {
     vi.mocked(loadBank).mockRejectedValue(new Error('bank failed'))
     paramsMock.value = { attemptId: attempt.id, index: '0' }
 
-    render(<MockExamAttemptQuestionPage />)
+    renderMockExamAttemptQuestionPage()
 
     expect(
       await screen.findByText('Could not load the mock exam question. Try again.'),
@@ -479,6 +527,19 @@ function byTextContent(expected: string) {
   return (_content: string, element: Element | null) =>
     element?.textContent === expected &&
     Array.from(element.children).every((child) => child.textContent !== expected)
+}
+
+function renderMockExamAttemptQuestionPage(client = makeQueryClient()) {
+  const view = render(
+    <QueryClientProvider client={client}>
+      <MockExamAttemptQuestionPage />
+    </QueryClientProvider>,
+  )
+  return { ...view, client }
+}
+
+function makeQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
 }
 
 function setMockExamRuntime(overrides: Partial<MockExamRuntime> = {}) {

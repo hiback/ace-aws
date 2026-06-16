@@ -7,11 +7,11 @@ import { QuestionStem } from '@/components/domain/question-stem'
 import { BottomSheet } from '@/components/primitives/bottom-sheet'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { ProgressBar } from '@/components/primitives/progress-bar'
-import { Spinner } from '@/components/primitives/spinner'
-import { loadBank } from '@/data/loaders'
-import type { Letter, Question } from '@/data/types'
+import type { Letter } from '@/data/types'
 import { useMockExamRuntime } from '@/hooks/use-mock-exam-runtime'
+import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
+import type { MockExamAttempt } from '@/lib/mock-exam/start-attempt'
 import { usePrefsStore } from '@/stores/prefs-store'
 
 export default function MockExamAttemptQuestionPage() {
@@ -21,62 +21,29 @@ export default function MockExamAttemptQuestionPage() {
   const locale = usePrefsStore((s) => s.locale)
   const runtime = useMockExamRuntime(params.attemptId)
   const attempt = runtime.attempt
-  const index = Number(params.index)
-  const [question, setQuestion] = useState<Question | null | undefined>(undefined)
-  const [loadError, setLoadError] = useState(false)
+  const bank = useQuestionBank(attempt?.cert)
+  const routeIndex = getSafeRouteIndex(params.index, attempt)
   const [exitOpen, setExitOpen] = useState(false)
   const [discardOpen, setDiscardOpen] = useState(false)
   const reconciledRouteRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!attempt) return
-    const routeKey = `${attempt.id}:${index}`
+    if (!attempt || routeIndex === null) return
+    const routeKey = `${attempt.id}:${routeIndex}`
     if (reconciledRouteRef.current === routeKey) return
     reconciledRouteRef.current = routeKey
-    void runtime.navigate(index)
-  }, [attempt, index, runtime.navigate])
+    void runtime.navigate(routeIndex)
+  }, [attempt, routeIndex, runtime.navigate])
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadAttemptQuestion() {
-      if (attempt === undefined) return
-      setLoadError(false)
-      if (!attempt) {
-        setQuestion(null)
-        return
-      }
-      const snapshot = attempt.questions[attempt.currentIndex]
-      if (!snapshot) {
-        setQuestion(null)
-        return
-      }
-      let bank: Question[]
-      try {
-        bank = await loadBank(attempt.cert)
-      } catch {
-        if (cancelled) return
-        setLoadError(true)
-        setQuestion(null)
-        return
-      }
-      if (cancelled) return
-      setQuestion(bank.find((item) => item.id === snapshot.qid) ?? null)
-    }
-    loadAttemptQuestion()
-    return () => {
-      cancelled = true
-    }
-  }, [attempt])
+  const activeIndex = routeIndex ?? attempt?.currentIndex ?? 0
+  const activeSnapshot = attempt?.questions[activeIndex]
+  const question = bank.data?.find((item) => item.id === activeSnapshot?.qid)
 
-  if (attempt === undefined || question === undefined) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <Spinner size={16} />
-      </main>
-    )
+  if (attempt === undefined || (attempt && bank.data === undefined && !bank.isError)) {
+    return <MockExamQuestionSkeleton />
   }
 
-  if (loadError || runtime.lastError === 'load') {
+  if (bank.isError || runtime.lastError === 'load') {
     return <EmptyState title={t('mockExamQuestionLoadError')} />
   }
 
@@ -84,21 +51,23 @@ export default function MockExamAttemptQuestionPage() {
     return <EmptyState title={t('questionNotFound')} />
   }
 
-  const activeIndex = attempt.currentIndex
   const displayIndex = activeIndex + 1
   const options = question.en.options
   const optionLetters = Object.keys(options) as Letter[]
-  const snapshot = attempt.questions[activeIndex]
-  const requiredPickCount = runtime.requiredPickCount
-  const isMulti = snapshot?.type === 'multi'
-  const isFlagged = snapshot?.flagged ?? false
+  const requiredPickCount =
+    activeSnapshot?.type === 'multi' ? activeSnapshot.correctAnswer.length : 1
+  const isMulti = activeSnapshot?.type === 'multi'
+  const isFlagged = activeSnapshot?.flagged ?? false
   const flaggedCount = attempt.questions.filter((item) => item.flagged).length
   const answeredCount = attempt.questions.filter((item) => item.answered).length
   const remainingSeconds = runtime.remainingSeconds
   const timerWarning = runtime.timerWarning
   const isLastQuestion = activeIndex >= attempt.questions.length - 1
-  const selectedPicks = runtime.currentPicks
-  const multiSelectionComplete = runtime.multiSelectionComplete
+  const runtimeIsOnRouteIndex = attempt.currentIndex === activeIndex
+  const selectedPicks = runtimeIsOnRouteIndex
+    ? runtime.currentPicks
+    : (activeSnapshot?.userPicks ?? [])
+  const multiSelectionComplete = isMulti ? selectedPicks.length === requiredPickCount : true
   const questionNumberMarker = `__CURRENT_QUESTION_${displayIndex}__`
   const [questionLabelPrefix = '', questionLabelSuffix = ''] = t('questionXofY', {
     x: questionNumberMarker,
@@ -119,10 +88,18 @@ export default function MockExamAttemptQuestionPage() {
   ) : null
 
   const handlePick = (letter: Letter) => {
+    if (!runtimeIsOnRouteIndex) {
+      void runtime.navigate(activeIndex)
+      return
+    }
     void runtime.pick(letter)
   }
 
   const handleFlag = () => {
+    if (!runtimeIsOnRouteIndex) {
+      void runtime.navigate(activeIndex)
+      return
+    }
     void runtime.toggleFlag()
   }
 
@@ -379,6 +356,54 @@ export default function MockExamAttemptQuestionPage() {
       </BottomSheet>
     </>
   )
+}
+
+function MockExamQuestionSkeleton() {
+  return (
+    <>
+      <header className="sticky top-0 z-10 border-b border-border bg-surface" aria-busy="true">
+        <div className="flex items-center gap-2.5 px-4 py-3">
+          <div className="h-7 w-7 rounded-lg bg-bg-alt" />
+          <div className="h-8 flex-1 rounded-pill border border-border bg-bg-alt" />
+          <div className="h-8 w-16 rounded-lg border border-border bg-bg-alt" />
+        </div>
+        <div className="border-t border-border px-5 py-2.5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="h-4 w-28 rounded bg-bg-alt" />
+            <div className="h-4 w-14 rounded bg-bg-alt" />
+          </div>
+          <div className="h-1 rounded-full bg-bg-alt" />
+        </div>
+      </header>
+      <main className="flex-1 space-y-4 px-5 pt-[18px] pb-4">
+        <div className="space-y-2 rounded-card border border-border bg-surface p-4">
+          <div className="h-4 w-3/4 rounded bg-bg-alt" />
+          <div className="h-4 w-full rounded bg-bg-alt" />
+          <div className="h-4 w-2/3 rounded bg-bg-alt" />
+        </div>
+        <div className="space-y-2.5">
+          {['A', 'B', 'C', 'D'].map((letter) => (
+            <div key={letter} className="h-14 rounded-card border border-border bg-surface p-3">
+              <div className="h-full rounded bg-bg-alt" />
+            </div>
+          ))}
+        </div>
+      </main>
+      <footer className="sticky bottom-0 flex shrink-0 items-center gap-2 border-t border-border bg-surface px-4 py-3 safe-bottom">
+        <div className="h-10 w-20 rounded-button border border-border bg-bg-alt" />
+        <div className="h-10 w-20 rounded-button border border-border bg-bg-alt" />
+        <div className="flex-1" />
+        <div className="h-10 w-20 rounded-button bg-bg-alt" />
+      </footer>
+    </>
+  )
+}
+
+function getSafeRouteIndex(indexParam: string, attempt: MockExamAttempt | null | undefined) {
+  if (!attempt) return null
+  const index = Number(indexParam)
+  if (!Number.isInteger(index)) return attempt.currentIndex
+  return Math.min(Math.max(index, 0), Math.max(attempt.questions.length - 1, 0))
 }
 
 type MockExamModalStatTone = 'default' | 'accent' | 'accentDeep' | 'danger' | 'muted'

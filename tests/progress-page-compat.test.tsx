@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   bankLoading: false,
   question: undefined as unknown as { id: number },
   progress: null as QuestionProgress | null,
+  progressLoading: false,
   router: { push: vi.fn(), replace: vi.fn() },
   recordAnswer: { mutate: vi.fn(), isPending: false },
   toggleBookmark: { mutate: vi.fn() },
@@ -84,7 +85,7 @@ vi.mock('../src/hooks/use-answer', () => ({
   findNextListReviewQid: vi.fn(),
   findNextUnansweredQid: vi.fn(),
   useIsBookmarked: () => ({ data: true, isLoading: false }),
-  useQuestionProgress: () => ({ data: mocks.progress, isLoading: false }),
+  useQuestionProgress: () => ({ data: mocks.progress, isLoading: mocks.progressLoading }),
   useRecordAnswer: () => mocks.recordAnswer,
   useToggleBookmark: () => mocks.toggleBookmark,
 }))
@@ -140,6 +141,7 @@ beforeEach(() => {
   mocks.question = question
   mocks.bank = [question]
   mocks.bankLoading = false
+  mocks.progressLoading = false
   mocks.progress = {
     qid: 1,
     correctCount: 0,
@@ -175,6 +177,16 @@ describe('progress page compatibility', () => {
 
     expect(screen.getByText('Submit')).not.toBeNull()
     expect(screen.queryByText('Wrong')).toBeNull()
+  })
+
+  it('keeps the practice question visible while local question progress is pending', () => {
+    mocks.progress = null
+    mocks.progressLoading = true
+
+    render(<PracticePage />)
+
+    expect(screen.getByText('Submit')).not.toBeNull()
+    expect(screen.getByText('Which option is correct?')).not.toBeNull()
   })
 
   it('shows previous normal-practice results without a retry action', () => {

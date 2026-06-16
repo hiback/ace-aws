@@ -7,7 +7,7 @@ import {
   useProgressScope,
 } from '../src/components/providers/progress-scope-provider'
 import type { CertCode } from '../src/data/types'
-import { useQuestionProgress, useRecordAnswer } from '../src/hooks/use-answer'
+import { useIsBookmarked, useQuestionProgress, useRecordAnswer } from '../src/hooks/use-answer'
 import { useMockExamDraft } from '../src/hooks/use-mock-exam'
 import {
   useDailyQuestionStats,
@@ -127,6 +127,24 @@ describe('progress hooks scope', () => {
     const { result } = renderHook(() => useQuestionProgress(1, 'DVA-C02'), { wrapper })
 
     await waitFor(() => expect(result.current.data?.lastPicks).toEqual(['A']))
+  })
+
+  it('initializes question progress from the current local snapshot', () => {
+    new BrowserProgressModule('anonymous').recordAnswer(1, ['A'], true, 'DVA-C02')
+
+    const { result } = renderHook(() => useQuestionProgress(1, 'DVA-C02'), { wrapper })
+
+    expect(result.current.data?.lastPicks).toEqual(['A'])
+    expect(result.current.isLoading).toBe(false)
+  })
+
+  it('initializes bookmark state from the current local snapshot', () => {
+    new BrowserProgressModule('anonymous').toggleBookmark(1, 'DVA-C02')
+
+    const { result } = renderHook(() => useIsBookmarked(1, 'DVA-C02'), { wrapper })
+
+    expect(result.current.data).toBe(true)
+    expect(result.current.isLoading).toBe(false)
   })
 
   it('reads account progress when signed in', async () => {

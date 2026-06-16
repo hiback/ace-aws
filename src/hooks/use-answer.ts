@@ -16,6 +16,7 @@ export function useQuestionProgress(qid: number, cert: CertCode) {
   return useQuery({
     queryKey: ['progress', scope, 'question', cert, qid],
     queryFn: () => progress.getProgress(qid, cert),
+    initialData: () => progress.getProgress(qid, cert),
     staleTime: 0,
   })
 }
@@ -67,6 +68,7 @@ export function useIsBookmarked(qid: number, cert: CertCode) {
   return useQuery({
     queryKey: ['progress', scope, 'bookmarks', cert, qid],
     queryFn: () => progress.isBookmarked(qid, cert),
+    initialData: () => progress.isBookmarked(qid, cert),
     staleTime: 0,
   })
 }

@@ -156,7 +156,7 @@ export default function PracticePage() {
     else if (invalidSmartPracticeHref) router.push(invalidSmartPracticeHref)
   }, [router, wrongRedoRedirectHref, smartPracticeRedirectHref, invalidSmartPracticeHref])
 
-  if (question.isLoading || answer.isLoading || bank.isLoading) {
+  if (question.isLoading || bank.isLoading) {
     return (
       <main className="flex-1 px-4 py-6 space-y-3">
         {Array.from({ length: 4 }).map((_, i) => (

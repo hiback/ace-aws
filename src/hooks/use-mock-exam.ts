@@ -75,6 +75,27 @@ export function useSubmittedMockExamAttempt(attemptId: string) {
   }
 }
 
+export function useSubmittedMockExamAttemptSnapshot(attemptId: string) {
+  const { scope } = useProgressScope()
+  const qc = useQueryClient()
+  const cached = findSubmittedAttemptInHistoryCache(qc, scope, attemptId)
+  const submittedQuery = useQuery({
+    queryKey: ['mock-exam', scope, 'submitted-attempt', attemptId],
+    queryFn: () => getMockExamDraftRepository(scope).getSubmittedAttempt(attemptId),
+    initialData: cached?.attempt,
+    staleTime: 0,
+  })
+
+  return {
+    data: submittedQuery.data ?? null,
+    isPending: submittedQuery.isPending,
+    isLoading: submittedQuery.isPending,
+    isFetching: submittedQuery.isFetching,
+    isError: submittedQuery.isError,
+    error: submittedQuery.error,
+  }
+}
+
 export function useSaveMockExamDraft() {
   const qc = useQueryClient()
   const { scope } = useProgressScope()

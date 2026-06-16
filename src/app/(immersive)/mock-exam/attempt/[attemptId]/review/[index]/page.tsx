@@ -13,12 +13,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { Prose } from '@/components/primitives/prose'
-import { Spinner } from '@/components/primitives/spinner'
 import { useAccountProgressSync } from '@/components/providers/account-progress-sync-provider'
 import { useProgressScope } from '@/components/providers/progress-scope-provider'
-import { loadBank } from '@/data/loaders'
-import type { Letter, Question } from '@/data/types'
-import { useMockExamHistory, useSubmittedMockExamAttempt } from '@/hooks/use-mock-exam'
+import type { Letter } from '@/data/types'
+import { useMockExamHistory, useSubmittedMockExamAttemptSnapshot } from '@/hooks/use-mock-exam'
+import { useQuestionBank } from '@/hooks/use-question-bank'
 import { useT } from '@/hooks/use-t'
 import { MOCK_EXAM_DOMAIN_LABEL_KEYS } from '@/lib/mock-exam/domain-labels'
 import {
@@ -34,9 +33,18 @@ function normalizeReviewFilter(value: string | null): ReviewFilter {
   return value === 'wrong' || value === 'flagged' ? value : 'all'
 }
 
-function buildReviewHref(attemptId: string, index: number, filter: ReviewFilter) {
+function buildReviewHref(
+  attemptId: string,
+  index: number,
+  filter: ReviewFilter,
+  sheetOpen = false,
+) {
   const href = `/mock-exam/attempt/${attemptId}/review/${index}`
-  return filter === 'all' ? href : `${href}?filter=${filter}`
+  const params = new URLSearchParams()
+  if (filter !== 'all') params.set('filter', filter)
+  if (sheetOpen) params.set('sheet', '1')
+  const query = params.toString()
+  return query ? `${href}?${query}` : href
 }
 
 export default function MockExamReviewPage() {
@@ -44,14 +52,10 @@ export default function MockExamReviewPage() {
   const attemptId = params.attemptId
   const routeIndex = params.index
   const t = useT()
-  const submittedQuery = useSubmittedMockExamAttempt(attemptId)
+  const submittedQuery = useSubmittedMockExamAttemptSnapshot(attemptId)
 
   if (submittedQuery.isPending) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <Spinner size={16} />
-      </main>
-    )
+    return <MockExamReviewSkeleton />
   }
 
   const submitted = submittedQuery.data
@@ -59,12 +63,61 @@ export default function MockExamReviewPage() {
     return <EmptyState title={t('questionNotFound')} />
   }
 
+  return <MockExamReviewContent submitted={submitted} routeIndex={routeIndex} />
+}
+
+function MockExamReviewSkeleton() {
   return (
-    <MockExamReviewContent
-      key={`${submitted.id}:${routeIndex}`}
-      submitted={submitted}
-      routeIndex={routeIndex}
-    />
+    <>
+      <header
+        className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3"
+        aria-busy="true"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-bg-alt" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="mx-auto h-3 w-32 rounded bg-bg-alt" />
+            <div className="mx-auto h-4 w-28 rounded bg-bg-alt" />
+          </div>
+          <div className="h-8 w-8 rounded-lg bg-bg-alt" />
+        </div>
+      </header>
+      <div className="border-border border-b bg-surface px-4 py-2.5">
+        <div className="flex rounded-[10px] border border-border bg-bg-alt p-0.5">
+          <div className="h-8 flex-1 rounded-lg bg-surface" />
+          <div className="h-8 flex-1 rounded-lg" />
+          <div className="h-8 flex-1 rounded-lg" />
+        </div>
+      </div>
+      <main className="flex-1 space-y-3 px-4.5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-20 rounded-pill bg-bg-alt" />
+          <div className="h-4 flex-1 rounded bg-bg-alt" />
+          <div className="h-7 w-7 rounded-lg bg-bg-alt" />
+        </div>
+        <div className="space-y-2 rounded-card border border-border bg-surface p-4">
+          <div className="h-4 w-3/4 rounded bg-bg-alt" />
+          <div className="h-4 w-full rounded bg-bg-alt" />
+          <div className="h-4 w-2/3 rounded bg-bg-alt" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="h-12 rounded-[10px] bg-bg-alt" />
+          <div className="h-12 rounded-[10px] bg-bg-alt" />
+        </div>
+        <div className="space-y-2">
+          {['A', 'B', 'C'].map((letter) => (
+            <div key={letter} className="h-14 rounded-card border border-border bg-surface p-3">
+              <div className="h-full rounded bg-bg-alt" />
+            </div>
+          ))}
+        </div>
+      </main>
+      <footer className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-surface px-4 py-3 safe-bottom">
+        <div className="h-10 w-20 rounded-button border border-border bg-bg-alt" />
+        <div className="h-4 flex-1 rounded bg-bg-alt" />
+        <div className="h-10 w-20 rounded-button bg-bg-alt" />
+      </footer>
+    </>
   )
 }
 
@@ -81,49 +134,28 @@ function MockExamReviewContent({
   const locale = usePrefsStore((s) => s.locale)
   const historyQuery = useMockExamHistory(submitted.cert)
   const history = historyQuery.isError ? [] : historyQuery.data
-  const [questions, setQuestions] = useState<Array<Question | null> | null>(null)
-  const urlFilter = normalizeReviewFilter(searchParams.get('filter'))
-  const [filter, setFilter] = useState<ReviewFilter>(urlFilter)
-  const [overrideIndex, setOverrideIndex] = useState<number | null>(null)
-  const [showSheet, setShowSheet] = useState(false)
-
-  useEffect(() => {
-    setFilter(urlFilter)
-  }, [urlFilter])
-
-  useEffect(() => {
-    let cancelled = false
-    setQuestions(null)
-    loadBank(submitted.cert)
-      .then((bank) => {
-        if (cancelled) return
-        setQuestions(
-          submitted.questions.map(
-            (item) => bank.find((bankQuestion) => bankQuestion.id === item.qid) ?? null,
-          ),
-        )
-      })
-      .catch(() => {
-        if (!cancelled) setQuestions(submitted.questions.map(() => null))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [submitted])
-
-  if (questions === null || history === undefined) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <Spinner size={16} />
-      </main>
-    )
-  }
-
+  const bank = useQuestionBank(submitted.cert)
+  const filter = normalizeReviewFilter(searchParams.get('filter'))
+  const showSheet = searchParams.get('sheet') === '1'
   const parsedIndex = Number(routeIndex)
   const index = Number.isFinite(parsedIndex)
     ? Math.min(Math.max(Math.trunc(parsedIndex), 0), submitted.questions.length - 1)
     : 0
-  const attemptNumber = deriveReviewAttemptNumber(submitted, history)
+
+  useEffect(() => {
+    if (routeIndex === String(index)) return
+    router.replace(buildReviewHref(submitted.id, index, filter, showSheet))
+  }, [filter, index, routeIndex, router, showSheet, submitted.id])
+
+  if (bank.data === undefined && !bank.isError) {
+    return <MockExamReviewSkeleton />
+  }
+
+  const questions = submitted.questions.map(
+    (item) => bank.data?.find((bankQuestion) => bankQuestion.id === item.qid) ?? null,
+  )
+
+  const attemptNumber = deriveReviewAttemptNumber(submitted, history ?? [])
   const routeSnapshot = submitted.questions[index]
 
   if (!routeSnapshot) {
@@ -139,11 +171,18 @@ function MockExamReviewContent({
   )
   const filteredIndexes =
     filter === 'wrong' ? wrongIndexes : filter === 'flagged' ? flaggedIndexes : allIndexes
-  const displayIndex = overrideIndex ?? index
-  const activeIndex = filteredIndexes.includes(displayIndex)
-    ? displayIndex
-    : (filteredIndexes[0] ?? displayIndex)
+  const activeIndex = index
   const filteredPosition = filteredIndexes.indexOf(activeIndex)
+  const previousFilteredIndex = filteredIndexes.findLast((item) => item < activeIndex) ?? null
+  const nextFilteredIndex = filteredIndexes.find((item) => item > activeIndex) ?? null
+  const previousTargetIndex =
+    filteredPosition > 0
+      ? filteredIndexes[filteredPosition - 1]
+      : filteredPosition < 0
+        ? previousFilteredIndex
+        : null
+  const nextTargetIndex =
+    filteredPosition >= 0 ? (filteredIndexes[filteredPosition + 1] ?? null) : nextFilteredIndex
   const snapshot = submitted.questions[activeIndex]
   const question = questions[activeIndex]
   const total = submitted.questions.length
@@ -170,15 +209,7 @@ function MockExamReviewContent({
         : t('mockExamReviewAll')
 
   const chooseFilter = (nextFilter: ReviewFilter) => {
-    setFilter(nextFilter)
-    const nextIndexes =
-      nextFilter === 'wrong' ? wrongIndexes : nextFilter === 'flagged' ? flaggedIndexes : allIndexes
-    const nextIndex = nextIndexes.includes(activeIndex)
-      ? activeIndex
-      : (nextIndexes[0] ?? activeIndex)
-    setOverrideIndex(nextIndex)
-    setShowSheet(false)
-    router.push(buildReviewHref(submitted.id, nextIndex, nextFilter))
+    router.push(buildReviewHref(submitted.id, activeIndex, nextFilter))
   }
 
   if (showSheet) {
@@ -187,11 +218,10 @@ function MockExamReviewContent({
         submitted={submitted}
         currentIndex={activeIndex}
         attemptNumber={attemptNumber}
-        onBack={() => setShowSheet(false)}
+        onBack={() => {
+          router.replace(buildReviewHref(submitted.id, activeIndex, filter))
+        }}
         onJump={(index) => {
-          setFilter('all')
-          setOverrideIndex(index)
-          setShowSheet(false)
           router.push(buildReviewHref(submitted.id, index, 'all'))
         }}
       />
@@ -223,7 +253,9 @@ function MockExamReviewContent({
           </div>
           <button
             type="button"
-            onClick={() => setShowSheet(true)}
+            onClick={() => {
+              router.push(buildReviewHref(submitted.id, activeIndex, filter, true))
+            }}
             className="flex h-8 w-8 items-center justify-center rounded-lg bg-bg-alt text-ink-soft"
             aria-label={t('mockExamAnswerSheet')}
           >
@@ -255,76 +287,64 @@ function MockExamReviewContent({
           />
         </div>
       </div>
-      {filteredIndexes.length === 0 ? (
-        <main className="flex flex-1 items-center justify-center px-6 text-center">
-          <div>
-            <p className="text-card font-bold text-ink">
-              {filter === 'flagged'
-                ? t('mockExamReviewEmptyFlagged')
-                : t('mockExamReviewEmptyWrong')}
-            </p>
+      <main className="flex-1 overflow-auto px-4.5 py-4">
+        <ReviewResultRow
+          cert={submitted.cert}
+          qid={snapshot.qid}
+          flagged={snapshot.flagged}
+          isCorrect={isCorrect}
+          isUnanswered={isUnanswered}
+          resultLabel={resultLabel}
+          resultTone={resultTone}
+          domainLabel={domainLabel}
+        />
+        {localized ? (
+          <Prose source={localized.question} variant="stem" className="mb-3.5" />
+        ) : (
+          <div className="mb-3.5 rounded-card border border-border bg-bg-alt p-3 text-secondary font-semibold text-ink-soft">
+            {t('questionNotFound')}
           </div>
-        </main>
-      ) : (
-        <main className="flex-1 overflow-auto px-4.5 py-4">
-          <ReviewResultRow
-            cert={submitted.cert}
-            qid={snapshot.qid}
-            flagged={snapshot.flagged}
-            isCorrect={isCorrect}
-            isUnanswered={isUnanswered}
-            resultLabel={resultLabel}
-            resultTone={resultTone}
-            domainLabel={domainLabel}
+        )}
+
+        <div className="mb-3.5 grid grid-cols-2 gap-2">
+          <AnswerBadge
+            label={t('mockExamYourAnswer')}
+            value={isUnanswered ? t('mockExamNoAnswer') : snapshot.userPicks.join(',')}
+            tone={isCorrect ? 'good' : 'bad'}
           />
-          {localized ? (
-            <Prose source={localized.question} variant="stem" className="mb-3.5" />
-          ) : (
-            <div className="mb-3.5 rounded-card border border-border bg-bg-alt p-3 text-secondary font-semibold text-ink-soft">
-              {t('questionNotFound')}
-            </div>
-          )}
+          <AnswerBadge
+            label={t('mockExamCorrectAnswer')}
+            value={snapshot.correctAnswer.join(',')}
+            tone="good"
+          />
+        </div>
 
-          <div className="mb-3.5 grid grid-cols-2 gap-2">
-            <AnswerBadge
-              label={t('mockExamYourAnswer')}
-              value={isUnanswered ? t('mockExamNoAnswer') : snapshot.userPicks.join(',')}
-              tone={isCorrect ? 'good' : 'bad'}
-            />
-            <AnswerBadge
-              label={t('mockExamCorrectAnswer')}
-              value={snapshot.correctAnswer.join(',')}
-              tone="good"
-            />
-          </div>
+        <div className="mb-4 space-y-2">
+          {localized
+            ? Object.entries(localized.options).map(([letter, text]) => (
+                <ReviewOptionRow
+                  key={letter}
+                  letter={letter as Letter}
+                  text={text ?? ''}
+                  state={getMockExamReviewOptionState(letter as Letter, snapshot)}
+                />
+              ))
+            : null}
+        </div>
 
-          <div className="mb-4 space-y-2">
-            {localized
-              ? Object.entries(localized.options).map(([letter, text]) => (
-                  <ReviewOptionRow
-                    key={letter}
-                    letter={letter as Letter}
-                    text={text ?? ''}
-                    state={getMockExamReviewOptionState(letter as Letter, snapshot)}
-                  />
-                ))
-              : null}
-          </div>
-
-          <section className="rounded-card border border-border bg-surface p-3.5">
-            <h2 className="mb-2 text-secondary font-bold text-ink">{t('explanationTitle')}</h2>
-            {localized ? <Prose source={localized.explanation} variant="explanation" /> : null}
-          </section>
-        </main>
-      )}
+        <section className="rounded-card border border-border bg-surface p-3.5">
+          <h2 className="mb-2 text-secondary font-bold text-ink">{t('explanationTitle')}</h2>
+          {localized ? <Prose source={localized.explanation} variant="explanation" /> : null}
+        </section>
+      </main>
       <footer className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-surface px-4 py-3 safe-bottom">
         <button
           type="button"
-          disabled={filteredPosition <= 0}
+          disabled={previousTargetIndex === null}
           onClick={() =>
-            router.push(
-              buildReviewHref(submitted.id, filteredIndexes[filteredPosition - 1], filter),
-            )
+            previousTargetIndex === null
+              ? undefined
+              : router.push(buildReviewHref(submitted.id, previousTargetIndex, filter))
           }
           className="flex items-center gap-1 rounded-button border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-secondary font-semibold text-ink-soft disabled:opacity-50"
         >
@@ -337,11 +357,11 @@ function MockExamReviewContent({
         </div>
         <button
           type="button"
-          disabled={filteredPosition < 0 || filteredPosition >= filteredIndexes.length - 1}
+          disabled={nextTargetIndex === null}
           onClick={() =>
-            router.push(
-              buildReviewHref(submitted.id, filteredIndexes[filteredPosition + 1], filter),
-            )
+            nextTargetIndex === null
+              ? undefined
+              : router.push(buildReviewHref(submitted.id, nextTargetIndex, filter))
           }
           className="flex items-center gap-1 rounded-button bg-btn-bg px-3.5 py-2.5 text-secondary font-semibold text-white shadow-[0_4px_12px_rgb(99_102_241_/_0.25)] disabled:bg-bg-alt disabled:text-ink-mute disabled:shadow-none"
         >

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MockExamHistoryPage from '../src/app/(immersive)/mock-exam/[cert]/history/page'
 import MockExamIntroPage from '../src/app/(immersive)/mock-exam/[cert]/page'
 import MockExamAttemptQuestionPage from '../src/app/(immersive)/mock-exam/attempt/[attemptId]/[index]/page'
+import MockExamReviewPage from '../src/app/(immersive)/mock-exam/attempt/[attemptId]/review/[index]/page'
 import MockExamAnswerSheetPage from '../src/app/(immersive)/mock-exam/attempt/[attemptId]/sheet/page'
 import { ProgressScopeProvider } from '../src/components/providers/progress-scope-provider'
 import { loadBank } from '../src/data/loaders'
@@ -38,6 +39,7 @@ const runtimeMocks = vi.hoisted(() => ({
 
 const repositoryMocks = vi.hoisted(() => ({
   getDraft: vi.fn(),
+  getSubmittedAttempt: vi.fn(),
   getHistory: vi.fn(),
   getMockExamDraftRepository: vi.fn(),
 }))
@@ -92,11 +94,14 @@ beforeEach(() => {
   vi.mocked(loadBank).mockResolvedValue(makeBank())
   repositoryMocks.getDraft.mockReset()
   repositoryMocks.getDraft.mockResolvedValue(null)
+  repositoryMocks.getSubmittedAttempt.mockReset()
+  repositoryMocks.getSubmittedAttempt.mockResolvedValue(null)
   repositoryMocks.getHistory.mockReset()
   repositoryMocks.getHistory.mockResolvedValue([])
   repositoryMocks.getMockExamDraftRepository.mockReset()
   repositoryMocks.getMockExamDraftRepository.mockReturnValue({
     getDraft: repositoryMocks.getDraft,
+    getSubmittedAttempt: repositoryMocks.getSubmittedAttempt,
     getHistory: repositoryMocks.getHistory,
   })
   accountSyncMocks.enqueueDirtySync.mockReset()
@@ -453,6 +458,408 @@ describe('Mock Exam attempt question render layer', () => {
   })
 })
 
+describe('Mock Exam submitted review render layer', () => {
+  it('renders the reviewed question from submitted attempt and shared bank data while history metadata is pending', async () => {
+    const submitted = makeSubmittedAttempt('review-history-pending')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index === 0,
+        flagged: index === 1,
+        userPicks: index === 0 ? ['A'] : ['B'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockImplementation(
+      () => new Promise<SubmittedMockExamAttempt[]>(() => {}),
+    )
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    vi.mocked(loadBank).mockImplementation(() => new Promise(() => {}))
+    paramsMock.value = { attemptId: submitted.id, index: '1' }
+
+    renderMockExamReviewPage(client)
+
+    expect(await screen.findByText('Question 902')).toBeTruthy()
+    expect(screen.getByText(byTextContent('Review answers 2/2'))).toBeTruthy()
+    expect(screen.getByText('DVA-C02 · Attempt #1')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('keeps the selected review filter while rendering the route-indexed question', async () => {
+    const submitted = makeSubmittedAttempt('review-filter-stability')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index === 0,
+        flagged: index === 1,
+        userPicks: index === 0 ? ['A'] : ['B'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '1' }
+    const view = renderMockExamReviewPage(client)
+
+    await screen.findByText('Question 902')
+    fireEvent.click(screen.getByRole('button', { name: 'Flagged 1' }))
+
+    expect(routerMocks.push).toHaveBeenLastCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/1?filter=flagged`,
+    )
+
+    paramsMock.value = { attemptId: submitted.id, index: '0' }
+    searchParamsMock.value = new URLSearchParams('filter=flagged')
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByRole('button', { name: 'Flagged 1' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.getByText('Question 901')).toBeTruthy()
+    expect(screen.queryByText('Question 902')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(routerMocks.push).toHaveBeenLastCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/1?filter=flagged`,
+    )
+  })
+
+  it('keeps the current question when selecting a review filter before filtered next navigation', async () => {
+    const submitted = makeSubmittedAttempt('review-filter-next-stability')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902, 903]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index === 0,
+        flagged: index > 0,
+        userPicks: index === 0 ? ['A'] : ['B'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [
+        makeQuestion(901, 'Development'),
+        makeQuestion(902, 'Development'),
+        makeQuestion(903, 'Development'),
+      ],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '0' }
+    const view = renderMockExamReviewPage(client)
+
+    await screen.findByText('Question 901')
+    fireEvent.click(screen.getByRole('button', { name: 'Wrong 2' }))
+
+    expect(routerMocks.push).toHaveBeenLastCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/0?filter=wrong`,
+    )
+
+    paramsMock.value = { attemptId: submitted.id, index: '0' }
+    searchParamsMock.value = new URLSearchParams('filter=wrong')
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('Question 901')).toBeTruthy()
+    expect(screen.queryByText('Question 902')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Wrong 2' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(routerMocks.push).toHaveBeenLastCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/1?filter=wrong`,
+    )
+
+    paramsMock.value = { attemptId: submitted.id, index: '1' }
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('Question 902')).toBeTruthy()
+    expect(screen.queryByText('Question 901')).toBeNull()
+    expect(screen.getByText('Wrong 1 / 2')).toBeTruthy()
+  })
+
+  it('renders the route-indexed question when the selected review filter is empty', async () => {
+    const submitted = makeSubmittedAttempt('review-empty-filter-keeps-question')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: true,
+        flagged: false,
+        userPicks: ['A'],
+        qid: index === 0 ? 901 : 902,
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '0' }
+    searchParamsMock.value = new URLSearchParams('filter=wrong')
+
+    renderMockExamReviewPage(client)
+
+    expect(await screen.findByText('Question 901')).toBeTruthy()
+    expect(screen.queryByText('No wrong questions in this exam.')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Wrong 0' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.getByText('Wrong 0 / 0')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Prev' }).getAttribute('disabled')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Next' }).getAttribute('disabled')).not.toBeNull()
+  })
+
+  it('canonicalizes an out-of-range review index while preserving filter and sheet query', async () => {
+    const submitted = makeSubmittedAttempt('review-index-canonical')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902, 903]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index === 0,
+        flagged: index === 2,
+        userPicks: index === 0 ? ['A'] : ['B'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [
+        makeQuestion(901, 'Development'),
+        makeQuestion(902, 'Development'),
+        makeQuestion(903, 'Development'),
+      ],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '999' }
+    searchParamsMock.value = new URLSearchParams('filter=wrong&sheet=1')
+
+    renderMockExamReviewPage(client)
+
+    expect(await screen.findByText(byTextContent('Answer sheet'))).toBeTruthy()
+    expect(routerMocks.replace).toHaveBeenCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/2?filter=wrong&sheet=1`,
+    )
+  })
+
+  it('closes the review answer sheet with replace so browser back does not reopen it', async () => {
+    const submitted = makeSubmittedAttempt('review-sheet-close-replace')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index === 0,
+        userPicks: index === 0 ? ['A'] : ['B'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '1' }
+    searchParamsMock.value = new URLSearchParams('filter=wrong&sheet=1')
+
+    renderMockExamReviewPage(client)
+
+    expect(await screen.findByText(byTextContent('Answer sheet'))).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to question' }))
+
+    expect(routerMocks.replace).toHaveBeenCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/1?filter=wrong`,
+    )
+    expect(routerMocks.push).not.toHaveBeenCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/1?filter=wrong`,
+    )
+  })
+
+  it('keeps the review answer sheet open across route index remounts and preserves jump navigation', async () => {
+    const submitted = makeSubmittedAttempt('review-sheet-stability')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index === 0,
+        flagged: index === 1,
+        userPicks: index === 0 ? ['A'] : ['B'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '1' }
+    const view = renderMockExamReviewPage(client)
+
+    await screen.findByText('Question 902')
+    fireEvent.click(screen.getByLabelText('Answer sheet'))
+    expect(routerMocks.push).toHaveBeenLastCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/1?sheet=1`,
+    )
+    expect(screen.queryByText(byTextContent('Answer sheet'))).toBeNull()
+
+    searchParamsMock.value = new URLSearchParams('sheet=1')
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText(byTextContent('Answer sheet'))).toBeTruthy()
+
+    searchParamsMock.value = new URLSearchParams()
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.queryByText(byTextContent('Answer sheet'))).toBeNull()
+    expect(screen.getByText('Question 902')).toBeTruthy()
+
+    view.unmount()
+    paramsMock.value = { attemptId: submitted.id, index: '0' }
+    searchParamsMock.value = new URLSearchParams('sheet=1')
+    render(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText(byTextContent('Answer sheet'))).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '1 Correct' }))
+
+    expect(routerMocks.push).toHaveBeenLastCalledWith(`/mock-exam/attempt/${submitted.id}/review/0`)
+  })
+
+  it('renders the route-indexed question after an answer-sheet jump and later route change', async () => {
+    const submitted = makeSubmittedAttempt('review-sheet-jump-route-stability')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902, 903]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index !== 1,
+        flagged: false,
+        userPicks: index === 1 ? ['B'] : ['A'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [
+        makeQuestion(901, 'Development'),
+        makeQuestion(902, 'Development'),
+        makeQuestion(903, 'Development'),
+      ],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '0' }
+    const view = renderMockExamReviewPage(client)
+
+    await screen.findByText('Question 901')
+    fireEvent.click(screen.getByLabelText('Answer sheet'))
+    expect(routerMocks.push).toHaveBeenLastCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/0?sheet=1`,
+    )
+
+    searchParamsMock.value = new URLSearchParams('sheet=1')
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '2 Wrong' }))
+    expect(routerMocks.push).toHaveBeenLastCalledWith(`/mock-exam/attempt/${submitted.id}/review/1`)
+
+    paramsMock.value = { attemptId: submitted.id, index: '1' }
+    searchParamsMock.value = new URLSearchParams()
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText('Question 902')).toBeTruthy()
+
+    paramsMock.value = { attemptId: submitted.id, index: '2' }
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('Question 903')).toBeTruthy()
+    expect(screen.queryByText('Question 902')).toBeNull()
+  })
+
+  it('shows a structured review skeleton while submitted attempt data is unavailable', () => {
+    repositoryMocks.getSubmittedAttempt.mockImplementation(() => new Promise(() => {}))
+    paramsMock.value = { attemptId: 'review-primary-loading', index: '0' }
+
+    renderMockExamReviewPage()
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(document.querySelector('header[aria-busy="true"]')).toBeTruthy()
+    expect(document.querySelector('main')).toBeTruthy()
+    expect(document.querySelector('footer')).toBeTruthy()
+  })
+})
+
 describe('Mock Exam answer sheet render layer', () => {
   it('renders answered, flagged, and current tile states from fake runtime state', async () => {
     const attempt = makeAttempt('attempt-sheet-grid-render', [910, 911, 912])
@@ -533,6 +940,17 @@ function renderMockExamAttemptQuestionPage(client = makeQueryClient()) {
   const view = render(
     <QueryClientProvider client={client}>
       <MockExamAttemptQuestionPage />
+    </QueryClientProvider>,
+  )
+  return { ...view, client }
+}
+
+function renderMockExamReviewPage(client = makeQueryClient()) {
+  const view = render(
+    <QueryClientProvider client={client}>
+      <ProgressScopeProvider>
+        <MockExamReviewPage />
+      </ProgressScopeProvider>
     </QueryClientProvider>,
   )
   return { ...view, client }

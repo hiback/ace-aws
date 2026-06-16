@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MockExamHistoryPage from '../src/app/(immersive)/mock-exam/[cert]/history/page'
 import MockExamIntroPage from '../src/app/(immersive)/mock-exam/[cert]/page'
 import MockExamAttemptQuestionPage from '../src/app/(immersive)/mock-exam/attempt/[attemptId]/[index]/page'
+import MockExamResultPage from '../src/app/(immersive)/mock-exam/attempt/[attemptId]/result/page'
 import MockExamReviewPage from '../src/app/(immersive)/mock-exam/attempt/[attemptId]/review/[index]/page'
 import MockExamAnswerSheetPage from '../src/app/(immersive)/mock-exam/attempt/[attemptId]/sheet/page'
 import { ProgressScopeProvider } from '../src/components/providers/progress-scope-provider'
@@ -861,6 +862,18 @@ describe('Mock Exam submitted review render layer', () => {
 })
 
 describe('Mock Exam answer sheet render layer', () => {
+  it('shows a structured answer-sheet skeleton while runtime data is unavailable', () => {
+    setMockExamRuntime({ attempt: undefined })
+    paramsMock.value = { attemptId: 'attempt-sheet-loading' }
+
+    render(<MockExamAnswerSheetPage />)
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(document.querySelector('header[aria-busy="true"]')).toBeTruthy()
+    expect(document.querySelector('main')).toBeTruthy()
+    expect(document.querySelector('footer')).toBeTruthy()
+  })
+
   it('renders answered, flagged, and current tile states from fake runtime state', async () => {
     const attempt = makeAttempt('attempt-sheet-grid-render', [910, 911, 912])
     attempt.currentIndex = 0
@@ -927,6 +940,26 @@ describe('Mock Exam answer sheet render layer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     const confirmStat = screen.getByLabelText('00:09:59 Time left')
     expect(confirmStat.querySelector('div')?.className).toContain('text-danger-deep')
+  })
+})
+
+describe('Mock Exam result render layer', () => {
+  it('shows a structured result skeleton while submitted attempt data is unavailable', () => {
+    repositoryMocks.getSubmittedAttempt.mockImplementation(() => new Promise(() => {}))
+    paramsMock.value = { attemptId: 'result-loading' }
+
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <ProgressScopeProvider>
+          <MockExamResultPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(document.querySelector('main[aria-busy="true"]')).toBeTruthy()
+    expect(document.querySelector('section')).toBeTruthy()
+    expect(screen.getByTestId('mock-exam-result-skeleton-actions')).toBeTruthy()
   })
 })
 

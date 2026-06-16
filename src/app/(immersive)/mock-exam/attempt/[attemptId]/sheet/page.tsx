@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { BottomSheet } from '@/components/primitives/bottom-sheet'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { ProgressBar } from '@/components/primitives/progress-bar'
-import { Spinner } from '@/components/primitives/spinner'
 import { useMockExamRuntime } from '@/hooks/use-mock-exam-runtime'
 import { useT } from '@/hooks/use-t'
 
@@ -19,11 +18,7 @@ export default function MockExamAnswerSheetPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   if (attempt === undefined) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <Spinner size={16} />
-      </main>
-    )
+    return <AnswerSheetSkeleton />
   }
 
   if (!attempt) {
@@ -220,6 +215,49 @@ export default function MockExamAnswerSheetPage() {
     </>
   )
 }
+
+function AnswerSheetSkeleton() {
+  return (
+    <>
+      <header
+        aria-busy="true"
+        className="sticky top-0 z-10 border-b border-border bg-surface px-5 py-3"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-bg-alt" />
+          <div className="mx-auto h-4 w-28 rounded-full bg-bg-alt" />
+          <div className="h-6 w-16 rounded-pill bg-accent-softer" />
+        </div>
+      </header>
+      <main className="flex-1 space-y-4 overflow-auto px-5 py-4">
+        <div className="flex flex-wrap gap-2.5">
+          <div className="h-4 w-20 rounded-full bg-bg-alt" />
+          <div className="h-4 w-24 rounded-full bg-bg-alt" />
+          <div className="h-4 w-20 rounded-full bg-bg-alt" />
+        </div>
+        <div className="grid grid-cols-5 gap-2">
+          {SKELETON_TILE_KEYS.map((key) => (
+            <div key={key} className="aspect-square rounded-lg border border-border bg-surface" />
+          ))}
+        </div>
+        <section className="rounded-[12px] bg-bg-alt p-3.5">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="h-3.5 w-20 rounded-full bg-surface" />
+            <div className="h-3.5 w-12 rounded-full bg-surface" />
+          </div>
+          <div className="h-1.5 rounded-full bg-surface" />
+          <div className="mt-3 h-3 w-48 rounded-full bg-surface" />
+        </section>
+      </main>
+      <footer className="sticky bottom-0 flex shrink-0 gap-2.5 border-t border-border bg-surface px-4 py-3 safe-bottom">
+        <div className="h-11 flex-1 rounded-button border-[1.5px] border-border bg-surface" />
+        <div className="h-11 flex-1 rounded-button bg-bg-alt" />
+      </footer>
+    </>
+  )
+}
+
+const SKELETON_TILE_KEYS = Array.from({ length: 20 }, (_, index) => `tile-${index + 1}`)
 
 function Legend({ label, className }: { label: string; className: string }) {
   return (

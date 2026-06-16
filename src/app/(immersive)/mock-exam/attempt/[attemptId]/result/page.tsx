@@ -3,7 +3,6 @@ import { AlertTriangle, BookOpen, Trophy } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { ProgressBar } from '@/components/primitives/progress-bar'
-import { Spinner } from '@/components/primitives/spinner'
 import { useSubmittedMockExamAttempt } from '@/hooks/use-mock-exam'
 import { useT } from '@/hooks/use-t'
 import { MOCK_EXAM_DOMAIN_LABEL_KEYS } from '@/lib/mock-exam/domain-labels'
@@ -16,11 +15,7 @@ export default function MockExamResultPage() {
   const submittedQuery = useSubmittedMockExamAttempt(params.attemptId)
 
   if (submittedQuery.isPending) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <Spinner size={16} />
-      </main>
-    )
+    return <ResultSkeleton />
   }
 
   const submitted = submittedQuery.data
@@ -137,6 +132,65 @@ export default function MockExamResultPage() {
     </main>
   )
 }
+
+function ResultSkeleton() {
+  return (
+    <main aria-busy="true" className="flex-1 overflow-auto">
+      <section
+        className="relative overflow-hidden px-5 py-7 text-center text-white"
+        style={{
+          backgroundImage: 'linear-gradient(160deg, var(--color-hero-from), var(--color-hero-to))',
+        }}
+      >
+        <div className="absolute -top-12 -right-12 h-44 w-44 rounded-full bg-white/10" />
+        <div className="absolute -bottom-8 -left-8 h-28 w-28 rounded-full bg-white/10" />
+        <div className="relative mx-auto mb-3 h-14 w-14 rounded-full border-2 border-white/30 bg-white/20" />
+        <div className="relative mx-auto h-3 w-20 rounded-full bg-white/25" />
+        <div className="relative mx-auto mt-3 h-14 w-28 rounded-[14px] bg-white/25" />
+        <div className="relative mx-auto mt-3 h-3.5 w-44 rounded-full bg-white/20" />
+      </section>
+
+      <section className="space-y-4 px-5 pt-[18px] pb-5">
+        <div className="grid grid-cols-3 gap-2">
+          <SkeletonStat />
+          <SkeletonStat />
+          <SkeletonStat />
+        </div>
+        <section>
+          <div className="mb-2.5 h-3 w-24 rounded-full bg-bg-alt" />
+          <div className="space-y-3 rounded-[14px] border border-border bg-surface p-3.5">
+            {RESULT_SKELETON_DOMAIN_KEYS.map((key) => (
+              <div key={key}>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <div className="h-3.5 flex-1 rounded-full bg-bg-alt" />
+                  <div className="h-3 w-7 rounded-full bg-bg-alt" />
+                  <div className="h-3.5 w-9 rounded-full bg-bg-alt" />
+                </div>
+                <div className="h-1.5 rounded-full bg-bg-alt" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div data-testid="mock-exam-result-skeleton-actions" className="space-y-2">
+          <div className="h-11 rounded-button bg-bg-alt" />
+          <div className="mx-auto h-9 w-28 rounded-button bg-bg-alt" />
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function SkeletonStat() {
+  return (
+    <div className="rounded-[12px] border border-border bg-surface px-2 py-2.5 text-center">
+      <div className="mx-auto h-5 w-10 rounded-full bg-bg-alt" />
+      <div className="mx-auto mt-1 h-2.5 w-14 rounded-full bg-bg-alt" />
+    </div>
+  )
+}
+
+const RESULT_SKELETON_DOMAIN_KEYS = ['domain-1', 'domain-2', 'domain-3', 'domain-4']
 
 function SmallStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (

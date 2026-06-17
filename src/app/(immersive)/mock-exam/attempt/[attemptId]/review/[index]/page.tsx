@@ -173,8 +173,9 @@ function MockExamReviewContent({
   const flaggedIndexes = submitted.questions.flatMap((question, index) =>
     question.flagged ? [index] : [],
   )
-  const filteredIndexes =
+  const indexesForFilter = (filter: ReviewFilter) =>
     filter === 'wrong' ? wrongIndexes : filter === 'flagged' ? flaggedIndexes : allIndexes
+  const filteredIndexes = indexesForFilter(filter)
   const activeIndex = index
   const filteredPosition = filteredIndexes.indexOf(activeIndex)
   const previousFilteredIndex = filteredIndexes.findLast((item) => item < activeIndex) ?? null
@@ -213,7 +214,13 @@ function MockExamReviewContent({
         : t('mockExamReviewAll')
 
   const chooseFilter = (nextFilter: ReviewFilter) => {
-    router.push(buildReviewHref(submitted.id, activeIndex, nextFilter))
+    const nextIndexes = indexesForFilter(nextFilter)
+    const targetIndex = nextIndexes.includes(activeIndex)
+      ? activeIndex
+      : (nextIndexes[0] ?? activeIndex)
+    if (nextFilter === filter && targetIndex === activeIndex) return
+
+    router.push(buildReviewHref(submitted.id, targetIndex, nextFilter))
   }
 
   if (showSheet) {

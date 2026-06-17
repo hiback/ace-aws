@@ -555,7 +555,7 @@ describe('Mock Exam submitted review render layer', () => {
     )
   })
 
-  it('keeps the current question when selecting a review filter before filtered next navigation', async () => {
+  it('selects the first matching review question when choosing a filter', async () => {
     const submitted = makeSubmittedAttempt('review-filter-next-stability')
     submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902, 903]).questions.map(
       (question, index) => ({
@@ -584,32 +584,11 @@ describe('Mock Exam submitted review render layer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Wrong 2' }))
 
     expect(routerMocks.push).toHaveBeenLastCalledWith(
-      `/mock-exam/attempt/${submitted.id}/review/0?filter=wrong`,
-    )
-
-    paramsMock.value = { attemptId: submitted.id, index: '0' }
-    searchParamsMock.value = new URLSearchParams('filter=wrong')
-    view.rerender(
-      <QueryClientProvider client={client}>
-        <ProgressScopeProvider>
-          <MockExamReviewPage />
-        </ProgressScopeProvider>
-      </QueryClientProvider>,
-    )
-
-    expect(screen.getByText('Question 901')).toBeTruthy()
-    expect(screen.queryByText('Question 902')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Wrong 2' }).getAttribute('aria-pressed')).toBe(
-      'true',
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-
-    expect(routerMocks.push).toHaveBeenLastCalledWith(
       `/mock-exam/attempt/${submitted.id}/review/1?filter=wrong`,
     )
 
     paramsMock.value = { attemptId: submitted.id, index: '1' }
+    searchParamsMock.value = new URLSearchParams('filter=wrong')
     view.rerender(
       <QueryClientProvider client={client}>
         <ProgressScopeProvider>
@@ -620,7 +599,59 @@ describe('Mock Exam submitted review render layer', () => {
 
     expect(screen.getByText('Question 902')).toBeTruthy()
     expect(screen.queryByText('Question 901')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Wrong 2' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
     expect(screen.getByText('Wrong 1 / 2')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(routerMocks.push).toHaveBeenLastCalledWith(
+      `/mock-exam/attempt/${submitted.id}/review/2?filter=wrong`,
+    )
+
+    paramsMock.value = { attemptId: submitted.id, index: '2' }
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamReviewPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('Question 903')).toBeTruthy()
+    expect(screen.queryByText('Question 902')).toBeNull()
+    expect(screen.getByText('Wrong 2 / 2')).toBeTruthy()
+  })
+
+  it('does not push history when reselecting the active review filter on a matching question', async () => {
+    const submitted = makeSubmittedAttempt('review-filter-repeat-active')
+    submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902]).questions.map(
+      (question, index) => ({
+        ...question,
+        answered: true,
+        correct: index === 0,
+        userPicks: index === 0 ? ['A'] : ['B'],
+      }),
+    )
+    repositoryMocks.getSubmittedAttempt.mockResolvedValue(submitted)
+    repositoryMocks.getHistory.mockResolvedValue([submitted])
+    const client = makeQueryClient()
+    client.setQueryData(
+      ['question-bank', 'DVA-C02'],
+      [makeQuestion(901, 'Development'), makeQuestion(902, 'Development')],
+    )
+    paramsMock.value = { attemptId: submitted.id, index: '1' }
+    searchParamsMock.value = new URLSearchParams('filter=wrong')
+
+    renderMockExamReviewPage(client)
+
+    await screen.findByText('Question 902')
+    routerMocks.push.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wrong 1' }))
+
+    expect(routerMocks.push).not.toHaveBeenCalled()
   })
 
   it('renders the route-indexed question when the selected review filter is empty', async () => {

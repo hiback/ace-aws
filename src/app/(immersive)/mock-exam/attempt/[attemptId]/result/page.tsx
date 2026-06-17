@@ -3,7 +3,7 @@ import { AlertTriangle, BookOpen, Trophy } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/primitives/empty-state'
 import { ProgressBar } from '@/components/primitives/progress-bar'
-import { useSubmittedMockExamAttempt } from '@/hooks/use-mock-exam'
+import { useSubmittedMockExamAttemptSnapshot } from '@/hooks/use-mock-exam'
 import { useT } from '@/hooks/use-t'
 import { MOCK_EXAM_DOMAIN_LABEL_KEYS } from '@/lib/mock-exam/domain-labels'
 import { getMockExamProfile } from '@/lib/mock-exam/profile'
@@ -12,13 +12,17 @@ export default function MockExamResultPage() {
   const params = useParams<{ attemptId: string }>()
   const router = useRouter()
   const t = useT()
-  const submittedQuery = useSubmittedMockExamAttempt(params.attemptId)
+  const submittedQuery = useSubmittedMockExamAttemptSnapshot(params.attemptId)
 
   if (submittedQuery.isPending) {
     return <ResultSkeleton />
   }
 
   const submitted = submittedQuery.data
+  if (submittedQuery.isError && !submitted) {
+    return <EmptyState title={t('mockExamQuestionLoadError')} />
+  }
+
   if (!submitted) {
     return <EmptyState title={t('questionNotFound')} />
   }

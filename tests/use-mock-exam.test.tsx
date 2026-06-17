@@ -3,14 +3,14 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProgressScopeProvider } from '../src/components/providers/progress-scope-provider'
-import type { CertCode, ProgressScope } from '../src/data/types'
+import type { ProgressScope } from '../src/data/types'
 import {
   useDeleteMockExamDraft,
   useMockExamDraft,
   useMockExamHistory,
   useSaveMockExamDraft,
   useSubmitMockExamAttempt,
-  useSubmittedMockExamAttempt,
+  useSubmittedMockExamAttemptSnapshot,
 } from '../src/hooks/use-mock-exam'
 import type { MockExamAttempt } from '../src/lib/mock-exam/start-attempt'
 import type { SubmittedMockExamAttempt } from '../src/lib/mock-exam/submission'
@@ -278,166 +278,107 @@ describe('useMockExamHistory', () => {
   })
 })
 
-describe('useSubmittedMockExamAttempt', () => {
-  it('derives a submitted attempt from an existing history cache', async () => {
+describe('useSubmittedMockExamAttemptSnapshot', () => {
+  it('hydrates a submitted attempt snapshot from an existing history cache', async () => {
     const client = createQueryClient()
-    const submitted = makeSubmitted('cached-submitted')
+    const submitted = makeSubmitted('snapshot-cached')
     client.setQueryData(['mock-exam', 'anonymous', 'history', 'DVA-C02'], [submitted])
     const anonymousRepository = {
       getDraft: vi.fn(async () => null),
+      getSubmittedAttempt: vi.fn(async () => submitted),
       getHistory: vi.fn(async () => []),
     }
     const accountRepository = {
       getDraft: vi.fn(async () => null),
+      getSubmittedAttempt: vi.fn(async () => null),
       getHistory: vi.fn(async () => []),
     }
     useRepositories({ anonymous: anonymousRepository, account: accountRepository })
 
-    const { result } = renderHook(() => useSubmittedMockExamAttempt('cached-submitted'), {
+    const { result } = renderHook(() => useSubmittedMockExamAttemptSnapshot('snapshot-cached'), {
       wrapper: createWrapper(client),
     })
 
-    await waitFor(() => expect(result.current.data?.id).toBe('cached-submitted'))
+    expect(result.current.data?.id).toBe('snapshot-cached')
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.isLoading).toBe(false)
 
-    expect(anonymousRepository.getHistory).not.toHaveBeenCalled()
-    expect(accountRepository.getHistory).not.toHaveBeenCalled()
-  })
-
-  it('updates when the matching history cache changes', async () => {
-    const client = createQueryClient()
-    const submitted = makeSubmitted('live-submitted')
-    client.setQueryData(['mock-exam', 'anonymous', 'history', 'DVA-C02'], [submitted])
-    const anonymousRepository = {
-      getDraft: vi.fn(async () => null),
-      getHistory: vi.fn(async () => []),
-    }
-    const accountRepository = {
-      getDraft: vi.fn(async () => null),
-      getHistory: vi.fn(async () => []),
-    }
-    useRepositories({ anonymous: anonymousRepository, account: accountRepository })
-
-    const { result } = renderHook(() => useSubmittedMockExamAttempt('live-submitted'), {
-      wrapper: createWrapper(client),
-    })
-
-    await waitFor(() => expect(result.current.data?.summary.score).toBe(850))
-
-    act(() => {
-      client.setQueryData(
-        ['mock-exam', 'anonymous', 'history', 'DVA-C02'],
-        [{ ...submitted, summary: { ...submitted.summary, score: 910 } }],
-      )
-    })
-
-    await waitFor(() => expect(result.current.data?.summary.score).toBe(910))
-    expect(anonymousRepository.getHistory).not.toHaveBeenCalled()
-  })
-
-  it('confirms a cached history miss before returning a submitted attempt as missing', async () => {
-    const client = createQueryClient()
-    const submitted = makeSubmitted('fresh-submitted', 'DVA-C02')
-    client.setQueryData(
-      ['mock-exam', 'anonymous', 'history', 'DVA-C02'],
-      [makeSubmitted('stale-submitted', 'DVA-C02')],
+    await waitFor(() =>
+      expect(anonymousRepository.getSubmittedAttempt).toHaveBeenCalledWith('snapshot-cached'),
     )
-    let resolveHistory: (history: SubmittedMockExamAttempt[]) => void = () => {}
+    expect(result.current.data?.id).toBe('snapshot-cached')
+  })
+
+  it('loads a submitted attempt snapshot from the repository when history cache misses', async () => {
+    const submitted = makeSubmitted('snapshot-repository')
+    let resolveSubmitted: (attempt: SubmittedMockExamAttempt | null) => void = () => {}
     const anonymousRepository = {
       getDraft: vi.fn(async () => null),
-      getHistory: vi.fn(
+      getSubmittedAttempt: vi.fn(
         () =>
-          new Promise<SubmittedMockExamAttempt[]>((resolve) => {
-            resolveHistory = resolve
+          new Promise<SubmittedMockExamAttempt | null>((resolve) => {
+            resolveSubmitted = resolve
           }),
       ),
+      getHistory: vi.fn(async () => []),
     }
     const accountRepository = {
       getDraft: vi.fn(async () => null),
+      getSubmittedAttempt: vi.fn(async () => null),
       getHistory: vi.fn(async () => []),
     }
     useRepositories({ anonymous: anonymousRepository, account: accountRepository })
 
-    const { result } = renderHook(() => useSubmittedMockExamAttempt('fresh-submitted'), {
-      wrapper: createWrapper(client),
-    })
+    const { result } = renderHook(
+      () => useSubmittedMockExamAttemptSnapshot('snapshot-repository'),
+      {
+        wrapper: createWrapper(),
+      },
+    )
 
     expect(result.current.data).toBeNull()
     expect(result.current.isPending).toBe(true)
-    await waitFor(() => expect(anonymousRepository.getHistory).toHaveBeenCalledWith('DVA-C02'))
+    expect(result.current.isLoading).toBe(true)
+    await waitFor(() =>
+      expect(anonymousRepository.getSubmittedAttempt).toHaveBeenCalledWith('snapshot-repository'),
+    )
 
     act(() => {
-      resolveHistory([submitted])
+      resolveSubmitted(submitted)
     })
 
-    await waitFor(() => expect(result.current.data?.id).toBe('fresh-submitted'))
+    await waitFor(() => expect(result.current.data?.id).toBe('snapshot-repository'))
     expect(result.current.isPending).toBe(false)
+    expect(result.current.isLoading).toBe(false)
+    expect(anonymousRepository.getHistory).not.toHaveBeenCalled()
+    expect(accountRepository.getSubmittedAttempt).not.toHaveBeenCalled()
   })
 
-  it('walks ready certification histories and refetches cached histories that miss the attempt', async () => {
-    const client = createQueryClient()
-    const submitted = makeSubmitted('found-by-walk', 'DVA-C02')
-    client.setQueryData(['mock-exam', 'anonymous', 'history', 'CLF-C02'], [])
+  it('returns null after a submitted attempt snapshot repository miss', async () => {
     const anonymousRepository = {
       getDraft: vi.fn(async () => null),
-      getHistory: vi.fn(async (cert: CertCode) => (cert === 'DVA-C02' ? [submitted] : [])),
+      getSubmittedAttempt: vi.fn(async () => null),
+      getHistory: vi.fn(async () => []),
     }
     const accountRepository = {
       getDraft: vi.fn(async () => null),
+      getSubmittedAttempt: vi.fn(async () => null),
       getHistory: vi.fn(async () => []),
     }
     useRepositories({ anonymous: anonymousRepository, account: accountRepository })
 
-    const { result } = renderHook(() => useSubmittedMockExamAttempt('found-by-walk'), {
-      wrapper: createWrapper(client),
-    })
-
-    expect(result.current.data).toBeNull()
-    await waitFor(() => expect(result.current.data?.id).toBe('found-by-walk'))
-
-    expect(anonymousRepository.getHistory).toHaveBeenCalledTimes(4)
-    expect(anonymousRepository.getHistory).toHaveBeenCalledWith('CLF-C02')
-    expect(anonymousRepository.getHistory).toHaveBeenCalledWith('SAA-C03')
-    expect(anonymousRepository.getHistory).toHaveBeenCalledWith('SAP-C02')
-    expect(anonymousRepository.getHistory).toHaveBeenCalledWith('DVA-C02')
-    expect(accountRepository.getHistory).not.toHaveBeenCalled()
-  })
-
-  it('returns null until the matching history resolves', async () => {
-    const submitted = makeSubmitted('eventual-submitted', 'DVA-C02')
-    const historyResolvers: Partial<
-      Record<CertCode, (history: SubmittedMockExamAttempt[]) => void>
-    > = {}
-    const anonymousRepository = {
-      getDraft: vi.fn(async () => null),
-      getHistory: vi.fn(
-        (cert: CertCode) =>
-          new Promise<SubmittedMockExamAttempt[]>((resolve) => {
-            historyResolvers[cert] = resolve
-          }),
-      ),
-    }
-    const accountRepository = {
-      getDraft: vi.fn(async () => null),
-      getHistory: vi.fn(async () => []),
-    }
-    useRepositories({ anonymous: anonymousRepository, account: accountRepository })
-
-    const { result } = renderHook(() => useSubmittedMockExamAttempt('eventual-submitted'), {
+    const { result } = renderHook(() => useSubmittedMockExamAttemptSnapshot('snapshot-missing'), {
       wrapper: createWrapper(),
     })
 
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
     expect(result.current.data).toBeNull()
-    expect(result.current.isPending).toBe(true)
-
-    act(() => {
-      historyResolvers['CLF-C02']?.([])
-      historyResolvers['SAA-C03']?.([])
-      historyResolvers['SAP-C02']?.([])
-      historyResolvers['DVA-C02']?.([submitted])
-    })
-
-    await waitFor(() => expect(result.current.data?.id).toBe('eventual-submitted'))
-    expect(result.current.isPending).toBe(false)
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
+    expect(anonymousRepository.getSubmittedAttempt).toHaveBeenCalledWith('snapshot-missing')
+    expect(anonymousRepository.getHistory).not.toHaveBeenCalled()
   })
 })
 

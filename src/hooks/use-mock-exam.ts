@@ -1,11 +1,5 @@
 'use client'
-import {
-  type QueryClient,
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query'
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccountProgressSync } from '@/components/providers/account-progress-sync-provider'
 import { useProgressScope } from '@/components/providers/progress-scope-provider'
 import type { CertCode, ProgressScope } from '@/data/types'
@@ -38,43 +32,6 @@ export function useMockExamHistory(cert: CertCode) {
   })
 }
 
-export function useSubmittedMockExamAttempt(attemptId: string) {
-  const { scope } = useProgressScope()
-  const qc = useQueryClient()
-  const cached = findSubmittedAttemptInHistoryCache(qc, scope, attemptId)
-  const certs = cached ? [cached.cert] : READY_CERTS
-  const historyQueries = useQueries({
-    queries: certs.map((cert) => {
-      const queryKey = mockExamHistoryQueryKey(scope, cert)
-      const cachedHistory = qc.getQueryData<SubmittedMockExamAttempt[]>(queryKey)
-      const cacheContainsAttempt =
-        cachedHistory?.some((attempt) => attempt.id === attemptId) ?? false
-      return {
-        queryKey,
-        queryFn: () => getMockExamDraftRepository(scope).getHistory(cert),
-        select: (history: SubmittedMockExamAttempt[]) =>
-          history.find((attempt) => attempt.id === attemptId) ?? null,
-        enabled: !cacheContainsAttempt,
-        staleTime: 0,
-      }
-    }),
-  })
-  const selected = historyQueries.find((query) => query.data)?.data ?? cached?.attempt ?? null
-  const isPending = selected
-    ? false
-    : historyQueries.some((query) => query.isPending || query.isFetching)
-  const errorQuery = historyQueries.find((query) => query.isError)
-
-  return {
-    data: selected,
-    isPending,
-    isLoading: isPending,
-    isFetching: historyQueries.some((query) => query.isFetching),
-    isError: !selected && errorQuery !== undefined,
-    error: errorQuery?.error ?? null,
-  }
-}
-
 export function useSubmittedMockExamAttemptSnapshot(attemptId: string) {
   const { scope } = useProgressScope()
   const qc = useQueryClient()
@@ -82,7 +39,7 @@ export function useSubmittedMockExamAttemptSnapshot(attemptId: string) {
   const submittedQuery = useQuery({
     queryKey: ['mock-exam', scope, 'submitted-attempt', attemptId],
     queryFn: () => getMockExamDraftRepository(scope).getSubmittedAttempt(attemptId),
-    initialData: cached?.attempt,
+    initialData: cached ?? undefined,
     staleTime: 0,
   })
 
@@ -167,7 +124,7 @@ function findSubmittedAttemptInHistoryCache(
   qc: QueryClient,
   scope: ProgressScope,
   attemptId: string,
-): { cert: CertCode; attempt: SubmittedMockExamAttempt } | null {
+): SubmittedMockExamAttempt | null {
   for (const query of qc.getQueryCache().getAll()) {
     const key = query.queryKey
     if (!isMockExamHistoryQueryKey(key, scope)) continue
@@ -177,7 +134,7 @@ function findSubmittedAttemptInHistoryCache(
       (item): item is SubmittedMockExamAttempt =>
         isSubmittedMockExamAttempt(item) && item.id === attemptId,
     )
-    if (attempt) return { cert: key[3], attempt }
+    if (attempt) return attempt
   }
   return null
 }

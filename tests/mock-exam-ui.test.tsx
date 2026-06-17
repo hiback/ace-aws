@@ -460,6 +460,18 @@ describe('Mock Exam attempt question render layer', () => {
 })
 
 describe('Mock Exam submitted review render layer', () => {
+  it('shows a load error when the submitted review cannot be loaded', async () => {
+    repositoryMocks.getSubmittedAttempt.mockRejectedValue(new Error('submitted failed'))
+    paramsMock.value = { attemptId: 'review-load-error', index: '0' }
+
+    renderMockExamReviewPage()
+
+    expect(
+      await screen.findByText('Could not load the mock exam question. Try again.'),
+    ).toBeTruthy()
+    expect(screen.queryByText('Question not found')).toBeNull()
+  })
+
   it('renders the reviewed question from submitted attempt and shared bank data while history metadata is pending', async () => {
     const submitted = makeSubmittedAttempt('review-history-pending')
     submitted.questions = makeAttempt(`${submitted.id}-draft`, [901, 902]).questions.map(
@@ -944,6 +956,60 @@ describe('Mock Exam answer sheet render layer', () => {
 })
 
 describe('Mock Exam result render layer', () => {
+  it('shows a load error when the submitted result cannot be loaded', async () => {
+    repositoryMocks.getSubmittedAttempt.mockRejectedValue(new Error('submitted failed'))
+    paramsMock.value = { attemptId: 'result-load-error' }
+
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <ProgressScopeProvider>
+          <MockExamResultPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(
+      await screen.findByText('Could not load the mock exam question. Try again.'),
+    ).toBeTruthy()
+    expect(screen.queryByText('Question not found')).toBeNull()
+  })
+
+  it('shares the submitted attempt snapshot cache with the review page', async () => {
+    const submitted = makeSubmittedAttempt('result-review-shared-snapshot')
+    repositoryMocks.getSubmittedAttempt
+      .mockResolvedValueOnce(submitted)
+      .mockRejectedValueOnce(new Error('background refresh failed'))
+    const client = makeQueryClient()
+    paramsMock.value = { attemptId: submitted.id }
+
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ProgressScopeProvider>
+          <MockExamResultPage />
+        </ProgressScopeProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('850')).toBeTruthy()
+    expect(client.getQueryData(['mock-exam', 'anonymous', 'submitted-attempt', submitted.id])).toBe(
+      submitted,
+    )
+
+    view.unmount()
+    paramsMock.value = { attemptId: submitted.id, index: '0' }
+    client.setQueryData(['question-bank', 'DVA-C02'], [makeQuestion(901, 'Development')])
+    vi.mocked(loadBank).mockImplementation(() => new Promise(() => {}))
+
+    renderMockExamReviewPage(client)
+
+    expect(screen.getByText('Question 901')).toBeTruthy()
+    await waitFor(() => expect(repositoryMocks.getSubmittedAttempt).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('Could not load the mock exam question. Try again.')).toBeNull()
+    expect(client.getQueryData(['mock-exam', 'anonymous', 'submitted-attempt', submitted.id])).toBe(
+      submitted,
+    )
+  })
+
   it('shows a structured result skeleton while submitted attempt data is unavailable', () => {
     repositoryMocks.getSubmittedAttempt.mockImplementation(() => new Promise(() => {}))
     paramsMock.value = { attemptId: 'result-loading' }

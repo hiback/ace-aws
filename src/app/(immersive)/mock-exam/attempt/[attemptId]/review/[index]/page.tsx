@@ -59,6 +59,10 @@ export default function MockExamReviewPage() {
   }
 
   const submitted = submittedQuery.data
+  if (submittedQuery.isError && !submitted) {
+    return <EmptyState title={t('mockExamQuestionLoadError')} />
+  }
+
   if (!submitted) {
     return <EmptyState title={t('questionNotFound')} />
   }

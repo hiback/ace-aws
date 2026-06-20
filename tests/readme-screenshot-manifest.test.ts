@@ -53,6 +53,14 @@ describe('README screenshot manifest', () => {
     ])
   })
 
+  it('scrolls explanation screenshots to the explanation card before capture', () => {
+    expect(
+      README_SCREENSHOT_MANIFEST.filter((entry) => entry.capture?.scrollTo === 'explanation').map(
+        (entry) => entry.output,
+      ),
+    ).toEqual(['practice-explanation-en.png', 'practice-explanation-zh.png'])
+  })
+
   it('rejects duplicate output filenames', () => {
     expect(() =>
       assertUniqueReadmeScreenshotOutputs([

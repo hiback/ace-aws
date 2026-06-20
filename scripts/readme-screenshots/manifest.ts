@@ -7,6 +7,9 @@ export interface ReadmeScreenshotEntry {
   output: string
   theme?: 'light' | 'dark'
   auth?: 'signed-in'
+  capture?: {
+    scrollTo?: 'explanation'
+  }
 }
 
 export const README_SCREENSHOT_ASSET_DIR = 'assets/readme'
@@ -121,12 +124,14 @@ export const README_SCREENSHOT_MANIFEST: ReadmeScreenshotEntry[] = [
     path: '/practice/clf-c02/4',
     locale: 'en',
     output: 'practice-explanation-en.png',
+    capture: { scrollTo: 'explanation' },
   },
   {
     name: 'practice-explanation-zh',
     path: '/practice/clf-c02/4',
     locale: 'zh',
     output: 'practice-explanation-zh.png',
+    capture: { scrollTo: 'explanation' },
   },
   {
     name: 'practice-wrong-en',

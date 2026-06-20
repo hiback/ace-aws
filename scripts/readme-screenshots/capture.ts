@@ -111,6 +111,7 @@ async function captureEntry(
     })
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined)
     await page.waitForTimeout(250)
+    await prepareEntryForCapture(page, entry)
     await page.screenshot({
       path: path.join(README_SCREENSHOT_ASSET_DIR, entry.output),
       scale: 'css',
@@ -119,6 +120,24 @@ async function captureEntry(
   } finally {
     await context.close()
   }
+}
+
+async function prepareEntryForCapture(
+  page: Awaited<ReturnType<BrowserContext['newPage']>>,
+  entry: ReadmeScreenshotEntry,
+) {
+  if (entry.capture?.scrollTo !== 'explanation') return
+
+  const explanation = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: /^(Explanation|解析)$/ }) })
+    .first()
+  await explanation.waitFor({ state: 'visible' })
+  await explanation.evaluate((element) => {
+    element.scrollIntoView({ block: 'start', inline: 'nearest' })
+    window.scrollBy(0, -72)
+  })
+  await page.waitForTimeout(100)
 }
 
 async function gotoEntryPath(

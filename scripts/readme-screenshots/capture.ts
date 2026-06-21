@@ -114,7 +114,7 @@ async function captureEntry(
     })
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined)
     await page.waitForTimeout(250)
-    await prepareEntryForCapture(page, entry)
+    await prepareEntryForCapture(page, entry, baseUrl)
     await page.screenshot({
       path: path.join(README_SCREENSHOT_ASSET_DIR, entry.output),
       scale: 'css',
@@ -128,7 +128,12 @@ async function captureEntry(
 async function prepareEntryForCapture(
   page: Awaited<ReturnType<BrowserContext['newPage']>>,
   entry: ReadmeScreenshotEntry,
+  baseUrl: string,
 ) {
+  if (entry.path === '/stats') {
+    await ensureStatsEntryReady(page, baseUrl, entry)
+  }
+
   if (entry.capture?.scrollTo !== 'explanation') return
 
   const explanation = page
@@ -141,6 +146,33 @@ async function prepareEntryForCapture(
     window.scrollBy(0, -72)
   })
   await page.waitForTimeout(100)
+}
+
+async function ensureStatsEntryReady(
+  page: Awaited<ReturnType<BrowserContext['newPage']>>,
+  baseUrl: string,
+  entry: ReadmeScreenshotEntry,
+) {
+  const heading = page.getByRole('heading', { name: entry.locale === 'zh' ? '统计' : 'Stats' })
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (new URL(page.url()).pathname !== '/stats') {
+      const statsLink = page.locator('a[href="/stats"]').first()
+      if (await statsLink.isVisible().catch(() => false)) {
+        await statsLink.click()
+      } else {
+        await page.goto(new URL('/', baseUrl).toString(), { waitUntil: 'domcontentloaded' })
+        await page.locator('a[href="/stats"]').waitFor({ state: 'visible' })
+        await page.locator('a[href="/stats"]').first().click()
+      }
+      await page.waitForURL(new URL('/stats', baseUrl).toString(), { timeout: 5_000 })
+    }
+
+    if (await heading.isVisible().catch(() => false)) return
+    await page.waitForTimeout(150)
+  }
+
+  throw new Error(`Stats README screenshot did not settle on /stats for ${entry.output}`)
 }
 
 async function gotoEntryPath(

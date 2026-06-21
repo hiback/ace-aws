@@ -274,6 +274,28 @@ function buildMockExamState(questions: readonly Question[]) {
     questions: questions.map((question, index) => toMockQuestion(question, index, 'submitted')),
   }
   const submitted = submitAttempt(submittedAttempt, README_SCREENSHOT_FIXED_NOW - 3_600_000)
+  const passedSubmitted = submitAttempt(
+    {
+      ...submittedAttempt,
+      id: 'readme-clf-c02-passed-submitted',
+      startedAt: README_SCREENSHOT_FIXED_NOW - 5_400_000,
+      elapsedSeconds: 3_180,
+      updatedAt: README_SCREENSHOT_FIXED_NOW - 1_800_000,
+      questions: questions.map((question, index) => toMockQuestion(question, index, 'passed')),
+    },
+    README_SCREENSHOT_FIXED_NOW - 1_800_000,
+  )
+  const highPassedSubmitted = submitAttempt(
+    {
+      ...submittedAttempt,
+      id: 'readme-clf-c02-high-passed-submitted',
+      startedAt: README_SCREENSHOT_FIXED_NOW - 4_800_000,
+      elapsedSeconds: 2_940,
+      updatedAt: README_SCREENSHOT_FIXED_NOW - 900_000,
+      questions: questions.map((question, index) => toMockQuestion(question, index, 'high-passed')),
+    },
+    README_SCREENSHOT_FIXED_NOW - 900_000,
+  )
   const olderSubmitted = submitAttempt(
     {
       ...submittedAttempt,
@@ -293,6 +315,8 @@ function buildMockExamState(questions: readonly Question[]) {
       submittedAttempts: {
         'CLF-C02': {
           [submitted.id]: submitted,
+          [passedSubmitted.id]: passedSubmitted,
+          [highPassedSubmitted.id]: highPassedSubmitted,
           [olderSubmitted.id]: olderSubmitted,
         },
       },
@@ -306,6 +330,8 @@ function buildMockExamState(questions: readonly Question[]) {
           submittedAttempts: {
             'CLF-C02': {
               [submitted.id]: submitted,
+              [passedSubmitted.id]: passedSubmitted,
+              [highPassedSubmitted.id]: highPassedSubmitted,
               [olderSubmitted.id]: olderSubmitted,
             },
           },
@@ -321,12 +347,24 @@ function buildMockExamState(questions: readonly Question[]) {
 function toMockQuestion(
   question: Question,
   index: number,
-  variant: 'draft' | 'submitted' | 'older-submitted',
+  variant: 'draft' | 'submitted' | 'passed' | 'high-passed' | 'older-submitted',
 ): MockExamQuestionSnapshot {
   const shouldAnswer =
-    variant === 'draft' ? index < 11 : variant === 'submitted' ? index < 58 : index < 51
+    variant === 'draft'
+      ? index < 11
+      : variant === 'submitted'
+        ? index < 58
+        : variant === 'older-submitted'
+          ? index < 51
+          : true
   const shouldBeCorrect =
-    variant === 'older-submitted' ? index % 4 !== 0 : index % 5 !== 0 && index < 50
+    variant === 'older-submitted'
+      ? index % 4 !== 0
+      : variant === 'passed'
+        ? index < 45
+        : variant === 'high-passed'
+          ? index < 52
+          : index % 5 !== 0 && index < 50
   const userPicks = shouldAnswer && shouldBeCorrect ? question.correct_answer : wrongPicks(question)
 
   return {

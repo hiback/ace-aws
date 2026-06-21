@@ -45,6 +45,17 @@ describe('README screenshot fixture state', () => {
     expect(
       mockExam.attempts['readme-clf-c02-draft'].questions.map((q: { qid: number }) => q.qid),
     ).toEqual(README_SCREENSHOT_REQUIRED_CLF_QIDS)
+    const submittedAttempts = Object.values(mockExam.submittedAttempts['CLF-C02']) as Array<{
+      summary: { passed: boolean; score: number }
+      submittedAt: number
+    }>
+    expect(submittedAttempts).toHaveLength(4)
+    expect(
+      submittedAttempts
+        .filter((attempt) => attempt.summary.passed)
+        .map((attempt) => attempt.summary.score)
+        .sort((a, b) => a - b),
+    ).toEqual([723, 820])
     expect(mockExam.submittedAttempts['CLF-C02']['readme-clf-c02-submitted'].submittedAt).toBe(
       README_SCREENSHOT_FIXED_NOW - 3_600_000,
     )

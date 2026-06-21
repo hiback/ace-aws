@@ -35,7 +35,10 @@ export async function captureReadmeScreenshots({
 }: CaptureReadmeScreenshotsOptions) {
   assertUniqueReadmeScreenshotOutputs(manifest)
 
-  const fixtureState = buildReadmeScreenshotFixtureState(clfBank as Question[])
+  const fixtureStates = {
+    default: buildReadmeScreenshotFixtureState(clfBank as Question[]),
+    stats: buildReadmeScreenshotFixtureState(clfBank as Question[], { fixture: 'stats' }),
+  }
   const executablePath = resolveChromiumExecutable({
     env,
     executablePathFromPlaywright: chromium.executablePath(),
@@ -44,7 +47,7 @@ export async function captureReadmeScreenshots({
 
   try {
     for (const entry of manifest) {
-      await captureEntry(browser, baseUrl, entry, fixtureState)
+      await captureEntry(browser, baseUrl, entry, fixtureStates[entry.fixture ?? 'default'])
     }
   } finally {
     await browser.close()
@@ -149,6 +152,10 @@ async function gotoEntryPath(
     await gotoListEntryPath(page, baseUrl, entryPath)
     return
   }
+  if (entryPath === '/stats') {
+    await gotoStatsEntryPath(page, baseUrl)
+    return
+  }
 
   const targetUrl = new URL(entryPath, baseUrl).toString()
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' })
@@ -184,9 +191,19 @@ async function gotoListEntryPath(
   }
 }
 
+async function gotoStatsEntryPath(
+  page: Awaited<ReturnType<BrowserContext['newPage']>>,
+  baseUrl: string,
+) {
+  await page.goto(new URL('/', baseUrl).toString(), { waitUntil: 'domcontentloaded' })
+  await page.locator('a[href="/stats"]').waitFor({ state: 'visible' })
+  await page.locator('a[href="/stats"]').click()
+  await page.waitForURL(new URL('/stats', baseUrl).toString())
+}
+
 function storageForEntry(entry: ReadmeScreenshotEntry, fixtureState: ReadmeScreenshotFixtureState) {
   const storage = { ...fixtureState.localStorage }
-  if (!entry.output.startsWith('mock-exam-')) {
+  if (!entry.output.startsWith('mock-exam-') && entry.fixture !== 'stats') {
     delete storage['ace-aws/mock-exam/local/v1']
   }
   if (entry.auth === 'signed-in') {

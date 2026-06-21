@@ -18,6 +18,10 @@ export interface ReadmeScreenshotFixtureState {
   localStorage: Record<string, string>
 }
 
+export interface ReadmeScreenshotFixtureOptions {
+  fixture?: 'default' | 'stats'
+}
+
 type MockExamQuestionSnapshot = {
   qid: number
   domain: string
@@ -69,9 +73,11 @@ type SubmittedMockExamAttempt = {
 
 export function buildReadmeScreenshotFixtureState(
   bank: readonly Question[],
+  options: ReadmeScreenshotFixtureOptions = {},
 ): ReadmeScreenshotFixtureState {
   const questions = requiredClfQuestions(bank)
-  const progress = buildProgressState(questions)
+  const progress =
+    options.fixture === 'stats' ? buildStatsProgressState(questions) : buildProgressState(questions)
   const mockExam = buildMockExamState(questions)
 
   return {
@@ -93,6 +99,83 @@ export function buildReadmeScreenshotFixtureState(
       [ACCOUNT_MOCK_EXAM_SYNC_KEY]: JSON.stringify(mockExam.account),
     },
   }
+}
+
+function buildStatsProgressState(questions: readonly Question[]) {
+  const progress: Record<number, QuestionProgress> = {}
+  const specs = statsProgressSpecs(questions)
+
+  for (const [index, { question, correct }] of specs.entries()) {
+    const lastAnsweredAt = README_SCREENSHOT_FIXED_NOW - (specs.length - index) * 90_000
+    progress[question.id] = progressEntry(question.id, {
+      correctCount: correct ? 1 : 0,
+      wrongCount: correct ? 0 : 1,
+      lastCorrect: correct,
+      lastPicks: correct ? question.correct_answer : wrongPicks(question),
+      lastAnsweredAt,
+      bookmarked: index % 8 === 0,
+      bookmarkUpdatedAt: index % 8 === 0 ? lastAnsweredAt + 30_000 : null,
+    })
+  }
+
+  return {
+    byCert: {
+      'CLF-C02': {
+        progress,
+        dailyStats: buildStatsDailyStats(),
+      },
+    },
+  }
+}
+
+function statsProgressSpecs(questions: readonly Question[]) {
+  const byTopic = new Map<string, Question[]>()
+  for (const question of questions) {
+    byTopic.set(question.topic, [...(byTopic.get(question.topic) ?? []), question])
+  }
+
+  const used = new Set<number>()
+  const specs: Array<{ question: Question; correct: boolean }> = []
+
+  for (const group of Array.from(byTopic.values())
+    .filter((items) => items.length >= 3)
+    .slice(0, 3)) {
+    for (const [index, question] of group.slice(0, 3).entries()) {
+      specs.push({ question, correct: index === 2 })
+      used.add(question.id)
+    }
+  }
+
+  for (const question of questions) {
+    if (specs.length >= 18) break
+    if (used.has(question.id)) continue
+    specs.push({ question, correct: specs.length % 4 !== 0 })
+    used.add(question.id)
+  }
+
+  return specs
+}
+
+function buildStatsDailyStats() {
+  const rows = [
+    { date: '2026-01-09', correctCount: 2, wrongCount: 1 },
+    { date: '2026-01-10', correctCount: 3, wrongCount: 1 },
+    { date: '2026-01-11', correctCount: 1, wrongCount: 2 },
+    { date: '2026-01-12', correctCount: 4, wrongCount: 0 },
+    { date: '2026-01-13', correctCount: 2, wrongCount: 2 },
+    { date: '2026-01-14', correctCount: 5, wrongCount: 1 },
+    { date: '2026-01-15', correctCount: 3, wrongCount: 1 },
+  ]
+
+  return Object.fromEntries(
+    rows.map((row, index) => [
+      row.date,
+      {
+        ...row,
+        updatedAt: README_SCREENSHOT_FIXED_NOW - (rows.length - index) * 86_400_000,
+      },
+    ]),
+  )
 }
 
 function requiredClfQuestions(bank: readonly Question[]): Question[] {

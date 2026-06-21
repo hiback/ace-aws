@@ -34,10 +34,40 @@ describe('README screenshot manifest', () => {
       'practice-wrong',
       'settings',
       'settings-dark',
+      'stats',
     ]) {
       expect(outputs.has(`${baseName}-en.png`), baseName).toBe(true)
       expect(outputs.has(`${baseName}-zh.png`), baseName).toBe(true)
     }
+  })
+
+  it('keeps Stats screenshots anonymous, light, and on the stats fixture', () => {
+    expect(
+      README_SCREENSHOT_MANIFEST.filter((entry) => entry.output.startsWith('stats-')).map(
+        (entry) => ({
+          output: entry.output,
+          path: entry.path,
+          fixture: entry.fixture,
+          theme: entry.theme,
+          auth: entry.auth,
+        }),
+      ),
+    ).toEqual([
+      {
+        output: 'stats-en.png',
+        path: '/stats',
+        fixture: 'stats',
+        theme: undefined,
+        auth: undefined,
+      },
+      {
+        output: 'stats-zh.png',
+        path: '/stats',
+        fixture: 'stats',
+        theme: undefined,
+        auth: undefined,
+      },
+    ])
   })
 
   it('limits dark mode and signed-in auth to Settings screenshots', () => {

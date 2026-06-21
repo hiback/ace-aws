@@ -53,16 +53,17 @@ ace-aws 是一个移动端优先的 AWS 认证刷题应用。它把体验压缩�
 </p>
 <p><sub>题目 · 答对后 · 答错后 · 解析</sub></p>
 
-### 题目列表与复习
+### 题目复习与统计
 
-错题和收藏题会自动归档，方便回看、重做，也可以从列表直接跳回具体题目。
+错题、收藏题和学习统计都会自动归档，方便回看、重做、查看最近练习状态，也可以从列表直接跳回具体题目。
 
 <p>
   <img src="./assets/readme/list-all-zh.png" alt="全部题目列表页面" width="200" />
   <img src="./assets/readme/list-wrong-zh.png" alt="错题列表页面" width="200" />
   <img src="./assets/readme/list-bookmarks-zh.png" alt="收藏题列表页面" width="200" />
+  <img src="./assets/readme/stats-zh.png" alt="学习统计页面" width="200" />
 </p>
-<p><sub>全部题目 · 错题 · 收藏题</sub></p>
+<p><sub>全部题目 · 错题 · 收藏题 · 统计</sub></p>
 
 ### 模拟考试
 

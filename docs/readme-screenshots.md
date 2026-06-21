@@ -74,13 +74,15 @@ settings-dark-en.png
 settings-dark-zh.png
 settings-en.png
 settings-zh.png
+stats-en.png
+stats-zh.png
 ```
 
-English and Chinese captures are generated for Home, Practice, Question Lists, Mock Exam, and Settings. Dark mode is generated only for Settings to match the README image structure.
+English and Chinese captures are generated for Home, Practice, Question Lists, Stats, Mock Exam, and Settings. Dark mode is generated only for Settings to match the README image structure.
 
 ## Deterministic State
 
-The runner seeds fixed `CLF-C02` fixture questions, anonymous practice progress, bookmarks, a mock exam draft, submitted mock exam history, preferences, and account-backed Settings state. Settings uses a mocked signed-in GitHub session and mocked account progress/mock exam sync endpoints. Other screenshots use anonymous local state.
+The runner seeds fixed `CLF-C02` fixture questions, anonymous practice progress, bookmarks, a mock exam draft, submitted mock exam history, preferences, and account-backed Settings state. Stats screenshots use a richer anonymous progress fixture with seven days of daily question stats and submitted mock exam history. Settings uses a mocked signed-in GitHub session and mocked account progress/mock exam sync endpoints. Other screenshots use anonymous local state.
 
 Browser time is frozen to keep countdowns, submitted-at ordering, and sync metadata stable. Screenshots use Playwright `scale: 'css'`, so one output pixel maps to one CSS pixel.
 

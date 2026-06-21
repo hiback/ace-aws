@@ -53,16 +53,17 @@ Work through the question bank with a clean, distraction-free mobile layout. Sin
 </p>
 <p><sub>Question · Correct result · Wrong result · Explanation</sub></p>
 
-### Question Lists and Review
+### Question Review and Stats
 
-Mistakes and saved questions stay easy to find. Use the list views to scan all questions, revisit wrong answers, open bookmarks, or jump back into a specific item.
+Mistakes, saved questions, and study stats stay easy to find. Use the list views to scan all questions, revisit wrong answers, open bookmarks, track recent activity, or jump back into a specific item.
 
 <p>
   <img src="./assets/readme/list-all-en.png" alt="All questions list screen" width="200" />
   <img src="./assets/readme/list-wrong-en.png" alt="Wrong answer list screen" width="200" />
   <img src="./assets/readme/list-bookmarks-en.png" alt="Bookmarked questions list screen" width="200" />
+  <img src="./assets/readme/stats-en.png" alt="Study stats screen" width="200" />
 </p>
-<p><sub>All questions · Wrong answers · Bookmarks</sub></p>
+<p><sub>All questions · Wrong answers · Bookmarks · Stats</sub></p>
 
 ### Mock Exam
 

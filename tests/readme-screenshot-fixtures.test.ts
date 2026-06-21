@@ -54,4 +54,25 @@ describe('README screenshot fixture state', () => {
       lastSyncedAt: README_SCREENSHOT_FIXED_NOW - 120_000,
     })
   })
+
+  it('constructs richer deterministic state for Stats screenshots', () => {
+    const state = buildReadmeScreenshotFixtureState(clfBank, { fixture: 'stats' })
+    const progress = JSON.parse(state.localStorage['ace-aws/progress/v1'])
+    const stats = progress.byCert['CLF-C02']
+
+    expect(Object.keys(stats.dailyStats).sort()).toEqual([
+      '2026-01-09',
+      '2026-01-10',
+      '2026-01-11',
+      '2026-01-12',
+      '2026-01-13',
+      '2026-01-14',
+      '2026-01-15',
+    ])
+    expect(Object.keys(stats.progress).length).toBeGreaterThan(12)
+    expect(stats.dailyStats['2026-01-15']).toMatchObject({
+      correctCount: 3,
+      wrongCount: 1,
+    })
+  })
 })

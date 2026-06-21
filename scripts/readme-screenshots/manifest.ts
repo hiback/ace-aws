@@ -5,6 +5,7 @@ export interface ReadmeScreenshotEntry {
   path: string
   locale: ReadmeScreenshotLocale
   output: string
+  fixture?: 'stats'
   theme?: 'light' | 'dark'
   auth?: 'signed-in'
   capture?: {
@@ -52,6 +53,20 @@ export const README_SCREENSHOT_MANIFEST: ReadmeScreenshotEntry[] = [
     path: '/list/wrong',
     locale: 'zh',
     output: 'list-wrong-zh.png',
+  },
+  {
+    name: 'stats-en',
+    path: '/stats',
+    locale: 'en',
+    output: 'stats-en.png',
+    fixture: 'stats',
+  },
+  {
+    name: 'stats-zh',
+    path: '/stats',
+    locale: 'zh',
+    output: 'stats-zh.png',
+    fixture: 'stats',
   },
   {
     name: 'mock-exam-en',

@@ -9,7 +9,6 @@ export const STRINGS = {
     greetingNight: '晚安，{name}',
     settingsTitle: '设置',
     selectCertTitle: '选择认证',
-    selectCertSubtitle: '选择你正在备考的 AWS 认证',
     selectCertCta: '开始练习',
     selectCertSaveFailed: '无法保存选择，请重试。',
     questionListTitle: '题目列表',
@@ -42,8 +41,6 @@ export const STRINGS = {
     certSwitchOther: '其他认证',
     certSwitchBrowseAll: '查看全部认证',
     selectCertBrowseTitle: '全部认证',
-    selectCertBrowseSubtitle:
-      '查看全部 AWS 认证。CLF-C02、DVA-C02、SAA-C03 与 SAP-C02 题库已就绪。',
     selectCertBrowseCta: '继续当前认证',
 
     homeContinue: '继续刷题',
@@ -154,6 +151,11 @@ export const STRINGS = {
     mockExamDomainDesignForNewSolutions: '设计新解决方案',
     mockExamDomainContinuousImprovementForExistingSolutions: '持续改进现有解决方案',
     mockExamDomainAccelerateWorkloadMigrationAndModernization: '加速工作负载迁移与现代化',
+    mockExamDomainSdlcAutomation: 'SDLC 自动化',
+    mockExamDomainConfigurationManagementIac: '配置管理和 IaC',
+    mockExamDomainResilientCloudSolutions: '韧性云解决方案',
+    mockExamDomainMonitoringLogging: '监控和日志记录',
+    mockExamDomainIncidentEventResponse: '安全事件和事件响应',
 
     questionXofY: '第 {x} 题 / 共 {y} 题',
     badgeSingle: '单选',
@@ -174,6 +176,11 @@ export const STRINGS = {
     topicDesignForNewSolutions: '设计新解决方案',
     topicContinuousImprovementForExistingSolutions: '持续改进现有解决方案',
     topicAccelerateWorkloadMigrationAndModernization: '加速工作负载迁移与现代化',
+    topicSdlcAutomation: 'SDLC 自动化',
+    topicConfigurationManagementIac: '配置管理和 IaC',
+    topicResilientCloudSolutions: '韧性云解决方案',
+    topicMonitoringLogging: '监控和日志记录',
+    topicIncidentEventResponse: '安全事件和事件响应',
     practiceCountPrefix: '第',
     practiceCountMiddle: '题 / 共',
     practiceCountSuffix: '题',
@@ -351,7 +358,6 @@ export const STRINGS = {
     greetingNight: 'Good night, {name}',
     settingsTitle: 'Settings',
     selectCertTitle: 'Choose certification',
-    selectCertSubtitle: 'Pick the AWS exam you are preparing for',
     selectCertCta: 'Start practicing',
     selectCertSaveFailed: 'Could not save your selection. Try again.',
     questionListTitle: 'Question list',
@@ -384,8 +390,6 @@ export const STRINGS = {
     certSwitchOther: 'Other certifications',
     certSwitchBrowseAll: 'Browse all certifications',
     selectCertBrowseTitle: 'All certifications',
-    selectCertBrowseSubtitle:
-      'Browse every AWS certification. CLF-C02, DVA-C02, SAA-C03, and SAP-C02 banks are ready right now.',
     selectCertBrowseCta: 'Continue current certification',
 
     homeContinue: 'Continue',
@@ -501,6 +505,11 @@ export const STRINGS = {
       'Continuous Improvement for Existing Solutions',
     mockExamDomainAccelerateWorkloadMigrationAndModernization:
       'Accelerate Workload Migration and Modernization',
+    mockExamDomainSdlcAutomation: 'SDLC Automation',
+    mockExamDomainConfigurationManagementIac: 'Configuration Management and IaC',
+    mockExamDomainResilientCloudSolutions: 'Resilient Cloud Solutions',
+    mockExamDomainMonitoringLogging: 'Monitoring and Logging',
+    mockExamDomainIncidentEventResponse: 'Incident and Event Response',
 
     questionXofY: 'Question {x} of {y}',
     badgeSingle: 'Single',
@@ -523,6 +532,11 @@ export const STRINGS = {
     topicContinuousImprovementForExistingSolutions: 'Continuous Improvement for Existing Solutions',
     topicAccelerateWorkloadMigrationAndModernization:
       'Accelerate Workload Migration and Modernization',
+    topicSdlcAutomation: 'SDLC Automation',
+    topicConfigurationManagementIac: 'Configuration Management and IaC',
+    topicResilientCloudSolutions: 'Resilient Cloud Solutions',
+    topicMonitoringLogging: 'Monitoring and Logging',
+    topicIncidentEventResponse: 'Incident and Event Response',
     practiceCountPrefix: 'Question',
     practiceCountMiddle: 'of',
     practiceCountSuffix: '',

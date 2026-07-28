@@ -108,6 +108,40 @@ const PROFILES: Record<CertCode, MockExamProfile> = {
       },
     ],
   },
+  'DOP-C02': {
+    cert: 'DOP-C02',
+    questionCount: 75,
+    timeLimitMinutes: 180,
+    passingScore: 750,
+    domains: [
+      { name: 'SDLC Automation', weight: 22, bankTopics: ['SDLC Automation'] },
+      {
+        name: 'Configuration Management and IaC',
+        weight: 17,
+        bankTopics: ['Configuration Management and IaC'],
+      },
+      {
+        name: 'Resilient Cloud Solutions',
+        weight: 15,
+        bankTopics: ['Resilient Cloud Solutions'],
+      },
+      {
+        name: 'Monitoring and Logging',
+        weight: 15,
+        bankTopics: ['Monitoring and Logging'],
+      },
+      {
+        name: 'Incident and Event Response',
+        weight: 14,
+        bankTopics: ['Incident and Event Response'],
+      },
+      {
+        name: 'Security and Compliance',
+        weight: 17,
+        bankTopics: ['Security and Compliance'],
+      },
+    ],
+  },
 }
 
 export function getMockExamProfile(cert: string): MockExamProfile {

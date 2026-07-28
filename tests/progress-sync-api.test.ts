@@ -174,6 +174,20 @@ describe('Progress Sync API', () => {
     })
   })
 
+  it('accepts DOP-C02 Question Progress with three valid picks', async () => {
+    signIn()
+
+    const progress = validAnswer({ qid: 6, lastPicks: ['A', 'D', 'F'] })
+    const response = await postJson({ baseRevision: 0, progress: [progress] }, 'dop-c02')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      cert: 'DOP-C02',
+      accepted: [progress],
+      rejected: [],
+    })
+  })
+
   it('rejects SAA-C03 progress picks that are absent from that question options', async () => {
     signIn()
 

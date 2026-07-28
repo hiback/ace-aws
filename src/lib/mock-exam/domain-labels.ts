@@ -20,4 +20,9 @@ export const MOCK_EXAM_DOMAIN_LABEL_KEYS: Partial<Record<string, StringKey>> = {
     'mockExamDomainContinuousImprovementForExistingSolutions',
   'Accelerate Workload Migration and Modernization':
     'mockExamDomainAccelerateWorkloadMigrationAndModernization',
+  'SDLC Automation': 'mockExamDomainSdlcAutomation',
+  'Configuration Management and IaC': 'mockExamDomainConfigurationManagementIac',
+  'Resilient Cloud Solutions': 'mockExamDomainResilientCloudSolutions',
+  'Monitoring and Logging': 'mockExamDomainMonitoringLogging',
+  'Incident and Event Response': 'mockExamDomainIncidentEventResponse',
 }

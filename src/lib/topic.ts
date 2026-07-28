@@ -19,4 +19,9 @@ export const TOPIC_KEYS: Record<string, StringKey> = {
   'Continuous Improvement for Existing Solutions': 'topicContinuousImprovementForExistingSolutions',
   'Accelerate Workload Migration and Modernization':
     'topicAccelerateWorkloadMigrationAndModernization',
+  'SDLC Automation': 'topicSdlcAutomation',
+  'Configuration Management and IaC': 'topicConfigurationManagementIac',
+  'Resilient Cloud Solutions': 'topicResilientCloudSolutions',
+  'Monitoring and Logging': 'topicMonitoringLogging',
+  'Incident and Event Response': 'topicIncidentEventResponse',
 }

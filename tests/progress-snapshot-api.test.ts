@@ -89,6 +89,21 @@ describe('Progress Snapshot API', () => {
     })
   })
 
+  it('returns an empty DOP-C02 progress snapshot for ready certification', async () => {
+    mocks.getServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } })
+    mocks.txOrderBy.mockResolvedValueOnce([])
+
+    const response = await snapshot('dop-c02')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      cert: 'DOP-C02',
+      revision: 0,
+      progress: [],
+      dailyStats: [],
+    })
+  })
+
   it('creates or reuses revision 0 and returns a sparse Progress Snapshot ordered by qid', async () => {
     const answeredAt = new Date('2026-01-01T00:00:00.000Z')
     const bookmarkAt = new Date('2026-01-02T00:00:00.000Z')

@@ -90,6 +90,21 @@ describe('account preferences API', () => {
     await expect(response.json()).resolves.toEqual({ currentCert: 'SAA-C03' })
   })
 
+  it('returns and upserts DOP-C02 as a ready cert', async () => {
+    mocks.getServerSession.mockResolvedValue({ user: { id: 'user-1' } })
+    mocks.selectLimit.mockResolvedValueOnce([{ currentCert: 'DOP-C02' }])
+
+    const getResponse = await GET()
+    expect(getResponse.status).toBe(200)
+    await expect(getResponse.json()).resolves.toEqual({ currentCert: 'DOP-C02' })
+
+    mocks.returning.mockResolvedValueOnce([{ currentCert: 'DOP-C02' }])
+    const patchResponse = await patch(JSON.stringify({ currentCert: 'DOP-C02' }))
+    expect(patchResponse.status).toBe(200)
+    expect(mocks.insertValues).toHaveBeenCalledWith({ userId: 'user-1', currentCert: 'DOP-C02' })
+    await expect(patchResponse.json()).resolves.toEqual({ currentCert: 'DOP-C02' })
+  })
+
   it('treats a non-ready stored cert as absent', async () => {
     mocks.getServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } })
     mocks.selectLimit.mockResolvedValueOnce([{ currentCert: 'AIF-C01' }])

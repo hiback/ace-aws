@@ -27,6 +27,15 @@ describe('account preferences client', () => {
     await expect(fetchAccountPreferences()).resolves.toEqual({ currentCert: 'SAA-C03' })
   })
 
+  it('returns DOP-C02 account current cert responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ currentCert: 'DOP-C02' }))),
+    )
+
+    await expect(fetchAccountPreferences()).resolves.toEqual({ currentCert: 'DOP-C02' })
+  })
+
   it('normalizes non-ready response certs to null', async () => {
     vi.stubGlobal(
       'fetch',

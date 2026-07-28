@@ -19,6 +19,10 @@ const BANK_CONFIGS = {
     src: 'refs/sap-c02.json',
     dst: 'src/data/sap-c02.json',
   },
+  'DOP-C02': {
+    src: 'refs/dop-c02.json',
+    dst: 'src/data/dop-c02.json',
+  },
 } as const satisfies Record<CertCode, { src: string; dst: string }>
 
 const LETTERS = new Set(['A', 'B', 'C', 'D', 'E', 'F'])

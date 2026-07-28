@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Question } from '../src/data/types'
+import type { CertCode, Question } from '../src/data/types'
 import { BrowserProgressModule } from '../src/lib/browser-progress-module'
 import {
   answerMockExamQuestion,
@@ -40,11 +40,7 @@ function localDateKey(timestamp: number): string {
   return `${year}-${month}-${day}`
 }
 
-function makeQuestion(
-  id: number,
-  topic: string,
-  cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03' | 'SAP-C02' = 'DVA-C02',
-): Question {
+function makeQuestion(id: number, topic: string, cert: CertCode = 'DVA-C02'): Question {
   return {
     id,
     cert,
@@ -63,6 +59,7 @@ describe('Mock Exam profile', () => {
     const clf = getMockExamProfile('clf-c02')
     const saa = getMockExamProfile('saa-c03')
     const sap = getMockExamProfile('sap-c02')
+    const dop = getMockExamProfile('dop-c02')
 
     expect(dva).toMatchObject({
       cert: 'DVA-C02',
@@ -127,6 +124,21 @@ describe('Mock Exam profile', () => {
         ['Accelerate Workload Migration and Modernization'],
       ],
     ])
+
+    expect(dop).toMatchObject({
+      cert: 'DOP-C02',
+      questionCount: 75,
+      timeLimitMinutes: 180,
+      passingScore: 750,
+    })
+    expect(dop.domains.map((domain) => [domain.name, domain.weight, domain.bankTopics])).toEqual([
+      ['SDLC Automation', 22, ['SDLC Automation']],
+      ['Configuration Management and IaC', 17, ['Configuration Management and IaC']],
+      ['Resilient Cloud Solutions', 15, ['Resilient Cloud Solutions']],
+      ['Monitoring and Logging', 15, ['Monitoring and Logging']],
+      ['Incident and Event Response', 14, ['Incident and Event Response']],
+      ['Security and Compliance', 17, ['Security and Compliance']],
+    ])
   })
 
   it('allocates largest-remainder quotas that preserve the total question count', () => {
@@ -153,6 +165,14 @@ describe('Mock Exam profile', () => {
       'Design for New Solutions': 22,
       'Continuous Improvement for Existing Solutions': 19,
       'Accelerate Workload Migration and Modernization': 15,
+    })
+    expect(getMockExamProfileDomainQuotas(getMockExamProfile('DOP-C02'))).toEqual({
+      'SDLC Automation': 17,
+      'Configuration Management and IaC': 13,
+      'Resilient Cloud Solutions': 11,
+      'Monitoring and Logging': 11,
+      'Incident and Event Response': 10,
+      'Security and Compliance': 13,
     })
   })
 })
@@ -300,6 +320,31 @@ describe('Mock Exam attempt sampling', () => {
       'Design for New Solutions': 22,
       'Continuous Improvement for Existing Solutions': 19,
       'Accelerate Workload Migration and Modernization': 15,
+    })
+  })
+
+  it('creates a DOP-C02 mock exam from official domain quotas', () => {
+    const attempt = startMockExamAttempt({
+      bank: makeFullDopBank(),
+      cert: 'DOP-C02',
+      random: () => 0,
+      now: () => 1000,
+      id: () => 'attempt-dop',
+    })
+
+    expect(attempt).toMatchObject({
+      id: 'attempt-dop',
+      cert: 'DOP-C02',
+      questionCount: 75,
+      timeLimitSeconds: 180 * 60,
+    })
+    expect(countByDomain(attempt.questions)).toEqual({
+      'SDLC Automation': 17,
+      'Configuration Management and IaC': 13,
+      'Resilient Cloud Solutions': 11,
+      'Monitoring and Logging': 11,
+      'Incident and Event Response': 10,
+      'Security and Compliance': 13,
     })
   })
 })
@@ -1027,6 +1072,23 @@ function makeFullSapBank(): Question[] {
       makeQuestion(index + 301, 'Accelerate Workload Migration and Modernization', 'SAP-C02'),
     ),
   ]
+}
+
+function makeFullDopBank(): Question[] {
+  const topics = [
+    'SDLC Automation',
+    'Configuration Management and IaC',
+    'Resilient Cloud Solutions',
+    'Monitoring and Logging',
+    'Incident and Event Response',
+    'Security and Compliance',
+  ]
+
+  return topics.flatMap((topic, topicIndex) =>
+    Array.from({ length: 20 }, (_, index) =>
+      makeQuestion(topicIndex * 100 + index + 1, topic, 'DOP-C02'),
+    ),
+  )
 }
 
 function range(start: number, end: number, step = 1): number[] {

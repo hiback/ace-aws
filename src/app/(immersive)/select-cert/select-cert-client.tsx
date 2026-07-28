@@ -93,10 +93,6 @@ export function SelectCertClient({ requestedMode }: SelectCertClientProps) {
         backHref="/"
       />
       <main className="flex-1 overflow-y-auto px-5 pt-5 pb-24">
-        <p className="mb-5 text-option leading-relaxed text-ink-mute">
-          {t(isSwitchMode ? 'selectCertBrowseSubtitle' : 'selectCertSubtitle')}
-        </p>
-
         <div className="space-y-6">
           {CERT_GROUPS.map((group) => (
             <section key={group.labelKey}>

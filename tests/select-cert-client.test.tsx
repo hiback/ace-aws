@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SelectCertClient } from '../src/app/(immersive)/select-cert/select-cert-client'
+import type { CertCode } from '../src/data/types'
 import { usePrefsStore } from '../src/stores/prefs-store'
 
 const routerMocks = vi.hoisted(() => ({
@@ -45,21 +46,20 @@ beforeEach(() => {
   authMocks.status = 'unauthenticated'
   authMocks.session = null
   accountPreferenceMocks.saveCurrentCert.mockReset()
-  accountPreferenceMocks.saveCurrentCert.mockImplementation(
-    async (cert: 'DVA-C02' | 'CLF-C02' | 'SAA-C03' | 'SAP-C02') => cert,
-  )
+  accountPreferenceMocks.saveCurrentCert.mockImplementation(async (cert: CertCode) => cert)
   usePrefsStore.setState({ locale: 'en', currentCert: null })
 })
 
 afterEach(cleanup)
 
 describe('SelectCertClient', () => {
-  it('starts onboarding with no selected cert and a disabled CTA', () => {
+  it('starts onboarding without a subtitle, with no selected cert and a disabled CTA', () => {
     render(<SelectCertClient requestedMode="onboarding" />)
 
     const dva = screen.getByRole('button', { name: /Developer/ })
     const cta = screen.getByRole('button', { name: 'Start practicing' }) as HTMLButtonElement
 
+    expect(screen.queryByText(/Pick the AWS exam you are preparing for/)).toBeNull()
     expect(dva.getAttribute('aria-pressed')).toBe('false')
     expect(cta.disabled).toBe(true)
   })
@@ -193,6 +193,23 @@ describe('SelectCertClient', () => {
     })
   })
 
+  it('selects and confirms DOP without a hot badge', async () => {
+    render(<SelectCertClient requestedMode="onboarding" />)
+
+    const dop = screen.getByRole('button', { name: /DevOps Engineer/ })
+    const cta = screen.getByRole('button', { name: 'Start practicing' }) as HTMLButtonElement
+
+    expect(dop.textContent).not.toContain('HOT')
+    fireEvent.click(dop)
+    fireEvent.click(cta)
+
+    await waitFor(() => {
+      expect(onboardingMocks.completeOnboardingStep).toHaveBeenCalledWith('complete-cert-selection')
+      expect(usePrefsStore.getState().currentCert).toBe('DOP-C02')
+      expect(routerMocks.replace).toHaveBeenCalledWith('/')
+    })
+  })
+
   it('cancels the selected cert when clicked again', () => {
     render(<SelectCertClient requestedMode="onboarding" />)
 
@@ -206,15 +223,13 @@ describe('SelectCertClient', () => {
     expect(cta.disabled).toBe(true)
   })
 
-  it('uses browse copy when opened from the cert switcher', () => {
+  it('uses browse chrome without a subtitle when opened from the cert switcher', () => {
     usePrefsStore.setState({ locale: 'en', currentCert: 'DVA-C02' })
 
     render(<SelectCertClient requestedMode="switch" />)
 
     expect(screen.getByText('All certifications')).not.toBeNull()
-    expect(
-      screen.getByText(/CLF-C02, DVA-C02, SAA-C03, and SAP-C02 banks are ready/),
-    ).not.toBeNull()
+    expect(screen.queryByText(/Browse every AWS certification/)).toBeNull()
     expect(screen.getByText('Continue current certification')).not.toBeNull()
     expect(screen.getByRole('button', { name: /Developer/ }).getAttribute('aria-pressed')).toBe(
       'true',

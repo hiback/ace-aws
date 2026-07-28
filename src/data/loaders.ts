@@ -5,6 +5,7 @@ const certLoaders = {
   'CLF-C02': () => import('./clf-c02.json') as Promise<{ default: Question[] }>,
   'SAA-C03': () => import('./saa-c03.json') as Promise<{ default: Question[] }>,
   'SAP-C02': () => import('./sap-c02.json') as Promise<{ default: Question[] }>,
+  'DOP-C02': () => import('./dop-c02.json') as Promise<{ default: Question[] }>,
 } as const satisfies Record<CertCode, () => Promise<{ default: Question[] }>>
 
 const KNOWN_CERTS = Object.keys(certLoaders) as CertCode[]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { loadBank, normalizeCert } from '../src/data/loaders'
-import { READY_CERTS } from '../src/lib/cert-catalog'
+import { getCertOption, READY_CERTS } from '../src/lib/cert-catalog'
 
 describe('normalizeCert', () => {
   it('uppercases lowercase input', () => {
@@ -27,6 +27,12 @@ describe('normalizeCert', () => {
   it('normalizes SAP cert input and marks it ready', () => {
     expect(normalizeCert('sap-c02')).toBe('SAP-C02')
     expect(READY_CERTS).toContain('SAP-C02')
+  })
+
+  it('normalizes DOP cert input and marks it ready without marking it hot', () => {
+    expect(normalizeCert('dop-c02')).toBe('DOP-C02')
+    expect(READY_CERTS).toContain('DOP-C02')
+    expect(getCertOption('DOP-C02').hot).not.toBe(true)
   })
 
   it('throws on unknown cert', () => {
@@ -73,5 +79,31 @@ describe('loadBank (integration with normalization)', () => {
     const bank = await loadBank('sap-c02')
     expect(bank).toHaveLength(529)
     expect(bank[0]?.cert).toBe('SAP-C02')
+  })
+
+  it('loads a complete bilingual DOP bank', async () => {
+    const bank = await loadBank('dop-c02')
+
+    expect(bank).toHaveLength(429)
+    expect(bank.every((question) => question.cert === 'DOP-C02')).toBe(true)
+    expect(bank.some((question) => question.type === 'multi' && question.answer_count === 3)).toBe(
+      true,
+    )
+    expect(bank.some((question) => Object.hasOwn(question.en.options, 'F'))).toBe(true)
+    expect(new Set(bank.map((question) => question.id)).size).toBe(bank.length)
+
+    for (const question of bank) {
+      expect(question.en.question).not.toBe('')
+      expect(question.en.explanation).not.toBe('')
+      expect(question.zh.question).not.toBe('')
+      expect(question.zh.explanation).not.toBe('')
+      expect(Object.keys(question.zh.options).sort()).toEqual(
+        Object.keys(question.en.options).sort(),
+      )
+      for (const answer of question.correct_answer) {
+        expect(question.en.options[answer]).toBeTruthy()
+        expect(question.zh.options[answer]).toBeTruthy()
+      }
+    }
   })
 })
